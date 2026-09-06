@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../widgets/app_scaffold.dart';
-import 'voice_input_screen.dart'; // ← make sure this import exists
+import 'voice_input_screen.dart'; 
 
 class ChatWithPdfScreen extends StatefulWidget {
   final List<Map<String, dynamic>> sources;
@@ -356,18 +356,24 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
 
                 // Mic Button → opens Voice Input Screen
                 CircleAvatar(
-                  radius: 22,
-                  backgroundColor: AppColors.cardBg,
-                  child: IconButton(
-                    icon: const Icon(Icons.mic, color: AppColors.primary, size: 22),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const VoiceInputScreen()),
-                      );
-                    },
-                  ),
-                ),
+  radius: 22,
+  backgroundColor: AppColors.cardBg,
+  child: IconButton(
+    icon: const Icon(Icons.mic, color: AppColors.primary, size: 22),
+    onPressed: () async {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const VoiceInputScreen()),
+      );
+
+      if (result != null && result is String && result.trim().isNotEmpty) {
+        setState(() {
+          _controller.text = result;
+        });
+      }
+    },
+  ),
+),
                 const SizedBox(width: 6),
 
                 // Send Button
