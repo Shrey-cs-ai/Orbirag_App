@@ -126,6 +126,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
             ),
 
           // Input area
+<<<<<<< HEAD
 Container(
   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
   decoration: const BoxDecoration(
@@ -175,6 +176,49 @@ Container(
     ],
   ),
 ),
+=======
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            decoration: const BoxDecoration(
+              color: AppColors.white,
+              border: Border(top: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: InputDecoration(
+                      hintText: "Type a message...",
+                      hintStyle: const TextStyle(color: AppColors.textSecondary),
+                      filled: true,
+                      fillColor: AppColors.cardBg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                 backgroundColor: AppColors.primary,
+                child: IconButton(
+                icon: const Icon(Icons.mic, color: Colors.white, size: 20),
+                  onPressed: () {
+                  Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const VoiceInputScreen()),
+                  );
+                },
+              ),
+              ),
+              ],
+            ),
+          ),
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
         ],
       ),
     );

@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/notes_service.dart';
+<<<<<<< HEAD
 import 'voice_input_screen.dart';
 
 class NewNoteScreen extends StatefulWidget {
   final Note? note;
+=======
+
+class NewNoteScreen extends StatefulWidget {
+  final Note? note; // null = create new, not null = edit
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
 
   const NewNoteScreen({super.key, this.note});
 
@@ -44,6 +50,10 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
     }
 
     if (widget.note == null) {
+<<<<<<< HEAD
+=======
+      // Create new
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
       final newNote = Note(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title.isEmpty ? "Untitled" : title,
@@ -52,6 +62,10 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
       );
       _notesService.addNote(newNote);
     } else {
+<<<<<<< HEAD
+=======
+      // Update existing
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
       widget.note!.title = title.isEmpty ? "Untitled" : title;
       widget.note!.content = content;
       widget.note!.updatedAt = DateTime.now();
@@ -67,6 +81,7 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
     Navigator.pop(context);
   }
 
+<<<<<<< HEAD
   Future<void> _openVoiceInput() async {
     final result = await Navigator.push(
       context,
@@ -87,6 +102,8 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
     }
   }
 
+=======
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,11 +119,15 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
           children: [
             const Text(
               "New Note",
+<<<<<<< HEAD
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
                 fontSize: 17,
               ),
+=======
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 17),
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
             ),
             if (_isAutoSaved)
               const Text(
@@ -140,10 +161,14 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               decoration: const InputDecoration(
                 hintText: "Note title",
+<<<<<<< HEAD
                 hintStyle: TextStyle(
                   color: AppColors.hintText,
                   fontWeight: FontWeight.w500,
                 ),
+=======
+                hintStyle: TextStyle(color: AppColors.hintText, fontWeight: FontWeight.w500),
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
                 border: InputBorder.none,
               ),
             ),
@@ -167,6 +192,7 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
           ],
         ),
       ),
+<<<<<<< HEAD
 
       // Mic Floating Button
       floatingActionButton: FloatingActionButton(
@@ -174,6 +200,8 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.mic, color: Colors.white),
       ),
+=======
+>>>>>>> 4914a4bcc9e59684a8050f37d9d23639907620bc
     );
   }
 }
