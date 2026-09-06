@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "407358214556",
+    "project_id": "orbirag-2816b",
+    "storage_bucket": "orbirag-2816b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:407358214556:android:bc4757ed198780f11cf859",
+        "android_client_info": {
+          "package_name": "com.scholarPulse.shreya.scholar_pulse"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6FzQZIsFq0crDL4cvBJuaKornyEXofn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

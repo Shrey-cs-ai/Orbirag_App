@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Static strings, route names and reusable text styles.
 class AppConstants {
   AppConstants._();
 
   static const String appName = 'Orbirag';
   static const String appTagline = 'AI-Powered Research Assistant';
 
-  // Route names used across the app.
+  // Routes
   static const String routeSplash = '/';
   static const String routeOnboarding = '/onboarding';
   static const String routeLogin = '/login';
