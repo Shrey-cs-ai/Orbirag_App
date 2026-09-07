@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import '../utils/app_colors.dart';
-import '../utils/app_constants.dart';
 import '../utils/whisper_transcription_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../widgets/app_scaffold.dart';
@@ -263,7 +262,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
                         boxShadow: _isRecording
                             ? [
                                 BoxShadow(
-                                  color: AppColors.error.withOpacity(0.35),
+                                  color: AppColors.error.withValues(alpha: 0.35),
                                   blurRadius: 18,
                                   spreadRadius: 4,
                                 )

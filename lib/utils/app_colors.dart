@@ -39,4 +39,9 @@ class AppColors {
   static const Color success = Color(0xFF10B981);
   static const Color error = Color(0xFFEF4444);
   static const Color warning = Color(0xFFF59E0B);
+
+  // Social Colors
+  static const Color github = Color(0xFF24292E);
+  static const Color linkedin = Color(0xFF0A66C2);
+  static const Color google = Color(0xFFEA4335);
 }

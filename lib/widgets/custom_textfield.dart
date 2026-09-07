@@ -2,26 +2,26 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 
-/// Rounded, filled text field with an optional label above it and
-/// an optional trailing icon (used for the password visibility toggle).
 class CustomTextField extends StatelessWidget {
   final String? label;
   final String hint;
-  final TextEditingController controller;
+  final TextEditingController? controller;
   final bool obscureText;
   final TextInputType keyboardType;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
+  final bool enabled;
 
   const CustomTextField({
     super.key,
     this.label,
     required this.hint,
-    required this.controller,
+    this.controller,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.suffixIcon,
     this.validator,
+    this.enabled = true,
   });
 
   @override
@@ -31,37 +31,50 @@ class CustomTextField extends StatelessWidget {
       children: [
         if (label != null) ...[
           Text(label!, style: AppTextStyles.inputLabel),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
         ],
         TextFormField(
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          enabled: enabled,
           validator: validator,
-          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          style: const TextStyle(
+            fontSize: 15,
+            color: AppColors.textPrimary,
+          ),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.hintText, fontSize: 14),
+            hintStyle: const TextStyle(
+              color: AppColors.hintText,
+              fontSize: 14,
+            ),
             filled: true,
             fillColor: AppColors.inputFill,
             suffixIcon: suffixIcon,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: AppColors.error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
             ),
           ),
         ),

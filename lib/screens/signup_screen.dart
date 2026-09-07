@@ -25,6 +25,8 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
+  final FirebaseAuthService _authService = FirebaseAuthService.instance;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -39,15 +41,24 @@ class _SignupScreenState extends State<SignupScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
   Future<void> _handleSignup() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showMessage('Passwords do not match');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    final error = await FirebaseAuthService.instance.signUp(
+    final error = await _authService.signUp(
       name: _nameController.text,
       email: _emailController.text,
       password: _passwordController.text,
@@ -59,26 +70,22 @@ class _SignupScreenState extends State<SignupScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppConstants.routeHome,
-        (route) => false,
-      );
+      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
-    final error = await FirebaseAuthService.instance.signInWithGoogle();
+
+    final error = await _authService.signInWithGoogle();
+
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (error != null) {
       _showMessage(error);
     } else {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppConstants.routeHome,
-        (route) => false,
-      );
+      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
     }
   }
 
@@ -94,49 +101,91 @@ class _SignupScreenState extends State<SignupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Back Button
                 IconButton(
                   padding: EdgeInsets.zero,
                   icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const SizedBox(height: 8),
-                const Text('Create your account', style: AppTextStyles.heading),
+
+                // Header
+                const Text(
+                  'Create your account',
+                  style: AppTextStyles.heading,
+                ),
                 const SizedBox(height: 4),
                 const Text(
                   'Join Orbirag and accelerate your research.',
                   style: AppTextStyles.subheading,
                 ),
                 const SizedBox(height: 24),
+
+                // Social Buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     SocialButton(
-                      icon: const Icon(Icons.code, color: Colors.black87),
+                      icon: Icon(
+                        Icons.code,
+                        color: AppColors.github,
+                        size: 28,
+                      ),
                       onPressed: () => _showMessage('GitHub sign-in not configured'),
                     ),
                     SocialButton(
-                      icon: const Icon(Icons.business, color: Color(0xFF0A66C2)),
+                      icon: Icon(
+                        Icons.business_center,
+                        color: AppColors.linkedin,
+                        size: 28,
+                      ),
                       onPressed: () => _showMessage('LinkedIn sign-in not configured'),
                     ),
                     SocialButton(
-                      icon: const Text('G',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Color(0xFFEA4335))),
+                      icon: Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'G',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            color: AppColors.google,
+                          ),
+                        ),
+                      ),
                       onPressed: _handleGoogleSignIn,
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
+
+                // OR Divider
                 Row(
-                  children: const [
-                    Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('OR', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  children: [
+                    const Expanded(
+                      child: Divider(color: AppColors.border, thickness: 1),
                     ),
-                    Expanded(child: Divider(color: AppColors.border)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const Expanded(
+                      child: Divider(color: AppColors.border, thickness: 1),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
+
+                // Form Fields
                 CustomTextField(
                   label: 'Full name',
                   hint: 'Alex Johnson',
@@ -144,6 +193,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   validator: Validators.name,
                 ),
                 const SizedBox(height: 18),
+
                 CustomTextField(
                   label: 'Email address',
                   hint: 'you@example.com',
@@ -152,47 +202,77 @@ class _SignupScreenState extends State<SignupScreen> {
                   validator: Validators.email,
                 ),
                 const SizedBox(height: 18),
+
                 CustomTextField(
                   label: 'Password',
                   hint: '••••••••',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  validator: Validators.password,
+                  validator: (value) => Validators.password(value, minLength: 6),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                       color: AppColors.textSecondary,
                       size: 20,
                     ),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
                   ),
                 ),
                 const SizedBox(height: 18),
+
                 CustomTextField(
                   label: 'Confirm password',
                   hint: '••••••••',
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
-                  validator: (value) => Validators.confirmPassword(value, _passwordController.text),
+                  validator: (value) =>
+                      Validators.confirmPassword(value, _passwordController.text),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                       color: AppColors.textSecondary,
                       size: 20,
                     ),
-                    onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                    onPressed: () {
+                      setState(() =>
+                          _obscureConfirmPassword = !_obscureConfirmPassword);
+                    },
                   ),
                 ),
                 const SizedBox(height: 24),
-                CustomButton(label: 'Sign up', isLoading: _isLoading, onPressed: _handleSignup),
+
+                // Sign Up Button
+                CustomButton(
+                  label: 'Sign up',
+                  isLoading: _isLoading,
+                  onPressed: _handleSignup,
+                ),
                 const SizedBox(height: 20),
+
+                // Login Navigation
                 Center(
-                  child: Wrap(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('Already have an account? ', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      const Text(
+                        'Already have an account? ',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
                       GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
-                        child: const Text('Log in', style: AppTextStyles.link),
+                        child: const Text(
+                          'Log in',
+                          style: AppTextStyles.link,
+                        ),
                       ),
                     ],
                   ),

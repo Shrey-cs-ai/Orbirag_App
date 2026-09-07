@@ -20,6 +20,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
   bool _emailSent = false;
 
+  final FirebaseAuthService _authService = FirebaseAuthService.instance;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -37,10 +39,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _handleResetPassword() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
 
-    final error = await FirebaseAuthService.instance
-        .sendPasswordResetEmail(_emailController.text);
+    final error = await _authService.sendPasswordResetEmail(
+      _emailController.text,
+    );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -84,7 +88,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Forgot password?', style: AppTextStyles.heading),
+          const Text(
+            'Forgot password?',
+            style: AppTextStyles.heading,
+          ),
           const SizedBox(height: 8),
           const Text(
             "Enter the email associated with your account and we'll "
@@ -105,6 +112,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             isLoading: _isLoading,
             onPressed: _handleResetPassword,
           ),
+          const SizedBox(height: 16),
+          Center(
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Back to login',
+                style: AppTextStyles.link,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -118,14 +135,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           width: 84,
           height: 84,
           decoration: BoxDecoration(
-            color: AppColors.success.withOpacity(0.1),
+            color: AppColors.success.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.mark_email_read_outlined,
-              size: 40, color: AppColors.success),
+          child: const Icon(
+            Icons.mark_email_read_outlined,
+            size: 40,
+            color: AppColors.success,
+          ),
         ),
         const SizedBox(height: 24),
-        const Text('Check your inbox', style: AppTextStyles.heading, textAlign: TextAlign.center),
+        const Text(
+          'Check your inbox',
+          style: AppTextStyles.heading,
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 8),
         Text(
           'We sent a password reset link to ${_emailController.text.trim()}.',
@@ -135,7 +159,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 28),
         CustomButton(
           label: 'Back to login',
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ],
     );

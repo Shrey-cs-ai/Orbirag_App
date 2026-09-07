@@ -11,6 +11,9 @@ class FirebaseAuthService {
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  // ==================== EMAIL/PASSWORD AUTH ====================
+
+  /// Sign up with email and password
   Future<String?> signUp({
     required String name,
     required String email,
@@ -23,7 +26,7 @@ class FirebaseAuthService {
       );
       await credential.user?.updateDisplayName(name.trim());
       await credential.user?.reload();
-      return null;
+      return null; // Success
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (_) {
@@ -31,6 +34,7 @@ class FirebaseAuthService {
     }
   }
 
+  /// Login with email and password
   Future<String?> login({
     required String email,
     required String password,
@@ -40,7 +44,7 @@ class FirebaseAuthService {
         email: email.trim(),
         password: password,
       );
-      return null;
+      return null; // Success
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (_) {
@@ -48,10 +52,11 @@ class FirebaseAuthService {
     }
   }
 
+  /// Send password reset email
   Future<String?> sendPasswordResetEmail(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
-      return null;
+      return null; // Success
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (_) {
@@ -59,18 +64,26 @@ class FirebaseAuthService {
     }
   }
 
+  // ==================== SOCIAL AUTH ====================
+
+  /// Sign in with Google
   Future<String?> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return 'Google sign-in cancelled';
+      if (googleUser == null) {
+        return 'Google sign-in cancelled';
+      }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
         accessToken: googleAuth.accessToken,
       );
+
       await _auth.signInWithCredential(credential);
-      return null;
+      return null; // Success
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (e) {
@@ -78,13 +91,19 @@ class FirebaseAuthService {
     }
   }
 
+  /// Sign in with GitHub
   Future<String?> signInWithGitHub() async {
     try {
+      // IMPORTANT: Enable GitHub in Firebase Console first
+      // Go to: Firebase Console → Authentication → Sign-in methods → GitHub
+      // You need to register a GitHub OAuth app and add Client ID & Secret
+      
       final provider = GithubAuthProvider();
       provider.addScope('read:user');
       provider.addScope('user:email');
+      
       await _auth.signInWithProvider(provider);
-      return null;
+      return null; // Success
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (e) {
@@ -92,27 +111,51 @@ class FirebaseAuthService {
     }
   }
 
+  /// Sign in with LinkedIn (Custom Implementation)
+  /// Note: LinkedIn is not a built-in provider in Firebase
+  /// You need to implement custom OAuth flow
   Future<String?> signInWithLinkedIn() async {
-    return 'LinkedIn sign-in not configured. Please use email or Google.';
+    // LinkedIn requires custom OAuth implementation
+    // You can use packages like: linkedin_login
+    // Or implement your own OAuth flow
+    return 'LinkedIn sign-in not configured. Please use Email, Google, or GitHub.';
   }
 
+  // ==================== UTILITY ====================
+
+  /// Sign out
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
   }
 
+  /// Map Firebase errors to user-friendly messages
   String _mapError(FirebaseAuthException e) {
     switch (e.code) {
-      case 'invalid-email': return 'That email address looks invalid.';
-      case 'user-disabled': return 'This account has been disabled.';
-      case 'user-not-found': return 'No account found with that email.';
+      case 'invalid-email':
+        return 'That email address looks invalid.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'user-not-found':
+        return 'No account found with that email.';
       case 'wrong-password':
-      case 'invalid-credential': return 'Incorrect email or password.';
-      case 'email-already-in-use': return 'An account already exists with that email.';
-      case 'weak-password': return 'Please choose a stronger password.';
-      case 'too-many-requests': return 'Too many attempts. Please try again later.';
-      case 'network-request-failed': return 'Network error. Check your connection.';
-      default: return e.message ?? 'Authentication failed. Please try again.';
+      case 'invalid-credential':
+        return 'Incorrect email or password.';
+      case 'email-already-in-use':
+        return 'An account already exists with that email.';
+      case 'weak-password':
+        return 'Please choose a stronger password.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection.';
+      case 'operation-not-allowed':
+        return 'This sign-in method is not enabled.';
+      default:
+        return e.message ?? 'Authentication failed. Please try again.';
     }
   }
+
+  /// Check if user is logged in
+  bool get isLoggedIn => _auth.currentUser != null;
 }

@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
-import '../screens/word_counter_screen.dart';
-import '../screens/saved_paper_screen.dart';
-import '../screens/plagarism_check_screen.dart';
-import '../screens/citation_generation_screen.dart';
-import '../screens/notebook_llm_screen.dart';
-import '../screens/my_notes_screen.dart';
 import '../screens/login_screen.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -55,12 +49,6 @@ class AppDrawer extends StatelessWidget {
                 children: [
                   _drawerItem(
                     context,
-                    icon: Icons.text_fields,
-                    title: "Word Counter",
-                    onTap: () => _navigate(context, const WordCounterScreen()),
-                  ),
-                  _drawerItem(
-                    context,
                     icon: Icons.menu_book_outlined,
                     title: "Literature Retrieval",
                     onTap: () {}, // Add your screen later
@@ -76,36 +64,6 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.travel_explore,
                     title: "Guided Topic Scoping",
                     onTap: () {}, // Add your screen later
-                  ),
-                  _drawerItem(
-                    context,
-                    icon: Icons.note_alt_outlined,
-                    title: "Notepad",
-                    onTap: () => _navigate(context, const MyNotesScreen()),
-                  ),
-                  _drawerItem(
-                    context,
-                    icon: Icons.bookmark_border,
-                    title: "Saved Papers",
-                    onTap: () => _navigate(context, const SavedPapersScreen()),
-                  ),
-                  _drawerItem(
-                    context,
-                    icon: Icons.shield_outlined,
-                    title: "Plagiarism Check",
-                    onTap: () => _navigate(context, const PlagiarismCheckScreen()),
-                  ),
-                  _drawerItem(
-                    context,
-                    icon: Icons.format_quote,
-                    title: "Citation Generation",
-                    onTap: () => _navigate(context, const CitationGeneratorScreen()),
-                  ),
-                  _drawerItem(
-                    context,
-                    icon: Icons.auto_awesome,
-                    title: "Notebook LLM",
-                    onTap: () => _navigate(context, const NotebookLLMScreen()),
                   ),
                 ],
               ),
@@ -144,10 +102,6 @@ class AppDrawer extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
     );
-  }
-
-  void _navigate(BuildContext context, Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
   void _showLogoutDialog(BuildContext context) {

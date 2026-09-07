@@ -9,17 +9,7 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/forgot_password_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/saved_paper_screen.dart';
-import 'screens/notebook_llm_screen.dart';
-import 'screens/chat_with_pdf_screen.dart';
-import 'screens/ori_chatbot_screen.dart';
 import 'screens/voice_input_screen.dart';
-import 'screens/plagarism_check_screen.dart';
-import 'screens/citation_generation_screen.dart';
-import 'screens/word_counter_screen.dart';
-import 'screens/my_notes_screen.dart';
-import 'screens/new_notes_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,16 +53,6 @@ class MyApp extends StatelessWidget {
         AppConstants.routeHome: (context) => const HomeScreen(),
         AppConstants.routeForgotPassword: (context) => const ForgotPasswordScreen(),
         AppConstants.routeVoiceInput: (context) => const VoiceInputScreen(),
-        '/profile': (context) => const ProfileScreen(),
-        '/saved-papers': (context) => const SavedPapersScreen(),
-        '/notebook-llm': (context) => const NotebookLLMScreen(),
-        '/chat-with-pdf': (context) => const ChatWithPdfScreen(),
-        '/ori-chat': (context) => const OriChatScreen(),
-        '/plagiarism-check': (context) => const PlagiarismCheckScreen(),
-        '/citation-generator': (context) => const CitationGeneratorScreen(),
-        '/word-counter': (context) => const WordCounterScreen(),
-        '/my-notes': (context) => const MyNotesScreen(),
-        '/new-note': (context) => const NewNoteScreen(),
       },
     );
   }

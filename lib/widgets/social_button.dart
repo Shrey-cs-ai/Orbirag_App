@@ -1,28 +1,34 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 
-/// Circular outlined icon button used for social auth providers
-/// on the login screen (GitHub, LinkedIn, Google).
 class SocialButton extends StatelessWidget {
   final Widget icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final Color? backgroundColor;
 
-  const SocialButton({super.key, required this.icon, required this.onPressed});
+  const SocialButton({
+    super.key,
+    required this.icon,
+    this.onPressed,
+    this.backgroundColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(30),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 56,
-        height: 52,
-        alignment: Alignment.center,
+        width: 60,
+        height: 60,
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
+          color: backgroundColor ?? AppColors.white,
         ),
-        child: icon,
+        child: Center(
+          child: icon,
+        ),
       ),
     );
   }
