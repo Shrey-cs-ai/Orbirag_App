@@ -15,6 +15,21 @@ class AppConstants {
   static const String routeForgotPassword = '/forgot-password';
   static const String routeHome = '/home';
   static const String routeVoiceInput = '/voice-input';
+  static const String routeProfile = '/profile';
+  static const String routeOriChat = '/ori-chat';
+  static const String routePlagiarismCheck = '/plagiarism-check';
+  static const String routeOriChat = '/ori-chat';
+  // Bottom Nav Items
+  static const List<Map<String, dynamic>> bottomNavItems = [
+    {'icon': Icons.home_outlined, 'label': 'Home', 'route': routeHome},
+    {'icon': Icons.chat_bubble_outline, 'label': 'Ori', 'route': routeOriChat},
+    {
+      'icon': Icons.search_outlined,
+      'label': 'Research',
+      'route': '/literature-retrieval'
+    },
+    {'icon': Icons.person_outline, 'label': 'Profile', 'route': routeProfile},
+  ];
 
   static const List<Map<String, dynamic>> roles = [
     {'label': 'PhD', 'icon': Icons.school_outlined},
@@ -22,6 +37,18 @@ class AppConstants {
     {'label': 'Undergraduate', 'icon': Icons.menu_book_outlined},
     {'label': 'Lecturer or Academic Staff', 'icon': Icons.co_present_outlined},
     {'label': 'Industry Professional', 'icon': Icons.business_center_outlined},
+  ];
+  // Add these routes
+  static const String routeMyNotes = '/my-notes';
+  static const String routeNewNote = '/new-note';
+
+  static const List<String> suggestionChips = [
+    'What is a research gap?',
+    'How do I start a lit review?',
+    'Help with methodology',
+    'Citation styles',
+    'Find research papers',
+    'Write abstract',
   ];
 }
 
