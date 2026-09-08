@@ -7,7 +7,7 @@ import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/landing_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/voice_input_screen.dart';
 
@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
         AppConstants.routeOnboarding: (context) => const OnboardingScreen(),
         AppConstants.routeLogin: (context) => const LoginScreen(),
         AppConstants.routeSignup: (context) => const SignupScreen(),
-        AppConstants.routeHome: (context) => const HomeScreen(),
+        AppConstants.routeHome: (context) => const Landingscreen(),
         AppConstants.routeForgotPassword: (context) => const ForgotPasswordScreen(),
         AppConstants.routeVoiceInput: (context) => const VoiceInputScreen(),
       },
