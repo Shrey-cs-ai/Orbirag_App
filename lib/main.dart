@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
         AppConstants.routeOnboarding: (context) => const OnboardingScreen(),
         AppConstants.routeLogin: (context) => const LoginScreen(),
         AppConstants.routeSignup: (context) => const SignupScreen(),
-        AppConstants.routeHome: (context) => const Landingscreen(),
+        AppConstants.routeHome: (context) => const LandingScreen(),
         AppConstants.routeForgotPassword: (context) => const ForgotPasswordScreen(),
         AppConstants.routeVoiceInput: (context) => const VoiceInputScreen(),
       },
