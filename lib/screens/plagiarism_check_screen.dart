@@ -64,7 +64,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
 
     final screens = [
       const HomeScreen(),
-      const OriChatbotScreen(),
+      const OriChatScreen(),
       const LiteratureRetrievalScreen(),
       const ProfileScreen(),
     ];

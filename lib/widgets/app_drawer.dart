@@ -12,7 +12,7 @@ import '../screens/plagiarism_check_screen.dart';
 import '../screens/citation_generation_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
-import 'screens/saved_paper_screen.dart';
+import '../screens/saved_papers_screen.dart'; 
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -111,7 +111,7 @@ class AppDrawer extends StatelessWidget {
                     context,
                     icon: Icons.bookmark_border,
                     title: "Saved Papers",
-                    screen: const SavedPaperScreen(),
+                    screen: const SavedPapersScreen(),
                   ),
                   _item(
                     context,
@@ -185,7 +185,6 @@ class AppDrawer extends StatelessWidget {
         content: const Text("Are you sure you want to log out?"),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
-          // No button
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text(
@@ -193,8 +192,6 @@ class AppDrawer extends StatelessWidget {
               style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
-
-          // Yes button
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx); // close dialog

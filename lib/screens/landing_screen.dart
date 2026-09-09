@@ -6,8 +6,8 @@ import '../widgets/app_scaffold.dart';
 
 /// Placeholder landing screen shown after a successful login/signup.
 /// Replace with the real dashboard UI.
-class Landingscreen extends StatelessWidget {
-  const Landingscreen({super.key});
+class LandingScreen extends StatelessWidget {
+  const LandingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

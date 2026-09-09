@@ -10,6 +10,7 @@ class FirebaseAuthService {
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
+  bool get isLoggedIn => _auth.currentUser != null;
 
   // ==================== EMAIL/PASSWORD AUTH ====================
 
@@ -112,22 +113,35 @@ class FirebaseAuthService {
   }
 
   /// Sign in with LinkedIn (Custom Implementation)
-  /// Note: LinkedIn is not a built-in provider in Firebase
-  /// You need to implement custom OAuth flow
   Future<String?> signInWithLinkedIn() async {
     // LinkedIn requires custom OAuth implementation
     // You can use packages like: linkedin_login
-    // Or implement your own OAuth flow
     return 'LinkedIn sign-in not configured. Please use Email, Google, or GitHub.';
   }
 
-  // ==================== UTILITY ====================
+  // ==================== PROFILE MANAGEMENT ====================
+
+  /// Update user profile
+  Future<void> updateProfile({String? displayName, String? photoURL}) async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      if (displayName != null) {
+        await user.updateDisplayName(displayName);
+      }
+      if (photoURL != null) {
+        await user.updatePhotoURL(photoURL);
+      }
+      await user.reload();
+    }
+  }
 
   /// Sign out
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
   }
+
+  // ==================== ERROR HANDLING ====================
 
   /// Map Firebase errors to user-friendly messages
   String _mapError(FirebaseAuthException e) {
@@ -155,7 +169,4 @@ class FirebaseAuthService {
         return e.message ?? 'Authentication failed. Please try again.';
     }
   }
-
-  /// Check if user is logged in
-  bool get isLoggedIn => _auth.currentUser != null;
 }
