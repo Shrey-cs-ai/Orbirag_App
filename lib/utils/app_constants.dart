@@ -99,6 +99,8 @@ class AppConstants {
   static const String keyRememberMe = 'remember_me';
   static const String keySavedPapers = 'saved_papers';
   static const String keyNotes = 'notes';
+
+static const String routeLibrary = '/library';
 }
 
 // ==================== TEXT STYLES ====================

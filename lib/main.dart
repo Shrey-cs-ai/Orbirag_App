@@ -19,6 +19,7 @@ import 'screens/my_notes_screen.dart';
 import 'screens/new_notes_screen.dart';
 import 'screens/saved_papers_screen.dart';
 import 'screens/word_counter_screen.dart';
+import 'screens/library_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +74,7 @@ class MyApp extends StatelessWidget {
         AppConstants.routeMyNotes: (context) => const MyNotesScreen(),
         AppConstants.routeWordCounter: (context) => const WordCounterScreen(),
         AppConstants.routeNewNote: (context) => const NewNoteScreen(),
+        AppConstants.routeLibrary: (context) => const LibraryScreen(),
       },
     );
   }
@@ -87,7 +89,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
-      body: const Cente r(child: Text('Home Screen')),
+      body: const Center(child: Text('Home Screen')),
     );
   }
 }

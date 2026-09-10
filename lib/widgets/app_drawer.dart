@@ -13,6 +13,7 @@ import '../screens/citation_generation_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/saved_papers_screen.dart'; 
+import '../screens/library_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -100,12 +101,6 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.note_alt_outlined,
                     title: "Notepad",
                     screen: const MyNotesScreen(),
-                  ),
-                  _item(
-                    context,
-                    icon: Icons.note_add,
-                    title: "New Note",
-                    screen: const NewNoteScreen(),
                   ),
                   _item(
                     context,
