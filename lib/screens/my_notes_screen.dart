@@ -194,7 +194,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                               Icon(
                                 Icons.note_add_outlined,
                                 size: 64,
-                                color: AppColors.textSecondary.withOpacity(0.3),
+                                color: AppColors.textSecondary.withValues(alpha:0.3),
                               ),
                               const SizedBox(height: 16),
                               const Text(
@@ -253,7 +253,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha:0.02),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),

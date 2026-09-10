@@ -137,7 +137,7 @@ class _NotebookLLMScreenState extends State<NotebookLLMScreen> {
                           Icon(
                             Icons.upload_file_outlined,
                             size: 64,
-                            color: AppColors.textSecondary.withOpacity(0.3),
+                            color: AppColors.textSecondary.withValues(alpha:0.3),
                           ),
                           const SizedBox(height: 12),
                           Text(

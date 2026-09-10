@@ -497,7 +497,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                           Icon(
                             Icons.folder_open_outlined,
                             size: 64,
-                            color: AppColors.textSecondary.withOpacity(0.3),
+                            color: AppColors.textSecondary.withValues(alpha:0.3),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -556,7 +556,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
