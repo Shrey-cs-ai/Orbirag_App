@@ -17,7 +17,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   int _selectedIndex = 0;
 
   // Sample text for demonstration
-  final String _sampleText = 
+  final String _sampleText =
       "The implications of this research are substancial for the field of cognitive behavioral therapy. "
       "Early interventions have shown a significant decrease in long-term symptom persistence.";
 
@@ -54,14 +54,20 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   int get sentenceCount {
     final text = _controller.text.trim();
     if (text.isEmpty) return 0;
-    return text.split(RegExp(r'[.!?]+')).where((s) => s.trim().isNotEmpty).length;
+    return text
+        .split(RegExp(r'[.!?]+'))
+        .where((s) => s.trim().isNotEmpty)
+        .length;
   }
 
   // Paragraph count
   int get paragraphCount {
     final text = _controller.text.trim();
     if (text.isEmpty) return 0;
-    return text.split(RegExp(r'\n\n+')).where((p) => p.trim().isNotEmpty).length;
+    return text
+        .split(RegExp(r'\n\n+'))
+        .where((p) => p.trim().isNotEmpty)
+        .length;
   }
 
   // Reading time (approx 200 words per minute)
@@ -90,7 +96,8 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
 
   void _replaceWord() {
     setState(() {
-      _controller.text = _controller.text.replaceFirst('substancial', 'substantial');
+      _controller.text =
+          _controller.text.replaceFirst('substancial', 'substantial');
     });
   }
 
@@ -353,7 +360,8 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
                   children: [
                     const Row(
                       children: [
-                        Icon(Icons.auto_awesome, size: 16, color: AppColors.purple),
+                        Icon(Icons.auto_awesome,
+                            size: 16, color: AppColors.purple),
                         SizedBox(width: 6),
                         Text(
                           "AI Suggestion",
@@ -367,7 +375,8 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
                     const SizedBox(height: 12),
                     RichText(
                       text: const TextSpan(
-                        style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                        style: TextStyle(
+                            fontSize: 15, color: AppColors.textPrimary),
                         children: [
                           TextSpan(
                             text: "substancial",
@@ -434,7 +443,8 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
                   children: [
                     const Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
+                        Icon(Icons.warning_amber_rounded,
+                            size: 16, color: AppColors.warning),
                         SizedBox(width: 6),
                         Text(
                           "Repeated Words",
@@ -456,10 +466,10 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.warning.withValues(alpha:0.1),
+                            color: AppColors.warning.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppColors.warning.withValues(alpha:0.3),
+                              color: AppColors.warning.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Text(
@@ -516,7 +526,11 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
                     ),
                     _buildAnalysisRow(
                       'Unique Words',
-                      _controller.text.split(RegExp(r'\s+')).toSet().length.toString(),
+                      _controller.text
+                          .split(RegExp(r'\s+'))
+                          .toSet()
+                          .length
+                          .toString(),
                       Icons.abc,
                     ),
                     _buildAnalysisRow(
@@ -548,7 +562,8 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -623,7 +638,10 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   }
 
   String _getAverageWordLength() {
-    final words = _controller.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = _controller.text
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (words.isEmpty) return '0';
     final totalLength = words.fold(0, (sum, word) => sum + word.length);
     final avg = totalLength / words.length;

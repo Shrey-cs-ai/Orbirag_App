@@ -1,7 +1,6 @@
 // lib/services/pdf_service.dart
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // ✅ For debugPrint and kDebugMode
-import 'package:path_provider/path_provider.dart';
 
 class PdfService {
   static final PdfService _instance = PdfService._internal();

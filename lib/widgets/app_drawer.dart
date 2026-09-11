@@ -7,14 +7,11 @@ import '../screens/literature_retrieval_screen.dart';
 import '../screens/methodology_screen.dart';
 import '../screens/guided_topic_scoping_screen.dart';
 import '../screens/my_notes_screen.dart';
-import '../screens/new_notes_screen.dart';
 import '../screens/plagiarism_check_screen.dart';
 import '../screens/citation_generation_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/saved_papers_screen.dart'; 
-import '../screens/library_screen.dart';
-
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 

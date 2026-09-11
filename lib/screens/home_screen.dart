@@ -21,7 +21,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
-  int _currentIndex = 0;
+  final int _currentIndex = 0;
 
   @override
   void dispose() {
@@ -143,7 +143,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.auto_awesome, size: 18, color: AppColors.primary),
+                  const Icon(Icons.auto_awesome,
+                      size: 18, color: AppColors.primary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -151,17 +152,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: const InputDecoration(
                         hintText: "Search paper by title or keywords...",
                         border: InputBorder.none,
-                        hintStyle: TextStyle(fontSize: 14, color: AppColors.hintText),
+                        hintStyle:
+                            TextStyle(fontSize: 14, color: AppColors.hintText),
                       ),
                       onSubmitted: _performSearch,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.mic, size: 20, color: AppColors.primary),
+                    icon: const Icon(Icons.mic,
+                        size: 20, color: AppColors.primary),
                     onPressed: _openVoiceSearch,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.arrow_forward, size: 20, color: AppColors.primary),
+                    icon: const Icon(Icons.arrow_forward,
+                        size: 20, color: AppColors.primary),
                     onPressed: () => _performSearch(_searchController.text),
                   ),
                 ],
@@ -183,7 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.play_circle_outline, size: 18, color: AppColors.primary),
+                      const Icon(Icons.play_circle_outline,
+                          size: 18, color: AppColors.primary),
                       const SizedBox(width: 6),
                       const Text(
                         "CONTINUE RESEARCH",
@@ -215,12 +220,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Text(
                         "Research Progress",
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
                       ),
                       const Spacer(),
                       const Text(
                         "65%",
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -310,7 +317,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const GuidedTopicScopingScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const GuidedTopicScopingScreen()),
                     );
                   },
                 ),
@@ -320,7 +328,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const CitationGenerationScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const CitationGenerationScreen()),
                     );
                   },
                 ),
@@ -330,7 +339,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const PlagiarismCheckScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const PlagiarismCheckScreen()),
                     );
                   },
                 ),
@@ -340,7 +350,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const SavedPapersScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const SavedPapersScreen()),
                     );
                   },
                 ),
@@ -390,7 +401,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 12, color: AppColors.textSecondary),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),

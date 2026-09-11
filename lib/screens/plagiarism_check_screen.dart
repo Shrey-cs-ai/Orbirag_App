@@ -18,7 +18,7 @@ class PlagiarismCheckScreen extends StatefulWidget {
 }
 
 class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
-  int _currentIndex = 2; // Research tab
+  final int _currentIndex = 2; // Research tab
 
   final TextEditingController _documentController = TextEditingController(
     text:
@@ -458,7 +458,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? AppColors.primary.withValues(alpha:0.15)
+                        ? AppColors.primary.withValues(alpha: 0.15)
                         : const Color(0xFFE0E7FF),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
@@ -563,9 +563,9 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.lightPurple.withValues(alpha:0.3),
+        color: AppColors.lightPurple.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.purple.withValues(alpha:0.3)),
+        border: Border.all(color: AppColors.purple.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -180,9 +180,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 children: [
                   // Personal Workspace Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Row(
@@ -290,7 +291,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           Icon(
                             Icons.library_books_outlined,
                             size: 64,
-                            color: AppColors.textSecondary.withValues(alpha:0.3),
+                            color:
+                                AppColors.textSecondary.withValues(alpha: 0.3),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -348,13 +350,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: item.isPinned
-              ? AppColors.primary.withValues(alpha:0.3)
+              ? AppColors.primary.withValues(alpha: 0.3)
               : AppColors.border,
           width: item.isPinned ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

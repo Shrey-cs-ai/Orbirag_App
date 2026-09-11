@@ -135,7 +135,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                       label: 'Authors',
                       hint: 'Smith, J., et al.',
                       validator: (value) {
-                        if (value?.isEmpty ?? true) return 'Authors are required';
+                        if (value?.isEmpty ?? true)
+                          return 'Authors are required';
                         return null;
                       },
                       maxLines: 2,
@@ -148,7 +149,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                       label: 'Category',
                       hint: 'e.g., QUALITATIVE METHODS',
                       validator: (value) {
-                        if (value?.isEmpty ?? true) return 'Category is required';
+                        if (value?.isEmpty ?? true)
+                          return 'Category is required';
                         return null;
                       },
                     ),
@@ -229,7 +231,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
                     : const Text('Add Paper'),
@@ -295,7 +298,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -472,11 +476,15 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                             selectedColor: AppColors.primary,
                             backgroundColor: AppColors.white,
                             labelStyle: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.textPrimary,
                               fontWeight: FontWeight.w500,
                             ),
                             side: BorderSide(
-                              color: isSelected ? AppColors.primary : AppColors.border,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.border,
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
@@ -497,7 +505,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                           Icon(
                             Icons.folder_open_outlined,
                             size: 64,
-                            color: AppColors.textSecondary.withValues(alpha:0.3),
+                            color:
+                                AppColors.textSecondary.withValues(alpha: 0.3),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -556,7 +565,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -581,7 +590,9 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 icon: Icon(
                   paper.isFavorite ? Icons.favorite : Icons.favorite_border,
                   size: 20,
-                  color: paper.isFavorite ? AppColors.error : AppColors.textSecondary,
+                  color: paper.isFavorite
+                      ? AppColors.error
+                      : AppColors.textSecondary,
                 ),
                 onPressed: () {
                   _papersService.toggleFavorite(paper.id);
@@ -593,7 +604,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 constraints: const BoxConstraints(),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.textSecondary),
+                icon: const Icon(Icons.delete_outline,
+                    size: 20, color: AppColors.textSecondary),
                 onPressed: () => _showDeleteDialog(paper),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -627,7 +639,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.lightPurple,
                     borderRadius: BorderRadius.circular(8),
@@ -635,7 +648,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.auto_awesome, size: 12, color: AppColors.purple),
+                      Icon(Icons.auto_awesome,
+                          size: 12, color: AppColors.purple),
                       SizedBox(width: 4),
                       Text(
                         "Analyzed by OrbiRAG",
@@ -649,7 +663,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                   onPressed: () {},
                   child: const Text(
                     "Read →",
-                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: AppColors.primary, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -695,7 +710,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.cardBg,
                     borderRadius: BorderRadius.circular(8),
@@ -710,7 +726,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                   onPressed: () {},
                   child: const Text(
                     "Start Reading →",
-                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: AppColors.primary, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],

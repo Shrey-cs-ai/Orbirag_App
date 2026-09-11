@@ -84,7 +84,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
         builder: (context) => NewNoteScreen(note: note),
       ),
     );
-    
+
     if (result == true) {
       await _loadNotes();
     }
@@ -194,7 +194,8 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                               Icon(
                                 Icons.note_add_outlined,
                                 size: 64,
-                                color: AppColors.textSecondary.withValues(alpha:0.3),
+                                color: AppColors.textSecondary
+                                    .withValues(alpha: 0.3),
                               ),
                               const SizedBox(height: 16),
                               const Text(
@@ -253,7 +254,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -286,7 +287,9 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                   icon: Icon(
                     note.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
                     size: 18,
-                    color: note.isPinned ? AppColors.primary : AppColors.textSecondary,
+                    color: note.isPinned
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
                   ),
                   onPressed: () {
                     _notesService.togglePinNote(note.id);

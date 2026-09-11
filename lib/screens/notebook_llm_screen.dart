@@ -35,7 +35,8 @@ class _NotebookLLMScreenState extends State<NotebookLLMScreen> {
           builder: (context) => IconButton(
             icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
             onPressed: () {
-              Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+              Navigator.of(context)
+                  .pushReplacementNamed(AppConstants.routeHome);
             },
           ),
         ),
@@ -137,7 +138,8 @@ class _NotebookLLMScreenState extends State<NotebookLLMScreen> {
                           Icon(
                             Icons.upload_file_outlined,
                             size: 64,
-                            color: AppColors.textSecondary.withValues(alpha:0.3),
+                            color:
+                                AppColors.textSecondary.withValues(alpha: 0.3),
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -320,7 +322,8 @@ class _NotebookLLMScreenState extends State<NotebookLLMScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+            icon: const Icon(Icons.close,
+                size: 18, color: AppColors.textSecondary),
             onPressed: () {
               setState(() {
                 _pdfService.removeSource(index);
@@ -365,7 +368,7 @@ class _NotebookLLMScreenState extends State<NotebookLLMScreen> {
     try {
       final picker = ImagePicker();
       final image = await picker.pickImage(source: ImageSource.camera);
-      
+
       if (image != null) {
         // Add as a source (simplified)
         setState(() {

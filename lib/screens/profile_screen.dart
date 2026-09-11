@@ -1,11 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../utils/firebase_auth_service.dart';
-import '../services/profile_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_drawer.dart';
 
@@ -17,10 +15,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  int _selectedIndex = 3;
+  int _selectedIndex = 3; // Profile is index 3
   final FirebaseAuthService _auth = FirebaseAuthService.instance;
-  final ProfileService _profileService = ProfileService();
-  
+
   // Profile Data
   String? _profileImageUrl;
   String _name = '';
@@ -28,18 +25,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _selectedRole = 'Undergraduate';
   bool _isEditMode = false;
   bool _isLoading = false;
-  bool _isUploadingImage = false;
-  
+
   // Notification Data
-  List<Map<String, dynamic>> _notifications = [];
+  final List<Map<String, dynamic>> _notifications = [
+    {
+      'icon': Icons.person_add,
+      'title': 'New follower',
+      'message': 'Sarah Johnson started following you',
+      'time': '2 hours ago'
+    },
+    {
+      'icon': Icons.bookmark,
+      'title': 'Paper saved',
+      'message': 'Your paper was saved by 5 researchers',
+      'time': '4 hours ago'
+    },
+    {
+      'icon': Icons.comment,
+      'title': 'New comment',
+      'message': 'Dr. Smith commented on your research',
+      'time': '1 day ago'
+    },
+    {
+      'icon': Icons.emoji_events,
+      'title': 'Achievement unlocked',
+      'message': 'You reached 50 papers saved!',
+      'time': '2 days ago'
+    },
+  ];
 
   // Progress Data
-  Map<String, dynamic> _progressData = {
-    'totalHours': '0',
-    'papersRead': '0',
-    'citations': '0',
-    'streak': '0 days',
-    'weeklyData': [0, 0, 0, 0, 0, 0, 0],
+  final Map<String, dynamic> _progressData = {
+    'totalHours': '127',
+    'papersRead': '34',
+    'citations': '12',
+    'streak': '7 days',
+    'weeklyData': [12, 8, 15, 10, 20, 5, 18],
   };
 
   // Expanded Sections
@@ -52,195 +73,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    final user = _auth.currentUser;
+    _profileImageUrl = user?.photoURL;
+    _name = user?.displayName ?? 'Alex Bennett';
+    _email = user?.email ?? 'alex.bennett@university.edu';
   }
 
-  // ==================== LOAD USER DATA ====================
-  Future<void> _loadUserData() async {
-    final user = _auth.currentUser;
-    
-    // ✅ Load role from storage
-    final savedRole = await _profileService.getRole();
-    
-    // ✅ Load progress from storage
-    final savedProgress = await _profileService.getProgress();
-    
-    // ✅ Load notifications from storage
-    final savedNotifications = await _profileService.getNotifications();
-    
-    setState(() {
-      _profileImageUrl = user?.photoURL;
-      _name = user?.displayName ?? 'Alex Bennett';
-      _email = user?.email ?? 'alex.bennett@university.edu';
-      _selectedRole = savedRole ?? 'Undergraduate';
-      
-      if (savedProgress != null) {
-        _progressData = savedProgress;
-      } else {
-        // Default sample data
-        _progressData = {
-          'totalHours': '127',
-          'papersRead': '34',
-          'citations': '12',
-          'streak': '7 days',
-          'weeklyData': [12, 8, 15, 10, 20, 5, 18],
-        };
-      }
-      
-      if (savedNotifications.isNotEmpty) {
-        _notifications = savedNotifications;
-      } else {
-        // Default sample notifications
-        _notifications = [
-          {'icon': 'person_add', 'title': 'New follower', 'message': 'Sarah Johnson started following you', 'time': '2 hours ago'},
-          {'icon': 'bookmark', 'title': 'Paper saved', 'message': 'Your paper was saved by 5 researchers', 'time': '4 hours ago'},
-          {'icon': 'comment', 'title': 'New comment', 'message': 'Dr. Smith commented on your research', 'time': '1 day ago'},
-          {'icon': 'emoji_events', 'title': 'Achievement unlocked', 'message': 'You reached 50 papers saved!', 'time': '2 days ago'},
-        ];
-        await _profileService.saveNotifications(_notifications);
-      }
-    });
-  }
+  // ==================== EDIT PROFILE ====================
 
   Future<void> _pickImage() async {
-    try {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
-      
-      if (pickedFile == null) return;
-
-      setState(() => _isUploadingImage = true);
-
-      // Try uploading to Firebase Storage
-      final user = _auth.currentUser;
-      if (user != null) {
-        try {
-          // Create storage reference
-          final storageRef = FirebaseStorage.instance
-              .ref()
-              .child('profile_pics')
-              .child('${user.uid}.jpg');
-
-          // Upload file
-          await storageRef.putFile(File(pickedFile.path));
-
-          // Get download URL
-          final downloadUrl = await storageRef.getDownloadURL();
-
-          // Update user profile
-          await _auth.updatePhotoURL(downloadUrl);
-
-          // Save to local storage as backup
-          await _profileService.saveProfilePicPath(downloadUrl);
-
-          setState(() {
-            _profileImageUrl = downloadUrl;
-            _isUploadingImage = false;
-          });
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Profile picture updated!'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-          }
-          return;
-        } catch (firebaseError) {
-          // Firebase failed, fall back to local
-          debugPrint('Firebase upload failed: $firebaseError');
-        }
-      }
-
-      // Fallback: Use local file
-      await _profileService.saveProfilePicPath(pickedFile.path);
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
       setState(() {
         _profileImageUrl = pickedFile.path;
-        _isUploadingImage = false;
       });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile picture updated locally'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => _isUploadingImage = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      // TODO: Upload to Firebase Storage
     }
   }
 
   Future<void> _saveProfile() async {
     setState(() => _isLoading = true);
     try {
-      // Update Firebase display name
       await _auth.updateProfile(displayName: _name);
-      
-      // ✅ Save role to storage
-      await _profileService.saveRole(_selectedRole);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Profile updated successfully!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-      
-      setState(() {
-        _isEditMode = false;
-        _isLoading = false;
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Profile updated!'),
+            backgroundColor: AppColors.success),
+      );
+      setState(() => _isEditMode = false);
     } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+      );
     }
-  }
-
-  // Helper to get icon from string
-  IconData _getIconFromString(String iconName) {
-    switch (iconName) {
-      case 'person_add': return Icons.person_add;
-      case 'bookmark': return Icons.bookmark;
-      case 'comment': return Icons.comment;
-      case 'emoji_events': return Icons.emoji_events;
-      case 'security': return Icons.security;
-      case 'download': return Icons.download;
-      case 'delete': return Icons.delete;
-      default: return Icons.notifications;
-    }
+    setState(() => _isLoading = false);
   }
 
   // ==================== BUILD ====================
+
   @override
   Widget build(BuildContext context) {
-    final List<String> roleLabels = AppConstants.roles
-        .map((role) => role['label'] as String)
-        .toList();
+    // FIXED: Convert roles list to List<String> for DropdownButton
+    final List<String> roleLabels =
+        AppConstants.roles.map((role) => role['label'] as String).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -276,45 +152,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           children: [
+            // ============================================
+            // PROFILE HEADER
+            // ============================================
             _buildProfileHeader(roleLabels),
             const SizedBox(height: 24),
-            
+
+            // ============================================
+            // EDIT PROFILE SECTION (Expandable)
+            // ============================================
             _buildExpandableSection(
               title: 'Edit Profile',
               icon: Icons.person_outline,
               isExpanded: _isEditProfileExpanded,
-              onTap: () => setState(() => _isEditProfileExpanded = !_isEditProfileExpanded),
+              onTap: () => setState(
+                  () => _isEditProfileExpanded = !_isEditProfileExpanded),
               content: _buildEditProfileContent(roleLabels),
             ),
             const SizedBox(height: 12),
-            
+
+            // ============================================
+            // NOTIFICATIONS SECTION (Expandable)
+            // ============================================
             _buildExpandableSection(
               title: 'Notifications',
               icon: Icons.notifications_none,
               isExpanded: _isNotificationsExpanded,
-              onTap: () => setState(() => _isNotificationsExpanded = !_isNotificationsExpanded),
+              onTap: () => setState(
+                  () => _isNotificationsExpanded = !_isNotificationsExpanded),
               content: _buildNotificationsContent(),
             ),
             const SizedBox(height: 12),
-            
+
+            // ============================================
+            // MY PROGRESS SECTION (Expandable)
+            // ============================================
             _buildExpandableSection(
               title: 'My Progress',
               icon: Icons.show_chart,
               isExpanded: _isProgressExpanded,
-              onTap: () => setState(() => _isProgressExpanded = !_isProgressExpanded),
+              onTap: () =>
+                  setState(() => _isProgressExpanded = !_isProgressExpanded),
               content: _buildProgressContent(),
             ),
             const SizedBox(height: 12),
-            
+
+            // ============================================
+            // PRIVACY & DATA SECTION (Expandable)
+            // ============================================
             _buildExpandableSection(
               title: 'Privacy & Data',
               icon: Icons.shield_outlined,
               isExpanded: _isPrivacyExpanded,
-              onTap: () => setState(() => _isPrivacyExpanded = !_isPrivacyExpanded),
+              onTap: () =>
+                  setState(() => _isPrivacyExpanded = !_isPrivacyExpanded),
               content: _buildPrivacyContent(),
             ),
             const SizedBox(height: 12),
-            
+
+            // ============================================
+            // ABOUT ORBIRAG SECTION (Expandable)
+            // ============================================
             _buildExpandableSection(
               title: 'About Orbirag',
               icon: Icons.info_outline,
@@ -355,47 +253,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircleAvatar(
-                    radius: 48,
-                    backgroundColor: AppColors.primary,
-                    backgroundImage: _profileImageUrl != null && _profileImageUrl!.startsWith('http')
-                        ? NetworkImage(_profileImageUrl!)
-                        : _profileImageUrl != null
-                            ? FileImage(File(_profileImageUrl!)) as ImageProvider
-                            : null,
-                    child: _profileImageUrl == null
-                        ? Text(
-                            _name.isNotEmpty ? _name.substring(0, 1).toUpperCase() : 'U',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          )
+              CircleAvatar(
+                radius: 48,
+                backgroundColor: AppColors.primary,
+                backgroundImage: _profileImageUrl != null &&
+                        _profileImageUrl!.startsWith('http')
+                    ? NetworkImage(_profileImageUrl!)
+                    : _profileImageUrl != null
+                        ? FileImage(File(_profileImageUrl!)) as ImageProvider
                         : null,
-                  ),
-                  // Loading indicator over avatar
-                  if (_isUploadingImage)
-                    Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha:0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(
+                child: _profileImageUrl == null
+                    ? Text(
+                        _name.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
                           color: Colors.white,
-                          strokeWidth: 3,
                         ),
-                      ),
-                    ),
-                ],
+                      )
+                    : null,
               ),
-              if (_isEditMode && !_isUploadingImage)
+              if (_isEditMode)
                 GestureDetector(
                   onTap: _pickImage,
                   child: Container(
@@ -404,7 +282,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: AppColors.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                    child: const Icon(Icons.camera_alt,
+                        size: 16, color: Colors.white),
                   ),
                 ),
             ],
@@ -416,7 +295,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ? TextField(
                   controller: TextEditingController(text: _name),
                   onChanged: (value) => _name = value,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                   decoration: const InputDecoration(
                     border: UnderlineInputBorder(),
@@ -443,7 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Role Badge
+          // Role Badge - FIXED: Pass roleLabels
           _isEditMode
               ? Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -462,12 +342,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Text(role),
                         );
                       }).toList(),
-                      onChanged: (value) => setState(() => _selectedRole = value!),
+                      onChanged: (value) =>
+                          setState(() => _selectedRole = value!),
                     ),
                   ),
                 )
               : Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.cardBg,
                     borderRadius: BorderRadius.circular(20),
@@ -475,7 +357,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: Text(
                     _selectedRole,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ),
 
@@ -485,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _saveProfile,
+                    onPressed: _saveProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -499,7 +382,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : const Text('Save Changes'),
@@ -541,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ============================================
-  // EXPANDABLE SECTION
+  // EXPANDABLE SECTION BUILDER
   // ============================================
 
   Widget _buildExpandableSection({
@@ -585,7 +469,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ============================================
-  // EDIT PROFILE CONTENT
+  // EDIT PROFILE CONTENT - FIXED
   // ============================================
 
   Widget _buildEditProfileContent(List<String> roleLabels) {
@@ -622,22 +506,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
-          onPressed: _isUploadingImage ? null : _pickImage,
-          icon: _isUploadingImage
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Icon(Icons.photo_camera),
-          label: Text(_isUploadingImage ? 'Uploading...' : 'Change Profile Photo'),
+          onPressed: _pickImage,
+          icon: const Icon(Icons.photo_camera),
+          label: const Text('Change Profile Photo'),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
       ],
@@ -664,14 +540,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha:0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  _getIconFromString(notification['icon'] ?? 'notifications'),
-                  color: AppColors.primary,
-                  size: 18,
-                ),
+                child: Icon(notification['icon'],
+                    color: AppColors.primary, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -679,16 +552,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      notification['title'] ?? '',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      notification['title'],
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13),
                     ),
                     Text(
-                      notification['message'] ?? '',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      notification['message'],
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
                     ),
                     Text(
-                      notification['time'] ?? '',
-                      style: const TextStyle(fontSize: 10, color: AppColors.hintText),
+                      notification['time'],
+                      style: const TextStyle(
+                          fontSize: 10, color: AppColors.hintText),
                     ),
                   ],
                 ),
@@ -707,23 +583,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProgressContent() {
     return Column(
       children: [
+        // Stats Row
         Row(
           children: [
-            _buildStatCard('Total Hours', _progressData['totalHours'] ?? '0', Icons.access_time, AppColors.progressColor1),
+            _buildStatCard('Total Hours', _progressData['totalHours'],
+                Icons.access_time, AppColors.progressColor1),
             const SizedBox(width: 8),
-            _buildStatCard('Papers Read', _progressData['papersRead'] ?? '0', Icons.menu_book, AppColors.progressColor2),
+            _buildStatCard('Papers Read', _progressData['papersRead'],
+                Icons.menu_book, AppColors.progressColor2),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            _buildStatCard('Citations', _progressData['citations'] ?? '0', Icons.format_quote, AppColors.progressColor3),
+            _buildStatCard('Citations', _progressData['citations'],
+                Icons.format_quote, AppColors.progressColor3),
             const SizedBox(width: 8),
-            _buildStatCard('Streak', _progressData['streak'] ?? '0 days', Icons.local_fire_department, AppColors.warning),
+            _buildStatCard('Streak', _progressData['streak'],
+                Icons.local_fire_department, AppColors.warning),
           ],
         ),
         const SizedBox(height: 16),
 
+        // Weekly Activity
         const Text(
           'Weekly Activity',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -731,11 +613,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].asMap().entries.map((entry) {
+          children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+              .asMap()
+              .entries
+              .map((entry) {
             final index = entry.key;
             final day = entry.value;
-            final weeklyData = (_progressData['weeklyData'] as List?) ?? [0, 0, 0, 0, 0, 0, 0];
-            final value = (weeklyData.length > index ? weeklyData[index] : 0) as int;
+            final value = (_progressData['weeklyData'] as List<int>)[index];
             return Column(
               children: [
                 Container(
@@ -752,7 +636,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: (value / 20) * 80,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [AppColors.progressColor1, AppColors.progressColor2],
+                            colors: [
+                              AppColors.progressColor1,
+                              AppColors.progressColor2
+                            ],
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
                           ),
@@ -763,13 +650,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(day, style: const TextStyle(fontSize: 9, color: AppColors.textSecondary)),
+                Text(day,
+                    style: const TextStyle(
+                        fontSize: 9, color: AppColors.textSecondary)),
               ],
             );
           }).toList(),
         ),
         const SizedBox(height: 8),
 
+        // GitHub-style contribution graph
         const Text(
           'Activity Overview',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -780,7 +670,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String label, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -798,7 +689,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             Text(
               label,
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+              style:
+                  const TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -809,9 +701,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildContributionGraph() {
     final colors = [
       AppColors.cardBg,
-      AppColors.progressColor1.withValues(alpha:0.2),
-      AppColors.progressColor1.withValues(alpha:0.4),
-      AppColors.progressColor1.withValues(alpha:0.6),
+      AppColors.progressColor1.withValues(alpha: 0.2),
+      AppColors.progressColor1.withValues(alpha: 0.4),
+      AppColors.progressColor1.withValues(alpha: 0.6),
       AppColors.progressColor1,
     ];
 
@@ -840,14 +732,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            const Text('Less', style: TextStyle(fontSize: 8, color: AppColors.textSecondary)),
+            const Text('Less',
+                style: TextStyle(fontSize: 8, color: AppColors.textSecondary)),
             ...colors.map((color) => Container(
                   width: 10,
                   height: 10,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
-                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                      color: color, borderRadius: BorderRadius.circular(2)),
                 )),
-            const Text('More', style: TextStyle(fontSize: 8, color: AppColors.textSecondary)),
+            const Text('More',
+                style: TextStyle(fontSize: 8, color: AppColors.textSecondary)),
           ],
         ),
       ],
@@ -865,21 +760,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: Icons.security,
           title: 'Data Security',
           description: 'Your data is encrypted and stored securely.',
-          onTap: () => _showInfoDialog('Data Security', 'Your data is encrypted with industry-standard protocols.'),
         ),
         const SizedBox(height: 8),
         _buildPrivacyItem(
           icon: Icons.shield,
           title: 'Privacy Policy',
           description: 'Read how we handle your data.',
-          onTap: () => _showInfoDialog('Privacy Policy', 'We respect your privacy. Your data is never sold to third parties.'),
         ),
         const SizedBox(height: 8),
         _buildPrivacyItem(
           icon: Icons.download,
           title: 'Download Data',
           description: 'Export your data in machine-readable format.',
-          onTap: () => _showInfoDialog('Download Data', 'Your data export will be sent to your email within 24 hours.'),
         ),
         const SizedBox(height: 8),
         _buildPrivacyItem(
@@ -887,7 +779,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: 'Delete Account',
           description: 'Permanently delete your account.',
           isDanger: true,
-          onTap: _showDeleteAccountDialog,
         ),
       ],
     );
@@ -898,104 +789,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required String description,
     bool isDanger = false,
-    VoidCallback? onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.cardBg,
-          borderRadius: BorderRadius.circular(10),
-          border: isDanger ? Border.all(color: AppColors.error) : null,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isDanger ? AppColors.error.withValues(alpha:0.1) : AppColors.primary.withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: isDanger ? AppColors.error : AppColors.primary, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: isDanger ? AppColors.error : AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    description,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: isDanger ? AppColors.error : AppColors.textSecondary, size: 18),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(10),
+        border: isDanger ? Border.all(color: AppColors.error) : null,
       ),
-    );
-  }
-
-  void _showInfoDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteAccountDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Account?'),
-        content: const Text(
-          'This action cannot be undone. All your data will be permanently deleted.',
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _auth.signOut();
-              if (mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  AppConstants.routeLogin,
-                  (route) => false,
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isDanger
+                  ? AppColors.error.withValues(alpha: 0.1)
+                  : AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('Delete'),
+            child: Icon(icon,
+                color: isDanger ? AppColors.error : AppColors.primary,
+                size: 18),
           ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: isDanger ? AppColors.error : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right,
+              color: isDanger ? AppColors.error : AppColors.textSecondary,
+              size: 18),
         ],
       ),
     );
@@ -1021,24 +861,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const Text(
           'Orbirag is an AI research mentor for students who don\'t know '
           'where to start — no experience needed, no question too basic.',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+          style: TextStyle(
+              fontSize: 13, color: AppColors.textSecondary, height: 1.5),
         ),
         const SizedBox(height: 12),
-
-        _buildAboutFeature('🎯', 'Scope Your Topic', 'Turn a vague idea into a clear research question.'),
-        _buildAboutFeature('📚', 'Find & Understand Papers', 'Search literature, spot gaps, chat with any paper.'),
-        _buildAboutFeature('✍️', 'Write Your Methodology', 'Get step-by-step guidance and examples.'),
-        _buildAboutFeature('🛡️', 'Check Your Work', 'Catch similarity issues, generate citations.'),
-        _buildAboutFeature('🔖', 'Save Your Progress', 'Build a personal library of saved papers.'),
-        _buildAboutFeature('📝', 'Word Counter', 'Track your writing length as you go.'),
-
+        _buildAboutFeature('🎯', 'Scope Your Topic',
+            'Turn a vague idea into a clear research question.'),
+        _buildAboutFeature('📚', 'Find & Understand Papers',
+            'Search literature, spot gaps, chat with any paper.'),
+        _buildAboutFeature('✍️', 'Write Your Methodology',
+            'Get step-by-step guidance and examples.'),
+        _buildAboutFeature('🛡️', 'Check Your Work',
+            'Catch similarity issues, generate citations.'),
+        _buildAboutFeature('🔖', 'Save Your Progress',
+            'Build a personal library of saved papers.'),
+        _buildAboutFeature(
+            '📝', 'Word Counter', 'Track your writing length as you go.'),
         const SizedBox(height: 12),
         const Divider(),
         const SizedBox(height: 8),
-        const Center(
+        Center(
           child: Text(
             'Orbirag · v1.0',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,
             ),
@@ -1062,11 +907,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 Text(
                   description,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
                 ),
               ],
             ),
