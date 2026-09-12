@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../utils/app_colors.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../services/citation_service.dart';
 import 'notebook_llm_screen.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
@@ -24,8 +28,7 @@ class _CitationGenerationScreenState extends State<CitationGenerationScreen> {
   bool _showResult = false;
 
   final _titleController = TextEditingController(
-    text:
-        "The impact of artificial intelligence on academic research methodologies",
+    text: "The impact of artificial intelligence on academic research methodologies",
   );
   final _authorController = TextEditingController(text: "Smith, J., & Doe, A.");
   final _yearController = TextEditingController(text: "2024");
@@ -93,12 +96,8 @@ class _CitationGenerationScreenState extends State<CitationGenerationScreen> {
   }
 
   String get _inTextCitation {
-    // Simple APA style example
     final authors = _authorController.text;
     final year = _yearController.text;
-    if (authors.contains("&") || authors.contains(",")) {
-      return "($authors, $year)";
-    }
     return "($authors, $year)";
   }
 
@@ -115,33 +114,152 @@ class _CitationGenerationScreenState extends State<CitationGenerationScreen> {
     );
   }
 
-  void _saveCitation() {
-    // TODO: Save to local storage / notes / drafts
+
+  Future<void> _saveCitation() async {
+    if (_titleController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cannot save an empty citation")),
+      );
+      return;
+    }
+
+    final citation = Citation(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: _titleController.text.trim(),
+      authors: _authorController.text.trim(),
+      year: _yearController.text.trim(),
+      journal: _journalController.text.trim(),
+      sourceType: _selectedSourceType,
+      style: _selectedStyle,
+      inTextCitation: _inTextCitation,
+      referenceList: _referenceList,
+      savedAt: DateTime.now(),
+    );
+
+    await CitationService.instance.saveCitation(citation);
+
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Citation saved successfully")),
+      const SnackBar(
+        content: Text("✅ Citation saved to your Library!"),
+        backgroundColor: AppColors.success,
+      ),
     );
   }
 
   Future<void> _pickPDF() async {
-    // TODO: Integrate file_picker later
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text(
-              "PDF upload coming soon – auto fill will work after backend")),
-    );
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final fileName = result.files.first.name;
+      
+      // Auto-fill Title from filename
+      final cleanTitle = fileName
+          .replaceAll('.pdf', '')
+          .replaceAll('_', ' ')
+          .replaceAll('-', ' ');
+
+      if (!mounted) return;
+
+      setState(() {
+        _titleController.text = cleanTitle;
+        _authorController.text = "Author, A."; // Default
+        _yearController.text = DateTime.now().year.toString();
+        _journalController.text = "Extracted from PDF";
+        _selectedTab = 2; // Switch to Manual Form so user can edit
+        _showResult = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("PDF selected! Title auto-filled. Please verify details."),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error picking PDF: $e")),
+      );
+    }
   }
 
-  void _processURL() {
-    if (_urlController.text.trim().isEmpty) {
+  Future<void> _processURL() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please paste a URL")),
       );
       return;
     }
-    // TODO: Call metadata extraction API later
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Extracting metadata from URL...")),
+      const SnackBar(content: Text("Extracting metadata...")),
     );
+
+    try {
+      // Check if it's a DOI link
+      if (url.contains('doi.org')) {
+        final doi = url.split('doi.org/').last;
+        
+        // Fetch from Crossref API (Free, no backend needed)
+        final response = await http.get(
+          Uri.parse('https://api.crossref.org/works/$doi'),
+          headers: {'User-Agent': 'Orbirag/1.0 (mailto:your@email.com)'},
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body)['message'];
+          
+          final title = data['title']?[0] ?? '';
+          final authorsList = (data['author'] as List?)
+              ?.map((a) => '${a['family']}, ${a['given']}')
+              .join(', ') ?? '';
+          final year = data['published-print']?['date-parts']?[0]?[0]?.toString() ?? 
+                       data['published-online']?['date-parts']?[0]?[0]?.toString() ?? '';
+          final journal = data['container-title']?[0] ?? '';
+
+          if (!mounted) return;
+
+          setState(() {
+            _titleController.text = title;
+            _authorController.text = authorsList;
+            _yearController.text = year;
+            _journalController.text = journal;
+            _selectedTab = 2; // Switch to Manual Form
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("✅ Metadata extracted successfully!"),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          return;
+        }
+      }
+
+      // Fallback if not a DOI or extraction fails
+      if (!mounted) return;
+      setState(() => _selectedTab = 2);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Could not extract metadata. Please enter manually."),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: AppColors.error),
+      );
+    }
   }
 
   @override
@@ -284,13 +402,13 @@ class _CitationGenerationScreenState extends State<CitationGenerationScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Save Button only
+              // Save Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _saveCitation,
                   icon: const Icon(Icons.bookmark_border),
-                  label: const Text("Save"),
+                  label: const Text("Save to Library"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
