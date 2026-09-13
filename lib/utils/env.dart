@@ -1,7 +1,5 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Env {
-  static String get openAiApiKey {
-    return dotenv.env['OPENAI_API_KEY'] ?? '';
-  }
+  static String get deepgramApiKey => dotenv.env['DEEPGRAM_API_KEY'] ?? '';
 }

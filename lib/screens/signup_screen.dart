@@ -89,6 +89,21 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  Future<void> _handleGitHubSignIn() async {
+    setState(() => _isLoading = true);
+
+    final error = await _authService.signInWithGitHub();
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      _showMessage(error);
+    } else {
+      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,7 +138,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // Social Buttons
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SocialButton(
                       icon: Icon(
@@ -131,16 +146,9 @@ class _SignupScreenState extends State<SignupScreen> {
                         color: AppColors.github,
                         size: 28,
                       ),
-                      onPressed: () => _showMessage('GitHub sign-in not configured'),
+                      onPressed: _handleGitHubSignIn,
                     ),
-                    SocialButton(
-                      icon: Icon(
-                        Icons.business_center,
-                        color: AppColors.linkedin,
-                        size: 28,
-                      ),
-                      onPressed: () => _showMessage('LinkedIn sign-in not configured'),
-                    ),
+                    const SizedBox(width: 24),
                     SocialButton(
                       icon: Container(
                         width: 28,

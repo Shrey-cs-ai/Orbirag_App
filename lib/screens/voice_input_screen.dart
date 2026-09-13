@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import '../utils/app_colors.dart';
-import '../utils/whisper_transcription_service.dart';
+import '../utils/deepgram_transcription_service.dart';
+import '../utils/env.dart';
 import '../services/audio_recorder_service.dart';
 import '../widgets/app_scaffold.dart';
 
@@ -26,9 +27,6 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   bool _isProcessing = false;
   bool _hasTranscript = false;
   String _statusMessage = 'Tap the mic to start recording';
-
-  // ⚠️ Put your real OpenAI key here (or use env later)
-  final String _apiKey = 'YOUR_OPENAI_API_KEY_HERE';
 
   @override
   void initState() {
@@ -85,7 +83,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   Future<void> _stopRecording() async {
     setState(() {
       _isProcessing = true;
-      _statusMessage = 'Transcribing with Whisper...';
+      _statusMessage = 'Transcribing with Deepgram...';
     });
 
     final path = await _recorder.stopRecording();
@@ -103,7 +101,9 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   Future<void> _transcribe(String path) async {
     try {
       final file = File(path);
-      final service = WhisperTranscriptionService(apiKey: _apiKey);
+      final service = DeepgramTranscriptionService(
+        apiKey: Env.deepgramApiKey,
+      );
       final text = await service.transcribeFile(file);
 
       setState(() {

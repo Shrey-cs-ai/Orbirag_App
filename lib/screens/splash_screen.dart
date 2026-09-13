@@ -38,17 +38,6 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             const SizedBox(height: 16),
 
-            // App Name
-            const Text(
-              "Orbirag",
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E40AF), // deep blue
-              ),
-            ),
-            const SizedBox(height: 6),
-
             // Tagline
             const Text(
               "AI-Powered\nResearch assistant",
