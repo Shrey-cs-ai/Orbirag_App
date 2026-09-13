@@ -8,7 +8,12 @@ import 'ori_chatbot_screen.dart';
 import 'profile_screen.dart';
 
 class LiteratureRetrievalScreen extends StatefulWidget {
-  const LiteratureRetrievalScreen({super.key});
+  final String? initialQuery;
+
+  const LiteratureRetrievalScreen({
+    super.key,
+    this.initialQuery,
+  });
 
   @override
   State<LiteratureRetrievalScreen> createState() => _LiteratureRetrievalScreenState();
@@ -67,10 +72,12 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
           ),
         ],
       ),
-      body: const Center(
+      body: Center(
         child: Text(
-          "Literature Retrieval Screen",
-          style: TextStyle(fontSize: 18, color: AppColors.textSecondary),
+          widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty
+              ? 'Searching: ${widget.initialQuery}'
+              : "Literature Retrieval Screen",
+          style: const TextStyle(fontSize: 18, color: AppColors.textSecondary),
         ),
       ),
       bottomNavigationBar: BottomNavBar(

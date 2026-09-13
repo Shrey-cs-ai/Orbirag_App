@@ -6,6 +6,7 @@ import '../utils/firebase_auth_service.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/social_button.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -32,7 +33,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ==================== MESSAGE HELPER ====================
+
   void _showMessage(String message, {bool isError = true}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -45,6 +49,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ==================== NAVIGATION HELPER ====================
+
+  void _navigateToHome() {
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
+  }
+
   // ==================== HANDLERS ====================
 
   Future<void> _handleLogin() async {
@@ -53,7 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     final error = await _authService.login(
-      email: _emailController.text,
+      email: _emailController.text.trim(),
       password: _passwordController.text,
     );
 
@@ -63,11 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
-      // Save remember me preference if needed
-      if (_rememberMe) {
-        // You can save this using SharedPreferences
-      }
-      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+      _navigateToHome();
     }
   }
 
@@ -82,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
-      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+      _navigateToHome();
     }
   }
 
@@ -97,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
-      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+      _navigateToHome();
     }
   }
 
@@ -112,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
-      Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+      _navigateToHome();
     }
   }
 
@@ -130,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // App Name
+                // ==================== HEADER ====================
                 const Text(
                   AppConstants.appName,
                   style: AppTextStyles.heading,
@@ -142,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // Social Login Buttons
+                // ==================== SOCIAL BUTTONS ====================
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -185,13 +195,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // OR Divider
+                // ==================== OR DIVIDER ====================
                 Row(
-                  children: [
-                    const Expanded(
+                  children: const [
+                    Expanded(
                       child: Divider(color: AppColors.border, thickness: 1),
                     ),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
                         'OR',
@@ -202,14 +212,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const Expanded(
+                    Expanded(
                       child: Divider(color: AppColors.border, thickness: 1),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
 
-                // Email Field
+                // ==================== EMAIL FIELD ====================
                 CustomTextField(
                   label: 'Email address',
                   hint: 'you@example.com',
@@ -219,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                // Password Field
+                // ==================== PASSWORD FIELD ====================
                 CustomTextField(
                   label: 'Password',
                   hint: '••••••••',
@@ -241,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Remember Me & Forgot Password
+                // ==================== REMEMBER ME + FORGOT ====================
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -287,7 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Login Button
+                // ==================== LOGIN BUTTON ====================
                 CustomButton(
                   label: 'Log in',
                   isLoading: _isLoading,
@@ -295,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Sign Up Navigation
+                // ==================== SIGN UP LINK ====================
                 Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -322,7 +332,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Security Message
+                // ==================== SECURITY MESSAGE ====================
                 const Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
