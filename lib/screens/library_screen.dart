@@ -4,6 +4,7 @@ import '../utils/app_constants.dart';
 import '../services/library_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
 import 'new_notes_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -19,7 +20,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<LibraryItem> _filteredItems = [];
-  bool _isSearching = false;
   bool _isLoading = true;
 
   @override
@@ -45,16 +45,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _searchItems(String query) {
     setState(() {
       _filteredItems = _libraryService.searchItems(query);
-    });
-  }
-
-  void _toggleSearch() {
-    setState(() {
-      _isSearching = !_isSearching;
-      if (!_isSearching) {
-        _searchController.clear();
-        _filteredItems = _libraryService.items;
-      }
     });
   }
 
@@ -129,38 +119,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'Search notes, ideas, citations...',
-                  hintStyle: TextStyle(color: AppColors.textSecondary),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 8),
-                ),
-                onChanged: _searchItems,
-              )
-            : const Text(
-                AppConstants.appName,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                ),
-              ),
+        title: const AppBrandTitle(),
         actions: [
-          IconButton(
-            icon: Icon(
-              _isSearching ? Icons.close : Icons.search,
-              color: AppColors.textPrimary,
-            ),
-            onPressed: _toggleSearch,
-          ),
           IconButton(
             tooltip: 'Notebook LLM',
             icon: const Icon(

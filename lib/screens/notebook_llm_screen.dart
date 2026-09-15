@@ -7,6 +7,7 @@ import '../utils/app_constants.dart';
 import '../services/pdf_services.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
 import 'chat_with_pdf_screen.dart';
 
 class NotebookLLMScreen extends StatefulWidget {
@@ -40,14 +41,7 @@ class _NotebookLLMScreenState extends State<NotebookLLMScreen> {
             },
           ),
         ),
-        title: const Text(
-          AppConstants.appName,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-            fontSize: 18,
-          ),
-        ),
+        title: const AppBrandTitle(),
         // No right icon (removed as requested)
       ),
       body: Padding(

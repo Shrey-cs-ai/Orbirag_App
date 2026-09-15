@@ -9,6 +9,7 @@ import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/opening_screen.dart';
 import 'screens/landing_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/profile_screen.dart';
@@ -21,6 +22,7 @@ import 'screens/new_notes_screen.dart';
 import 'screens/saved_papers_screen.dart';
 import 'screens/word_counter_screen.dart';
 import 'screens/library_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,18 +85,6 @@ class MyApp extends StatelessWidget {
 }
 
 // ==================== PLACEHOLDER SCREENS ====================
-
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Home')),
-      body: const Center(child: Text('Home Screen')),
-    );
-  }
-}
 
 class ForgotPasswordScreen extends StatelessWidget {
   const ForgotPasswordScreen({super.key});

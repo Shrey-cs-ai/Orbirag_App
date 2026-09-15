@@ -4,6 +4,7 @@ import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
 
 class WordCounterScreen extends StatefulWidget {
   const WordCounterScreen({super.key});
@@ -91,14 +92,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: const Text(
-          AppConstants.appName,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-            fontSize: 18,
-          ),
-        ),
+        title: const AppBrandTitle(),
         actions: [
           IconButton(
             icon: const Icon(

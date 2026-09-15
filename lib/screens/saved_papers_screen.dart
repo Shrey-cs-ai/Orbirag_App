@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/papers_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
 
 class SavedPapersScreen extends StatefulWidget {
   const SavedPapersScreen({super.key});
@@ -25,6 +27,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
   // Add Paper Dialog Controllers
   final _addFormKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
+  final _urlController = TextEditingController();
   final _authorsController = TextEditingController();
   final _categoryController = TextEditingController();
   final _yearController = TextEditingController();
@@ -44,6 +47,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
   void dispose() {
     _searchController.dispose();
     _titleController.dispose();
+    _urlController.dispose();
     _authorsController.dispose();
     _categoryController.dispose();
     _yearController.dispose();
@@ -87,6 +91,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
 
   void _showAddPaperDialog() {
     _titleController.clear();
+    _urlController.clear();
     _authorsController.clear();
     _categoryController.clear();
     _yearController.clear();
@@ -129,14 +134,32 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                     ),
                     const SizedBox(height: 12),
 
+                    _buildDialogTextField(
+                      controller: _urlController,
+                      label: 'Paper URL',
+                      hint: 'https://example.com/paper',
+                      keyboardType: TextInputType.url,
+                      validator: (value) {
+                        final url = Uri.tryParse(value?.trim() ?? '');
+                        if (url == null ||
+                            (url.scheme != 'http' && url.scheme != 'https') ||
+                            url.host.isEmpty) {
+                          return 'Enter a valid http(s) URL';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
                     // Authors
                     _buildDialogTextField(
                       controller: _authorsController,
                       label: 'Authors',
                       hint: 'Smith, J., et al.',
                       validator: (value) {
-                        if (value?.isEmpty ?? true)
+                        if (value?.isEmpty ?? true) {
                           return 'Authors are required';
+                        }
                         return null;
                       },
                       maxLines: 2,
@@ -149,8 +172,9 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                       label: 'Category',
                       hint: 'e.g., QUALITATIVE METHODS',
                       validator: (value) {
-                        if (value?.isEmpty ?? true)
+                        if (value?.isEmpty ?? true) {
                           return 'Category is required';
+                        }
                         return null;
                       },
                     ),
@@ -314,11 +338,14 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
   Future<void> _savePaper(BuildContext dialogContext) async {
     if (!_addFormKey.currentState!.validate()) return;
 
+    final dialogNavigator = Navigator.of(dialogContext);
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isAddingPaper = true);
 
     final paper = Paper(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
+      url: _urlController.text.trim(),
       authors: _authorsController.text.trim(),
       category: _categoryController.text.trim().toUpperCase(),
       year: _yearController.text.trim(),
@@ -331,16 +358,47 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
 
     if (!mounted) return;
     setState(() => _isAddingPaper = false);
-    Navigator.pop(dialogContext);
+    dialogNavigator.pop();
     await _loadPapers();
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (!mounted) return;
+
+    messenger.showSnackBar(
       const SnackBar(
         content: Text('Paper added successfully!'),
         backgroundColor: AppColors.success,
         duration: Duration(seconds: 2),
       ),
     );
+  }
+
+  Future<void> _openPaper(Paper paper) async {
+    final rawUrl = paper.url?.trim();
+    if (rawUrl == null || rawUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This paper does not have a URL yet.')),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This paper has an invalid URL.')),
+      );
+      return;
+    }
+
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted) return;
+    if (!launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open this paper.')),
+      );
+    }
   }
 
   void _showDeleteDialog(Paper paper) {
@@ -359,8 +417,10 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final dialogNavigator = Navigator.of(ctx);
               await _papersService.deletePaper(paper.id);
-              Navigator.pop(ctx);
+              if (!mounted) return;
+              dialogNavigator.pop();
               await _loadPapers();
             },
             style: ElevatedButton.styleFrom(
@@ -407,14 +467,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 ),
                 onChanged: _searchPapers,
               )
-            : const Text(
-                AppConstants.appName,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                ),
-              ),
+            : const AppBrandTitle(),
         actions: [
           IconButton(
             icon: Icon(
@@ -616,12 +669,16 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            paper.title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+          InkWell(
+            onTap: () => _openPaper(paper),
+            child: Text(
+              paper.title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+                decoration: TextDecoration.underline,
+              ),
             ),
           ),
           const SizedBox(height: 6),

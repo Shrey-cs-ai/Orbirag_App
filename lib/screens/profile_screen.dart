@@ -6,6 +6,7 @@ import '../utils/app_constants.dart';
 import '../utils/firebase_auth_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/app_brand_title.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -134,14 +135,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: const Text(
-          AppConstants.appName,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-            fontSize: 18,
-          ),
-        ),
+        title: const AppBrandTitle(),
         actions: [
           IconButton(
             icon: const Icon(

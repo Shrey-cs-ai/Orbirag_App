@@ -4,6 +4,7 @@ import '../utils/app_constants.dart';
 import '../services/ai_services.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
 import '../widgets/chat_bubble.dart';
 import 'voice_input_screen.dart';
 
@@ -152,14 +153,7 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
             },
           ),
         ),
-        title: const Text(
-          AppConstants.appName,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-            fontSize: 18,
-          ),
-        ),
+        title: const AppBrandTitle(),
         actions: [], // No right icon
       ),
       body: Column(

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class Paper {
   final String id;
   final String title;
+  final String? url;
   final String authors;
   final String category;
   final String year;
@@ -17,6 +18,7 @@ class Paper {
   Paper({
     required this.id,
     required this.title,
+    this.url,
     required this.authors,
     required this.category,
     required this.year,
@@ -30,6 +32,7 @@ class Paper {
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
+    'url': url,
     'authors': authors,
     'category': category,
     'year': year,
@@ -43,6 +46,7 @@ class Paper {
   factory Paper.fromJson(Map<String, dynamic> json) => Paper(
     id: json['id'],
     title: json['title'],
+    url: json['url'],
     authors: json['authors'],
     category: json['category'],
     year: json['year'],

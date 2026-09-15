@@ -4,6 +4,7 @@ import '../utils/app_constants.dart';
 import '../services/notes_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
 import 'new_notes_screen.dart';
 
 class MyNotesScreen extends StatefulWidget {
@@ -125,14 +126,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                 ),
                 onChanged: _searchNotes,
               )
-            : const Text(
-                AppConstants.appName,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                ),
-              ),
+            : const AppBrandTitle(),
         actions: [
           IconButton(
             icon: Icon(
