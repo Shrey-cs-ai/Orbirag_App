@@ -200,7 +200,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
               color: AppColors.textPrimary,
             ),
             onPressed: () {
-              Navigator.of(context).pushNamed(AppConstants.routeNotebookLLM);
+              Navigator.of(context).pushNamed(AppConstants.routePaperOrbit);
             },
           ),
         ],

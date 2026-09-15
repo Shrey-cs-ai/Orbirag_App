@@ -10,22 +10,25 @@ class AppBrandTitle extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Open home',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: () {
-          Navigator.of(context).pushNamedAndRemoveUntil(
-            AppConstants.routeHome,
-            (route) => false,
-          );
-        },
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Text(
-            AppConstants.appName,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-              fontSize: 18,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () {
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              AppConstants.routeHome,
+              (route) => false,
+            );
+          },
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              AppConstants.appName,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+                fontSize: 18,
+              ),
             ),
           ),
         ),

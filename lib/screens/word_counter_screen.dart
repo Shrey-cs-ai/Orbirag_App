@@ -100,7 +100,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
               color: AppColors.textPrimary,
             ),
             onPressed: () {
-              Navigator.of(context).pushNamed(AppConstants.routeNotebookLLM);
+              Navigator.of(context).pushNamed(AppConstants.routePaperOrbit);
             },
           ),
         ],

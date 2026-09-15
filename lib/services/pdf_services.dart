@@ -25,6 +25,20 @@ class PdfService {
     }
   }
 
+  void addText(String text) {
+    final trimmedText = text.trim();
+    if (trimmedText.isEmpty) return;
+
+    _sources.add({
+      'name': 'Written or pasted text',
+      'content': trimmedText,
+      'type': 'text',
+      'pages': 'Text source',
+      'size': '${trimmedText.length} characters',
+      'dateAdded': DateTime.now().toIso8601String(),
+    });
+  }
+
   void removeSource(int index) {
     if (index < _sources.length) {
       _sources.removeAt(index);

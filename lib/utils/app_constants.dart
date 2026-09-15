@@ -25,7 +25,7 @@ class AppConstants {
   static const String routeProfile = '/profile';
   static const String routeOriChat = '/ori-chat';
   static const String routeLiteratureRetrieval = '/literature-retrieval';
-  static const String routeNotebookLLM = '/notebook-llm';
+  static const String routePaperOrbit = '/paper-orbit';
   static const String routeChatWithPdf = '/chat-with-pdf';
   static const String routeVoiceInput = '/voice-input';
 

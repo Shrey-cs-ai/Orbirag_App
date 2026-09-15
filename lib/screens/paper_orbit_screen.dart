@@ -20,6 +20,13 @@ class PaperOrbitScreen extends StatefulWidget {
 class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
   int _selectedIndex = 0; // Home is index 0
   final PdfService _pdfService = PdfService();
+  final TextEditingController _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +96,80 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             ),
 
             const SizedBox(height: 32),
+
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.edit_note, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Text(
+                        'Write or paste text',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 150,
+                    child: TextField(
+                      controller: _textController,
+                      maxLines: null,
+                      expands: true,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      decoration: InputDecoration(
+                        hintText: 'Write or paste your paper text here...',
+                        hintStyle: const TextStyle(
+                          color: AppColors.hintText,
+                          fontSize: 13,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.inputFill,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _addTextSource,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add Text'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
 
             // Sources section
             Row(
@@ -284,8 +365,10 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
               color: AppColors.cardBg,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.picture_as_pdf,
+            child: Icon(
+              source['type'] == 'text'
+                  ? Icons.article_outlined
+                  : Icons.picture_as_pdf,
               color: AppColors.primary,
               size: 22,
             ),
@@ -356,6 +439,26 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
         ),
       );
     }
+  }
+
+  void _addTextSource() {
+    if (_textController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Write or paste some text first.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _pdfService.addText(_textController.text);
+      _textController.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Text added successfully!'),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   Future<void> _takePhoto() async {

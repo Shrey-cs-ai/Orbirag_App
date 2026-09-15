@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
-import 'notebook_llm_screen.dart';
+import 'paper_orbit_screen.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
 import 'literature_retrieval_screen.dart';
@@ -62,7 +62,7 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const NotebookLLMScreen()),
+                MaterialPageRoute(builder: (_) => const PaperOrbitScreen()),
               );
             },
           ),

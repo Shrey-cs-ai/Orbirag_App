@@ -122,13 +122,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: const AppBrandTitle(),
         actions: [
           IconButton(
-            tooltip: 'Notebook LLM',
+            tooltip: 'Paper Orbit',
             icon: const Icon(
               Icons.auto_awesome_outlined,
               color: AppColors.textPrimary,
             ),
             onPressed: () {
-              Navigator.of(context).pushNamed(AppConstants.routeNotebookLLM);
+              Navigator.of(context).pushNamed(AppConstants.routePaperOrbit);
             },
           ),
         ],

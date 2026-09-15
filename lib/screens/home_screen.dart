@@ -4,7 +4,7 @@ import '../utils/firebase_auth_service.dart';
 import '../services/user_state_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
-import 'notebook_llm_screen.dart';
+import 'paper_orbit_screen.dart';
 import 'voice_input_screen.dart';
 import 'ori_chatbot_screen.dart';
 import 'literature_retrieval_screen.dart';
@@ -183,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const NotebookLLMScreen()),
+                MaterialPageRoute(builder: (_) => const PaperOrbitScreen()),
               );
             },
           ),
@@ -387,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
           subtitle: "Summarize findings and methodologies",
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const NotebookLLMScreen()),
+            MaterialPageRoute(builder: (_) => const PaperOrbitScreen()),
           ),
         ),
         const SizedBox(height: 10),

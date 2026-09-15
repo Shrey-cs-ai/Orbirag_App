@@ -16,7 +16,7 @@ import 'screens/profile_screen.dart';
 import 'screens/plagiarism_check_screen.dart';
 import 'screens/voice_input_screen.dart';
 import 'screens/ori_chatbot_screen.dart';
-import 'screens/notebook_llm_screen.dart';
+import 'screens/paper_orbit_screen.dart';
 import 'screens/my_notes_screen.dart';
 import 'screens/new_notes_screen.dart';
 import 'screens/saved_papers_screen.dart';
@@ -73,7 +73,7 @@ class MyApp extends StatelessWidget {
         AppConstants.routeOriChat: (context) => const OriChatScreen(),
         AppConstants.routeSavedPapers: (context) => const SavedPapersScreen(),
         AppConstants.routeForgotPassword: (context) => const ForgotPasswordScreen(),
-        AppConstants.routeNotebookLLM: (context) => const NotebookLLMScreen(),
+        AppConstants.routePaperOrbit: (context) => const PaperOrbitScreen(),
         AppConstants.routeChatWithPdf: (context) => const ChatWithPdfScreen(),
         AppConstants.routeMyNotes: (context) => const MyNotesScreen(),
         AppConstants.routeWordCounter: (context) => const WordCounterScreen(),

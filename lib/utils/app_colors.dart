@@ -78,7 +78,7 @@ class AppColors {
   static const Color highMatchText = Color(0xFFB91C1C);       // High match % text
   static const Color infoBoxBg = Color(0xFFEFF6FF);           // Info banner background
 
-  // ==================== NOTEBOOK LLM ====================
+  // ==================== PAPER ORBIT ====================
   static const Color pdfIconBg = Color(0xFFFFE4E6);
   static const Color pdfIconColor = Color(0xFFE11D48);
 

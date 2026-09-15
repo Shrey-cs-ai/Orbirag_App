@@ -143,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: AppColors.textPrimary,
             ),
             onPressed: () {
-              Navigator.of(context).pushNamed(AppConstants.routeNotebookLLM);
+              Navigator.of(context).pushNamed(AppConstants.routePaperOrbit);
             },
           ),
         ],
