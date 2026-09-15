@@ -29,27 +29,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Notification Data
   final List<Map<String, dynamic>> _notifications = [
     {
-      'icon': Icons.person_add,
-      'title': 'New follower',
-      'message': 'Sarah Johnson started following you',
+      'icon': Icons.article_outlined,
+      'title': 'Related paper found',
+      'message': 'A new paper matches your interest in AI-assisted literature review.',
       'time': '2 hours ago'
     },
     {
-      'icon': Icons.bookmark,
-      'title': 'Paper saved',
-      'message': 'Your paper was saved by 5 researchers',
-      'time': '4 hours ago'
+      'icon': Icons.auto_awesome_outlined,
+      'title': 'Paper recommendation',
+      'message': 'Our AI suggests a high-confidence paper based on your saved topics.',
+      'time': '5 hours ago'
     },
     {
-      'icon': Icons.comment,
-      'title': 'New comment',
-      'message': 'Dr. Smith commented on your research',
+      'icon': Icons.bookmark_added_outlined,
+      'title': 'Saved paper updated',
+      'message': 'A paper in your library has new citation activity and highlights.',
       'time': '1 day ago'
     },
     {
-      'icon': Icons.emoji_events,
-      'title': 'Achievement unlocked',
-      'message': 'You reached 50 papers saved!',
+      'icon': Icons.library_books_outlined,
+      'title': 'Reading list match',
+      'message': 'A relevant paper was added to your topic cluster for review.',
       'time': '2 days ago'
     },
   ];
@@ -96,6 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
     try {
       await _auth.updateProfile(displayName: _name);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Profile updated!'),
@@ -103,10 +104,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       setState(() => _isEditMode = false);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
       );
     }
+    if (!mounted) return;
     setState(() => _isLoading = false);
   }
 
@@ -411,16 +414,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-          ] else ...[
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: () => setState(() => _isEditMode = true),
-              icon: const Icon(Icons.edit, size: 16),
-              label: const Text('Edit Profile'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-              ),
-            ),
           ],
         ],
       ),
@@ -476,50 +469,135 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ============================================
 
   Widget _buildEditProfileContent(List<String> roleLabels) {
-    return Column(
-      children: [
-        TextField(
-          controller: TextEditingController(text: _name),
-          onChanged: (value) => _name = value,
-          decoration: const InputDecoration(
-            labelText: 'Full Name',
-            border: OutlineInputBorder(),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person_outline, color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'Profile Details',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => setState(() => _isEditMode = true),
+                icon: const Icon(Icons.edit, size: 16),
+                label: const Text('Edit'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedRole,
-              isExpanded: true,
-              items: roleLabels.map((role) {
-                return DropdownMenuItem<String>(
-                  value: role,
-                  child: Text(role),
-                );
-              }).toList(),
-              onChanged: (value) => setState(() => _selectedRole = value!),
+          const SizedBox(height: 12),
+          TextField(
+            controller: TextEditingController(text: _name),
+            onChanged: (value) => _name = value,
+            decoration: const InputDecoration(
+              labelText: 'Full Name',
+              border: OutlineInputBorder(),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        ElevatedButton.icon(
-          onPressed: _pickImage,
-          icon: const Icon(Icons.photo_camera),
-          label: const Text('Change Profile Photo'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+              color: AppColors.white,
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedRole,
+                isExpanded: true,
+                items: roleLabels.map((role) {
+                  return DropdownMenuItem<String>(
+                    value: role,
+                    child: Text(role),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => _selectedRole = value!),
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.photo_camera_outlined, size: 18),
+              label: const Text('Change Profile Photo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() => _isEditMode = false);
+                    final user = _auth.currentUser;
+                    _name = user?.displayName ?? 'Alex Bennett';
+                    _profileImageUrl = user?.photoURL;
+                  },
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _saveProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
