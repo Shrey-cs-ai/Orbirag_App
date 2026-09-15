@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Note {
@@ -82,7 +83,7 @@ class NotesService {
         await _saveNotes();
       }
     } catch (e) {
-      print('Error loading notes: $e');
+      debugPrint('Error loading notes: $e');
     }
   }
 
@@ -92,7 +93,7 @@ class NotesService {
       final notesJson = jsonEncode(_notes.map((e) => e.toJson()).toList());
       await prefs.setString('notes', notesJson);
     } catch (e) {
-      print('Error saving notes: $e');
+      debugPrint('Error saving notes: $e');
     }
   }
 

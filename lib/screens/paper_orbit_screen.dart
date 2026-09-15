@@ -418,6 +418,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
+      if (!mounted) return;
 
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
@@ -432,6 +433,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error uploading PDF: $e'),
@@ -465,6 +467,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     try {
       final picker = ImagePicker();
       final image = await picker.pickImage(source: ImageSource.camera);
+      if (!mounted) return;
 
       if (image != null) {
         // Add as a source (simplified)
@@ -479,6 +482,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error taking photo: $e'),

@@ -85,12 +85,14 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
         updatedAt: now,
       );
       await _notesService.addNote(newNote);
+      if (!mounted) return;
     } else {
       // Update existing note
       widget.note!.title = title.isEmpty ? "Untitled" : title;
       widget.note!.content = content;
       widget.note!.updatedAt = now;
       await _notesService.updateNote(widget.note!);
+      if (!mounted) return;
     }
 
     setState(() {
@@ -131,7 +133,9 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
           ElevatedButton(
             onPressed: () async {
               await _notesService.deleteNote(widget.note!.id);
+              if (!ctx.mounted) return;
               Navigator.pop(ctx);
+              if (!mounted) return;
               Navigator.pop(context, true);
             },
             style: ElevatedButton.styleFrom(
