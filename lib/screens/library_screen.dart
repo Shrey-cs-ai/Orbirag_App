@@ -162,7 +162,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onPressed: _toggleSearch,
           ),
           IconButton(
-            icon: const Icon(Icons.bolt_outlined, color: AppColors.textPrimary),
+            tooltip: 'Notebook LLM',
+            icon: const Icon(
+              Icons.auto_stories_outlined,
+              color: AppColors.textPrimary,
+            ),
             onPressed: () {
               Navigator.of(context).pushNamed(AppConstants.routeNotebookLLM);
             },

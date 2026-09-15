@@ -111,21 +111,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleLinkedInSignIn() async {
-    setState(() => _isLoading = true);
-
-    final error = await _authService.signInWithLinkedIn();
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (error != null) {
-      _showMessage(error);
-    } else {
-      _navigateToHome();
-    }
-  }
-
   // ==================== BUILD ====================
 
   @override
@@ -154,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // ==================== SOCIAL BUTTONS ====================
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // GitHub
                     SocialButton(
@@ -165,15 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       onPressed: _handleGitHubSignIn,
                     ),
-                    // LinkedIn
-                    SocialButton(
-                      icon: Icon(
-                        Icons.business_center,
-                        color: AppColors.linkedin,
-                        size: 28,
-                      ),
-                      onPressed: _handleLinkedInSignIn,
-                    ),
+                    const SizedBox(width: 24),
                     // Google
                     SocialButton(
                       icon: Container(
