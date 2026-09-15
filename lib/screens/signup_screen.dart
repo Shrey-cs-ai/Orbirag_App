@@ -109,185 +109,195 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Back Button
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(height: 8),
-
-                // Header
-                const Text(
-                  'Create your account',
-                  style: AppTextStyles.heading,
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Join Orbirag and accelerate your research.',
-                  style: AppTextStyles.subheading,
-                ),
-                const SizedBox(height: 24),
-
-                // Social Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SocialButton(
-                      icon: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: SvgPicture.asset(
-                          'assets/icons/github_logo.svg',
-                          fit: BoxFit.contain,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 56),
+              child: Center(
+                child: SizedBox(
+                  width: 420,
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          AppConstants.appName,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                            letterSpacing: -0.5,
+                          ),
                         ),
-                      ),
-                      onPressed: _handleGitHubSignIn,
-                    ),
-                    const SizedBox(width: 24),
-                    SocialButton(
-                      icon: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: SvgPicture.asset(
-                          'assets/icons/google_logo.svg',
-                          fit: BoxFit.contain,
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Create your account and accelerate your research.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                            height: 1.4,
+                          ),
                         ),
-                      ),
-                      onPressed: _handleGoogleSignIn,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                // OR Divider
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Divider(color: AppColors.border, thickness: 1),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'OR',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SocialButton(
+                              icon: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: SvgPicture.asset(
+                                  'assets/icons/github_logo.svg',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              onPressed: _handleGitHubSignIn,
+                            ),
+                            const SizedBox(width: 24),
+                            SocialButton(
+                              icon: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: SvgPicture.asset(
+                                  'assets/icons/google_logo.svg',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              onPressed: _handleGoogleSignIn,
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                    const Expanded(
-                      child: Divider(color: AppColors.border, thickness: 1),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                // Form Fields
-                CustomTextField(
-                  label: 'Full name',
-                  hint: 'Alex Johnson',
-                  controller: _nameController,
-                  validator: Validators.name,
-                ),
-                const SizedBox(height: 18),
+                        Row(
+                          children: const [
+                            Expanded(
+                              child: Divider(color: AppColors.border, thickness: 1),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                'OR',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(color: AppColors.border, thickness: 1),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
 
-                CustomTextField(
-                  label: 'Email address',
-                  hint: 'you@example.com',
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: Validators.email,
-                ),
-                const SizedBox(height: 18),
+                        CustomTextField(
+                          label: 'Full name',
+                          hint: 'Alex Johnson',
+                          controller: _nameController,
+                          validator: Validators.name,
+                        ),
+                        const SizedBox(height: 18),
 
-                CustomTextField(
-                  label: 'Password',
-                  hint: '••••••••',
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  validator: (value) => Validators.password(value, minLength: 6),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: AppColors.textSecondary,
-                      size: 20,
+                        CustomTextField(
+                          label: 'Email address',
+                          hint: 'you@example.com',
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: Validators.email,
+                        ),
+                        const SizedBox(height: 18),
+
+                        CustomTextField(
+                          label: 'Password',
+                          hint: '••••••••',
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          validator: (value) =>
+                              Validators.password(value, minLength: 6),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: AppColors.textSecondary,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              setState(() => _obscurePassword = !_obscurePassword);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+
+                        CustomTextField(
+                          label: 'Confirm password',
+                          hint: '••••••••',
+                          controller: _confirmPasswordController,
+                          obscureText: _obscureConfirmPassword,
+                          validator: (value) => Validators.confirmPassword(
+                              value, _passwordController.text),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: AppColors.textSecondary,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              setState(() =>
+                                  _obscureConfirmPassword = !_obscureConfirmPassword);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        CustomButton(
+                          label: 'Sign up',
+                          isLoading: _isLoading,
+                          onPressed: _handleSignup,
+                        ),
+                        const SizedBox(height: 20),
+
+                        Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Already have an account? ',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  'Log in',
+                                  style: AppTextStyles.link,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
                   ),
                 ),
-                const SizedBox(height: 18),
-
-                CustomTextField(
-                  label: 'Confirm password',
-                  hint: '••••••••',
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirmPassword,
-                  validator: (value) =>
-                      Validators.confirmPassword(value, _passwordController.text),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirmPassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      setState(() =>
-                          _obscureConfirmPassword = !_obscureConfirmPassword);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Sign Up Button
-                CustomButton(
-                  label: 'Sign up',
-                  isLoading: _isLoading,
-                  onPressed: _handleSignup,
-                ),
-                const SizedBox(height: 20),
-
-                // Login Navigation
-                Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'Already have an account? ',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: const Text(
-                          'Log in',
-                          style: AppTextStyles.link,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
