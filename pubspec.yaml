@@ -46,6 +46,7 @@ dependencies:
 
   # UI Enhancements
   flutter_animate: ^4.5.0
+  flutter_svg: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -57,5 +58,6 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/icons/
     - .env
   

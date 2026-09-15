@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../utils/validators.dart';
@@ -141,26 +142,24 @@ class _SignupScreenState extends State<SignupScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SocialButton(
-                      icon: Icon(
-                        Icons.code,
-                        color: AppColors.github,
-                        size: 28,
+                      icon: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: SvgPicture.asset(
+                          'assets/icons/github_logo.svg',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                       onPressed: _handleGitHubSignIn,
                     ),
                     const SizedBox(width: 24),
                     SocialButton(
-                      icon: Container(
+                      icon: SizedBox(
                         width: 28,
                         height: 28,
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'G',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20,
-                            color: AppColors.google,
-                          ),
+                        child: SvgPicture.asset(
+                          'assets/icons/google_logo.svg',
+                          fit: BoxFit.contain,
                         ),
                       ),
                       onPressed: _handleGoogleSignIn,

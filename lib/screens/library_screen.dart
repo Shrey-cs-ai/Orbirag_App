@@ -164,7 +164,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           IconButton(
             tooltip: 'Notebook LLM',
             icon: const Icon(
-              Icons.auto_stories_outlined,
+              Icons.auto_awesome_outlined,
               color: AppColors.textPrimary,
             ),
             onPressed: () {

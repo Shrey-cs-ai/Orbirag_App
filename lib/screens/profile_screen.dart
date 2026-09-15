@@ -141,7 +141,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bolt_outlined, color: AppColors.textPrimary),
+            icon: const Icon(
+              Icons.auto_awesome_outlined,
+              color: AppColors.textPrimary,
+            ),
             onPressed: () {
               Navigator.of(context).pushNamed(AppConstants.routeNotebookLLM);
             },

@@ -15,6 +15,19 @@ import '../screens/saved_papers_screen.dart';
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
+  void _goToHome(BuildContext context) {
+    Navigator.pop(context);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
+  }
+
+  void _closeDrawer(BuildContext context) {
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -27,36 +40,36 @@ class AppDrawer extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
               child: Row(
                 children: [
-                  Image.asset(
-                    'assets/images/orbirag_logo.png',
-                    width: 34,
-                    height: 34,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.psychology_alt,
-                      color: AppColors.primary,
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    "Orbirag",
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                  GestureDetector(
+                    onTap: () => _goToHome(context),
+                    child: Row(
+                      children: [
+                        Image.asset(
+                          'assets/images/orbirag_logo.png',
+                          width: 34,
+                          height: 34,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.psychology_alt,
+                            color: AppColors.primary,
+                            size: 30,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          "Orbirag",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: () {
-                      Navigator.pop(context); // close drawer
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(builder: (_) => const HomeScreen()),
-                        (route) => false,
-                      );
-                    },
+                    onPressed: () => _closeDrawer(context),
                   ),
                 ],
               ),
