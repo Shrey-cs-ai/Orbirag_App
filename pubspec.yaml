@@ -20,7 +20,6 @@ dependencies:
   cloud_firestore: ^5.4.4
   google_sign_in: ^6.2.1
   firebase_storage: ^12.3.4
-
   # Storage
   shared_preferences: ^2.3.2
 
@@ -59,5 +58,4 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
-    - .env
   

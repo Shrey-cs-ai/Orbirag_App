@@ -7,7 +7,6 @@ import '../widgets/bottom_nav_bar.dart';
 import '../widgets/methodology_form.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
-import 'literature_retrieval_screen.dart';
 import 'profile_screen.dart';
 
 class MethodologyScreen extends StatefulWidget {

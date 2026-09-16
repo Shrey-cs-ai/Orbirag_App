@@ -6,7 +6,9 @@ class FirebaseAuthService {
   static final FirebaseAuthService instance = FirebaseAuthService._internal();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
+  );
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();

@@ -98,7 +98,6 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
 
   void _nextStep() {
     // Save current field
-    final key = _picoFields[_currentStep - 1]['key']!;
     _data.population = _fieldControllers['population']!.text;
     _data.intervention = _fieldControllers['intervention']!.text;
     _data.comparison = _fieldControllers['comparison']!.text;

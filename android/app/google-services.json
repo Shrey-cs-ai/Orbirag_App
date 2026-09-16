@@ -12,7 +12,20 @@
           "package_name": "com.scholarPulse.shreya.scholar_pulse"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "407358214556-ltiktos27crt9gtogb6m843nhbg0596o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.scholarPulse.shreya.scholar_pulse",
+            "certificate_hash": "8390829a79db81e0a64489dfb17e6f728e590d79"
+          }
+        },
+        {
+          "client_id": "407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA6FzQZIsFq0crDL4cvBJuaKornyEXofn4"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "407358214556-lavrd2uh72qs95j4heac9qngg9r1dli8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.scholarPulse.shreya.scholarPulse"
+              }
+            }
+          ]
         }
       }
     }

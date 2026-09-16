@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../utils/app_colors.dart';
@@ -7,6 +9,7 @@ import '../utils/firebase_auth_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_brand_title.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,6 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Profile Data
   String? _profileImageUrl;
+  Uint8List? _profileImageBytes;
   String _name = '';
   String _email = '';
   String _selectedRole = 'Undergraduate';
@@ -32,25 +36,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     {
       'icon': Icons.article_outlined,
       'title': 'Related paper found',
-      'message': 'A new paper matches your interest in AI-assisted literature review.',
+      'message':
+          'A new paper matches your interest in AI-assisted literature review.',
       'time': '2 hours ago'
     },
     {
       'icon': Icons.auto_awesome_outlined,
       'title': 'Paper recommendation',
-      'message': 'Our AI suggests a high-confidence paper based on your saved topics.',
+      'message':
+          'Our AI suggests a high-confidence paper based on your saved topics.',
       'time': '5 hours ago'
     },
     {
       'icon': Icons.bookmark_added_outlined,
       'title': 'Saved paper updated',
-      'message': 'A paper in your library has new citation activity and highlights.',
+      'message':
+          'A paper in your library has new citation activity and highlights.',
       'time': '1 day ago'
     },
     {
       'icon': Icons.library_books_outlined,
       'title': 'Reading list match',
-      'message': 'A relevant paper was added to your topic cluster for review.',
+      'message':
+          'A relevant paper was added to your topic cluster for review.',
       'time': '2 days ago'
     },
   ];
@@ -71,25 +79,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isPrivacyExpanded = false;
   bool _isAboutExpanded = false;
 
+  // ==================== INIT ====================
+
   @override
   void initState() {
     super.initState();
     final user = _auth.currentUser;
-    _profileImageUrl = user?.photoURL;
     _name = user?.displayName ?? 'Alex Bennett';
     _email = user?.email ?? 'alex.bennett@university.edu';
+    _loadProfileImage();
+  }
+
+  Future<void> _loadProfileImage() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final base64Image = doc.data()?['photoBase64'] as String?;
+      if (base64Image != null && mounted) {
+        setState(() => _profileImageBytes = base64Decode(base64Image));
+      }
+    } catch (e) {
+      debugPrint('Failed to load profile image: $e');
+    }
   }
 
   // ==================== EDIT PROFILE ====================
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+      maxWidth: 300,
+      maxHeight: 300,
+    );
+    if (pickedFile == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('No signed-in user found.');
+
+      final bytes = await File(pickedFile.path).readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      // Firestore field limit ~1MB
+      if (base64Image.length > 900000) {
+        throw Exception('Image too large. Please choose a smaller photo.');
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({'photoBase64': base64Image}, SetOptions(merge: true));
+
+      if (!mounted) return;
       setState(() {
-        _profileImageUrl = pickedFile.path;
+        _profileImageBytes = bytes; // ✅ show the actual uploaded image
+        _isLoading = false;
       });
-      // TODO: Upload to Firebase Storage
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile photo updated!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Upload failed: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -100,8 +171,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Profile updated!'),
-            backgroundColor: AppColors.success),
+          content: Text('Profile updated!'),
+          backgroundColor: AppColors.success,
+        ),
       );
       setState(() => _isEditMode = false);
     } catch (e) {
@@ -118,7 +190,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // FIXED: Convert roles list to List<String> for DropdownButton
     final List<String> roleLabels =
         AppConstants.roles.map((role) => role['label'] as String).toList();
 
@@ -152,15 +223,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           children: [
-            // ============================================
             // PROFILE HEADER
-            // ============================================
             _buildProfileHeader(roleLabels),
             const SizedBox(height: 24),
 
-            // ============================================
-            // EDIT PROFILE SECTION (Expandable)
-            // ============================================
+            // EDIT PROFILE SECTION
             _buildExpandableSection(
               title: 'Edit Profile',
               icon: Icons.person_outline,
@@ -171,9 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ============================================
-            // NOTIFICATIONS SECTION (Expandable)
-            // ============================================
+            // NOTIFICATIONS
             _buildExpandableSection(
               title: 'Notifications',
               icon: Icons.notifications_none,
@@ -184,9 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ============================================
-            // MY PROGRESS SECTION (Expandable)
-            // ============================================
+            // MY PROGRESS
             _buildExpandableSection(
               title: 'My Progress',
               icon: Icons.show_chart,
@@ -197,9 +260,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ============================================
-            // PRIVACY & DATA SECTION (Expandable)
-            // ============================================
+            // PRIVACY & DATA
             _buildExpandableSection(
               title: 'Privacy & Data',
               icon: Icons.shield_outlined,
@@ -210,9 +271,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ============================================
-            // ABOUT ORBIRAG SECTION (Expandable)
-            // ============================================
+            // ABOUT ORBIRAG
             _buildExpandableSection(
               title: 'About Orbirag',
               icon: Icons.info_outline,
@@ -253,18 +312,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
+              // ✅ FIXED: Prioritize _profileImageBytes (uploaded), then network, then local file
               CircleAvatar(
                 radius: 48,
                 backgroundColor: AppColors.primary,
-                backgroundImage: _profileImageUrl != null &&
-                        _profileImageUrl!.startsWith('http')
-                    ? NetworkImage(_profileImageUrl!)
-                    : _profileImageUrl != null
-                        ? FileImage(File(_profileImageUrl!)) as ImageProvider
-                        : null,
-                child: _profileImageUrl == null
+                backgroundImage: _profileImageBytes != null
+                    ? MemoryImage(_profileImageBytes!) as ImageProvider
+                    : _profileImageUrl != null &&
+                            _profileImageUrl!.startsWith('http')
+                        ? NetworkImage(_profileImageUrl!)
+                        : _profileImageUrl != null
+                            ? FileImage(File(_profileImageUrl!))
+                                as ImageProvider
+                            : null,
+                child: _profileImageBytes == null && _profileImageUrl == null
                     ? Text(
-                        _name.substring(0, 1).toUpperCase(),
+                        _name.isNotEmpty
+                            ? _name.substring(0, 1).toUpperCase()
+                            : 'U',
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
@@ -323,7 +388,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Role Badge - FIXED: Pass roleLabels
+          // Role Badge
           _isEditMode
               ? Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -459,7 +524,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ============================================
-  // EDIT PROFILE CONTENT - FIXED
+  // EDIT PROFILE CONTENT
   // ============================================
 
   Widget _buildEditProfileContent(List<String> roleLabels) {
@@ -475,7 +540,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.person_outline, color: AppColors.primary, size: 18),
+              const Icon(Icons.person_outline,
+                  color: AppColors.primary, size: 18),
               const SizedBox(width: 8),
               const Text(
                 'Profile Details',
@@ -658,7 +724,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProgressContent() {
     return Column(
       children: [
-        // Stats Row
         Row(
           children: [
             _buildStatCard('Total Hours', _progressData['totalHours'],
@@ -680,7 +745,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Weekly Activity
         const Text(
           'Weekly Activity',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -734,7 +798,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 8),
 
-        // GitHub-style contribution graph
         const Text(
           'Activity Overview',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -955,10 +1018,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         const Divider(),
         const SizedBox(height: 8),
-        Center(
+        const Center(
           child: Text(
             'Orbirag · v1.0',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,
             ),
