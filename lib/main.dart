@@ -22,6 +22,7 @@ import 'screens/new_notes_screen.dart';
 import 'screens/saved_papers_screen.dart';
 import 'screens/word_counter_screen.dart';
 import 'screens/library_screen.dart';
+import 'screens/literature_retrieval_screen.dart';
 
 
 void main() async {
@@ -71,6 +72,8 @@ class MyApp extends StatelessWidget {
         AppConstants.routeVoiceInput: (context) => const VoiceInputScreen(),
         AppConstants.routeHome: (context) => const HomeScreen(),
         AppConstants.routeOriChat: (context) => const OriChatScreen(),
+        AppConstants.routeLiteratureRetrieval: (context) =>
+            const LiteratureRetrievalScreen(),
         AppConstants.routeSavedPapers: (context) => const SavedPapersScreen(),
         AppConstants.routeForgotPassword: (context) => const ForgotPasswordScreen(),
         AppConstants.routePaperOrbit: (context) => const PaperOrbitScreen(),

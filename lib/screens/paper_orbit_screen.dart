@@ -51,7 +51,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
         title: const AppBrandTitle(),
         // No right icon (removed as requested)
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,45 +204,48 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             const SizedBox(height: 12),
 
             // Source list
-            Expanded(
-              child: sources.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.upload_file_outlined,
-                            size: 64,
-                            color:
-                                AppColors.textSecondary.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No sources added yet',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Upload a PDF or take a photo to get started',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+            if (sources.isEmpty)
+              SizedBox(
+                height: 120,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.upload_file_outlined,
+                        size: 64,
+                        color: AppColors.textSecondary.withValues(alpha: 0.3),
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: sources.length,
-                      itemBuilder: (context, index) {
-                        final source = sources[index];
-                        return _buildSourceItem(source, index);
-                      },
-                    ),
-            ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No sources added yet',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Upload a PDF or take a photo to get started',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: sources.length,
+                itemBuilder: (context, index) {
+                  final source = sources[index];
+                  return _buildSourceItem(source, index);
+                },
+              ),
 
             const SizedBox(height: 12),
 
