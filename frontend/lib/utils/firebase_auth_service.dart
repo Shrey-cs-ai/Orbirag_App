@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 
 class FirebaseAuthService {
   FirebaseAuthService._internal();
@@ -7,8 +10,14 @@ class FirebaseAuthService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
+    serverClientId:
+        '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
   );
+
+  // ==================== GITHUB OAUTH CONFIG ====================
+  static const String _githubClientId = 'Ov23lixXmPs1IIqHmyWj';
+  static const String _githubClientSecret = 'c75bf703998c4c60a12d210a14741dd04ccc108a'; 
+  static const String _callbackScheme = 'orbirag';
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -16,7 +25,6 @@ class FirebaseAuthService {
 
   // ==================== EMAIL/PASSWORD AUTH ====================
 
-  /// Sign up with email and password
   Future<String?> signUp({
     required String name,
     required String email,
@@ -29,7 +37,7 @@ class FirebaseAuthService {
       );
       await credential.user?.updateDisplayName(name.trim());
       await credential.user?.reload();
-      return null; // Success
+      return null;
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (_) {
@@ -37,7 +45,6 @@ class FirebaseAuthService {
     }
   }
 
-  /// Login with email and password
   Future<String?> login({
     required String email,
     required String password,
@@ -47,7 +54,7 @@ class FirebaseAuthService {
         email: email.trim(),
         password: password,
       );
-      return null; // Success
+      return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'operation-not-allowed' &&
           email.trim().toLowerCase() == 'test@test.com' &&
@@ -60,11 +67,10 @@ class FirebaseAuthService {
     }
   }
 
-  /// Send password reset email
   Future<String?> sendPasswordResetEmail(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
-      return null; // Success
+      return null;
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (_) {
@@ -74,13 +80,11 @@ class FirebaseAuthService {
 
   // ==================== SOCIAL AUTH ====================
 
-  /// Sign in with Google
+  /// Google Sign-In
   Future<String?> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        return 'Google sign-in cancelled';
-      }
+      if (googleUser == null) return 'Google sign-in cancelled';
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -91,7 +95,7 @@ class FirebaseAuthService {
       );
 
       await _auth.signInWithCredential(credential);
-      return null; // Success
+      return null;
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (e) {
@@ -99,19 +103,51 @@ class FirebaseAuthService {
     }
   }
 
-  /// Sign in with GitHub
+  /// GitHub Sign-In using flutter_web_auth_2 (custom scheme approach)
   Future<String?> signInWithGitHub() async {
     try {
-      // IMPORTANT: Enable GitHub in Firebase Console first
-      // Go to: Firebase Console → Authentication → Sign-in methods → GitHub
-      // You need to register a GitHub OAuth app and add Client ID & Secret
-      
-      final provider = GithubAuthProvider();
-      provider.addScope('read:user');
-      provider.addScope('user:email');
-      
-      await _auth.signInWithProvider(provider);
-      return null; // Success
+      // 1. Build the GitHub OAuth URL
+      final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
+        'client_id': _githubClientId,
+        'redirect_uri': '$_callbackScheme://callback',
+        'scope': 'read:user user:email',
+      });
+
+      // 2. Open GitHub login in a secure browser tab
+      final result = await FlutterWebAuth2.authenticate(
+        url: authUrl.toString(),
+        callbackUrlScheme: _callbackScheme, // 'orbirag'
+      );
+
+      // 3. Extract the authorization code
+      final code = Uri.parse(result).queryParameters['code'];
+      if (code == null) {
+        return 'GitHub authorization was cancelled';
+      }
+
+      // 4. Exchange code for access token
+      final tokenResponse = await http.post(
+        Uri.parse('https://github.com/login/oauth/access_token'),
+        headers: {'Accept': 'application/json'},
+        body: {
+          'client_id': _githubClientId,
+          'client_secret': _githubClientSecret,
+          'code': code,
+          'redirect_uri': '$_callbackScheme://callback',
+        },
+      );
+
+      final tokenData = jsonDecode(tokenResponse.body);
+      final accessToken = tokenData['access_token'];
+      if (accessToken == null) {
+        return 'Failed to get GitHub access token: ${tokenData['error_description'] ?? 'unknown'}';
+      }
+
+      // 5. Sign in to Firebase with the GitHub credential
+      final credential = GithubAuthProvider.credential(accessToken);
+      await _auth.signInWithCredential(credential);
+
+      return null;
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (e) {
@@ -119,30 +155,17 @@ class FirebaseAuthService {
     }
   }
 
-  /// Sign in with LinkedIn (Custom Implementation)
-  Future<String?> signInWithLinkedIn() async {
-    // LinkedIn requires custom OAuth implementation
-    // You can use packages like: linkedin_login
-    return 'LinkedIn sign-in not configured. Please use Email, Google, or GitHub.';
-  }
-
   // ==================== PROFILE MANAGEMENT ====================
 
-  /// Update user profile
   Future<void> updateProfile({String? displayName, String? photoURL}) async {
     final user = _auth.currentUser;
     if (user != null) {
-      if (displayName != null) {
-        await user.updateDisplayName(displayName);
-      }
-      if (photoURL != null) {
-        await user.updatePhotoURL(photoURL);
-      }
+      if (displayName != null) await user.updateDisplayName(displayName);
+      if (photoURL != null) await user.updatePhotoURL(photoURL);
       await user.reload();
     }
   }
 
-  /// Sign out
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
@@ -150,7 +173,6 @@ class FirebaseAuthService {
 
   // ==================== ERROR HANDLING ====================
 
-  /// Map Firebase errors to user-friendly messages
   String _mapError(FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
@@ -172,6 +194,10 @@ class FirebaseAuthService {
         return 'Network error. Check your connection.';
       case 'operation-not-allowed':
         return 'This sign-in method is not enabled.';
+      case 'account-exists-with-different-credential':
+        return 'An account already exists with a different sign-in method.';
+      case 'credential-already-in-use':
+        return 'This credential is already linked to another account.';
       default:
         return e.message ?? 'Authentication failed. Please try again.';
     }
