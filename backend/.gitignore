@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.local
+
+# Firebase
+firebase-service-account.json
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Data
+uploads/
+vectors/
+*.duckdb
+*.duckdb.wal
+
+# Test files
+*.wav
+*.mp3
+*.m4a
+
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
