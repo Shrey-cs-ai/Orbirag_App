@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
+import '../services/ai_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/chat_bubble.dart';
@@ -19,7 +20,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
   final FocusNode _focusNode = FocusNode();
 
   bool _isTyping = false;
-  int _selectedIndex = 1; // Ori is index 1
+  int _selectedIndex = 1;
 
   final List<Map<String, dynamic>> _messages = [
     {
@@ -29,29 +30,9 @@ class _OriChatScreenState extends State<OriChatScreen> {
     },
   ];
 
-  // AI Response mapping
-  final Map<String, String> _aiResponses = {
-    'research gap':
-        'A research gap is essentially an unanswered question or an unresolved problem in a specific field of study. It\'s the missing piece of the puzzle that existing literature hasn\'t covered yet.\n\nTo find one, you can start by reading recent systematic reviews in your area and looking closely at their "Recommendations for Future Research" sections.',
-    'lit review':
-        'To start a literature review:\n\n1️⃣ Define your research question\n2️⃣ Search for relevant papers using databases like Google Scholar, PubMed, or Scopus\n3️⃣ Read abstracts and select relevant papers\n4️⃣ Read full papers and take notes\n5️⃣ Organize by themes and identify gaps\n6️⃣ Write your review with proper citations\n\nWould you like me to help you with any of these steps?',
-    'methodology':
-        'For writing a methodology section:\n\n📌 Start with your research design (qualitative/quantitative/mixed)\n📌 Describe your participants/sample\n📌 Explain your data collection methods\n📌 Detail your analysis approach\n📌 Address ethical considerations\n📌 Justify your choices\n\nNeed help with any specific part?',
-    'citation':
-        'I can help with citations! Here are the most common styles:\n\n📝 APA 7th: (Author, Year)\n📝 MLA 9th: (Author Page)\n📝 Chicago: (Author Year, Page)\n📝 IEEE: [Number]\n📝 Harvard: (Author, Year)\n\nWhich style do you need?',
-    'hello':
-        'Hello! 👋 I\'m Ori, your AI research assistant. How can I help you with your academic work today? Feel free to ask me about:\n• Research gaps\n• Literature reviews\n• Methodology writing\n• Citation styles\n• Finding papers',
-    'hi':
-        'Hi there! 👋 I\'m Ori. What research topic are you working on? I can help you with:\n• Finding research gaps\n• Literature reviews\n• Methodology\n• Citations\n• And more!',
-    'paper':
-        'To find research papers:\n\n1️⃣ Use Google Scholar, PubMed, or Scopus\n2️⃣ Use keywords and Boolean operators (AND, OR, NOT)\n3️⃣ Check references of relevant papers\n4️⃣ Use citation tracking (who cited whom)\n5️⃣ Access through your university library\n\nI can help you refine your search strategy!',
-    'abstract':
-        'To write a strong abstract:\n\n📌 Background: What is the problem?\n📌 Objective: What did you do?\n📌 Methods: How did you do it?\n📌 Results: What did you find?\n📌 Conclusion: Why does it matter?\n\nKeep it concise (150-300 words) and include keywords!',
-  };
-
   static String _getCurrentTime() {
     final now = DateTime.now();
-    final hour = now.hour > 12 ? now.hour - 12 : now.hour;
+    final hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
     final minute = now.minute.toString().padLeft(2, '0');
     final ampm = now.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $ampm';
@@ -60,9 +41,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
@@ -73,11 +52,12 @@ class _OriChatScreenState extends State<OriChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  // ==================== SEND MESSAGE (via backend) ====================
+  Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isTyping) return;
 
-    // Add user message
+    // 1. Add user message to UI immediately
     setState(() {
       _messages.add({
         "text": text,
@@ -87,12 +67,27 @@ class _OriChatScreenState extends State<OriChatScreen> {
       _controller.clear();
       _isTyping = true;
     });
-
     _scrollToBottom();
 
-    // Simulate AI response
-    Future.delayed(const Duration(milliseconds: 800), () {
-      final response = _getAIResponse(text);
+    try {
+      // 2. Build history to send to backend (exclude the welcome message)
+      final history = _messages
+          .where((m) => m['isUser'] != null)
+          .map((m) => {
+                'text': m['text'] as String,
+                'isUser': m['isUser'] as bool,
+              })
+          .toList();
+
+      // 3. Call the backend
+      final response = await AiService.instance.chat(
+        message: text,
+        history: history,
+      );
+
+      if (!mounted) return;
+
+      // 4. Add AI response to UI
       setState(() {
         _messages.add({
           "text": response,
@@ -101,22 +96,20 @@ class _OriChatScreenState extends State<OriChatScreen> {
         });
         _isTyping = false;
       });
-      _scrollToBottom();
-    });
-  }
-
-  String _getAIResponse(String userMessage) {
-    final lowerMsg = userMessage.toLowerCase();
-
-    // Check for keywords
-    for (final entry in _aiResponses.entries) {
-      if (lowerMsg.contains(entry.key)) {
-        return entry.value;
-      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add({
+          "text":
+              "I couldn't reach the server. Please check your connection and try again. 🔌",
+          "isUser": false,
+          "time": _getCurrentTime(),
+        });
+        _isTyping = false;
+      });
     }
 
-    // Default response
-    return "That's a great question! 🤔 Let me think about that.\n\nI'm currently learning from research papers. Could you be more specific about what you'd like to know? For example:\n\n• Research gaps\n• Literature reviews\n• Methodology writing\n• Citation styles\n• Finding papers\n• Writing abstracts\n\nI'm here to help! 💪";
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -131,6 +124,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
     });
   }
 
+  // ==================== VOICE INPUT ====================
   void _handleVoiceInput() async {
     final result = await Navigator.push(
       context,
@@ -138,12 +132,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
     );
 
     if (result != null && result is String && result.trim().isNotEmpty) {
-      setState(() {
-        _controller.text = result;
-      });
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _sendMessage();
-      });
+      setState(() => _controller.text = result);
+      Future.delayed(const Duration(milliseconds: 300), _sendMessage);
     }
   }
 
@@ -232,7 +222,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
             ),
           ),
 
-          // Messages
+          // Messages list
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -276,7 +266,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
             ),
           ),
 
-          // Suggestion Chips
+          // Suggestion chips (only when conversation is fresh)
           if (showSuggestions)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -284,13 +274,13 @@ class _OriChatScreenState extends State<OriChatScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
-                children: AppConstants.suggestionChips.map((chip) {
-                  return _buildSuggestionChip(chip);
-                }).toList(),
+                children: AppConstants.suggestionChips
+                    .map(_buildSuggestionChip)
+                    .toList(),
               ),
             ),
 
-          // Input Area
+          // Input area
           Container(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             decoration: const BoxDecoration(
@@ -300,7 +290,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Text Field with Mic
+                // Text field + mic
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -330,7 +320,6 @@ class _OriChatScreenState extends State<OriChatScreen> {
                             onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
-                        // Mic Button
                         IconButton(
                           icon: const Icon(Icons.mic, color: AppColors.purple),
                           onPressed: _handleVoiceInput,
@@ -342,7 +331,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Send Button
+
+                // Send button
                 GestureDetector(
                   onTap: _sendMessage,
                   child: Container(
