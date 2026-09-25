@@ -1,4 +1,4 @@
-# scholar_pulse
+# Orbirag
 
 A new Flutter project.
 
