@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 
 // ==================== MODELS ====================
 
-/// Represents the AI-extracted search query (keywords, synonyms, boolean)
 class SearchQuery {
   final String topic;
   List<String> keywords;
@@ -34,7 +33,6 @@ class SearchQuery {
   }
 }
 
-/// Represents a single academic paper result
 class SearchResult {
   final String id;
   final String title;
@@ -42,7 +40,7 @@ class SearchResult {
   final String year;
   final String journal;
   final String abstract;
-  final String source; // PubMed, IEEE, arXiv
+  final String source;
   final int citations;
   final String url;
   String aiSummary;
@@ -64,11 +62,11 @@ class SearchResult {
 
   factory SearchResult.fromJson(Map<String, dynamic> json) {
     return SearchResult(
-      id: json['id'] ?? '',
+      id: (json['id'] ?? '').toString(),
       title: json['title'] ?? 'Untitled',
       authors: json['authors'] ?? 'Unknown',
       year: json['year']?.toString() ?? 'N/A',
-      journal: json['journal'] ?? '',
+      journal: json['venue'] ?? json['journal'] ?? '',   // ← backend uses 'venue'
       abstract: json['abstract'] ?? '',
       source: json['source'] ?? 'Unknown',
       citations: json['citations'] ?? 0,
@@ -88,6 +86,7 @@ class SearchResult {
         'source': source,
         'citations': citations,
         'url': url,
+        'ai_summary': aiSummary,
       };
 }
 
@@ -97,13 +96,13 @@ class SearchService {
   static final SearchService instance = SearchService._internal();
   SearchService._internal();
 
-  // ⚠️ IMPORTANT: Change this to your backend URL
-  // Android emulator: 'http://10.0.2.2:8000'
-  // iOS simulator: 'http://localhost:8000'
-  // Real device: 'http://<YOUR_PC_IP>:8000'
-  static const String _baseUrl = 'http://10.0.2.2:8000';
+  // ⚠️ Backend URL
+  // Android emulator: 10.0.2.2 points to host PC
+  // iOS simulator: localhost
+  // Real device: use PC LAN IP (e.g., 192.168.1.42)
+  static const String _baseUrl = 'http://localhost:8000';
 
-  /// Step 1: Use AI to extract keywords, synonyms, and boolean query from user topic
+  /// Step 1: AI extracts keywords + boolean query from the topic
   Future<SearchQuery?> buildSearchQuery(String topic) async {
     if (topic.trim().isEmpty) return null;
 
@@ -115,17 +114,19 @@ class SearchService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
         return SearchQuery.fromJson(topic, data);
       }
-      throw Exception('Failed: ${response.statusCode}');
+      debugPrint('buildSearchQuery failed: ${response.statusCode} ${response.body}');
+      return null;
     } catch (e) {
-      debugPrint('Build query error: $e');
+      debugPrint('buildSearchQuery error: $e');
       return null;
     }
   }
 
-  /// Step 2: Run semantic + vector search on the backend
+  /// Step 2: Search Semantic Scholar + AI summaries
+  /// Backend returns: { "results": [...], "count": N }
   Future<List<SearchResult>> searchPapers({
     required String query,
     String dateRange = '2015-2025',
@@ -145,61 +146,32 @@ class SearchService {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((e) => SearchResult.fromJson(e)).toList();
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final List<dynamic> results = data['results'] ?? [];
+        return results.map((e) => SearchResult.fromJson(e)).toList();
+      }
+
+      if (response.statusCode == 429) {
+        throw Exception('Rate limit — please wait a minute and try again');
       }
       throw Exception('Search failed: ${response.statusCode}');
     } catch (e) {
-      debugPrint('Search error: $e');
+      debugPrint('searchPapers error: $e');
       rethrow;
     }
   }
 
-  /// Step 3: Batch summarize the results using AI
-  Future<List<SearchResult>> summarizeResults(List<SearchResult> results) async {
-    if (results.isEmpty) return results;
-
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/ai/summarize-batch'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'papers': results
-              .map((r) => {
-                    'id': r.id,
-                    'title': r.title,
-                    'abstract': r.abstract,
-                  })
-              .toList(),
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> summaries = jsonDecode(response.body);
-        for (var r in results) {
-          final s = summaries[r.id];
-          if (s != null) {
-            r.aiSummary = s['summary'] ?? '';
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Summarize error: $e');
-    }
-    return results;
-  }
-
-  /// Step 4: Save a paper to user's library (PostgreSQL)
+  /// Save a paper to user's library
   Future<bool> savePaper(SearchResult paper) async {
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/api/papers/save'),
+        Uri.parse('$_baseUrl/api/papers/save?user_id=test-user'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(paper.toJson()),
       );
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('Save error: $e');
+      debugPrint('savePaper error: $e');
       return false;
     }
   }
