@@ -84,7 +84,7 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     });
 
     try {
-      // Step 1: Semantic + Vector search
+      // Search Semantic Scholar — backend already includes AI summaries
       final results = await _searchService.searchPapers(
         query: _builtQuery!.booleanQuery.isNotEmpty
             ? _builtQuery!.booleanQuery
@@ -93,12 +93,9 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
         discipline: _selectedDiscipline,
       );
 
-      // Step 2: AI summarize in background
-      final summarized = await _searchService.summarizeResults(results);
-
       if (!mounted) return;
       setState(() {
-        _results = summarized;
+        _results = results;
         _isSearching = false;
       });
     } catch (e) {

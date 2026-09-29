@@ -1,0 +1,111 @@
+"""
+Literature search via Semantic Scholar's free Graph API.
+Loads .env itself so it works regardless of import order.
+"""
+
+import os
+from pathlib import Path
+from typing import List, Dict
+
+import httpx
+
+
+# ============================================================
+# Load .env before reading S2_API_KEY
+# ============================================================
+def _load_env():
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        print(f"[S2] .env not found at {env_path}")
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ[k.strip()] = v.strip()
+
+
+_load_env()
+
+
+S2_BASE = "https://api.semanticscholar.org/graph/v1/paper/search"
+S2_FIELDS = "title,authors,year,abstract,url,citationCount,venue,externalIds"
+
+
+# ============================================================
+# Read key — with debug output
+# ============================================================
+_api_key = os.getenv("S2_API_KEY")
+
+if _api_key:
+    print(f"[S2 DEBUG] S2_API_KEY = SET ({_api_key[:15]}...)")
+else:
+    print("[S2 DEBUG] S2_API_KEY = MISSING — running unauthenticated")
+
+_headers = {"x-api-key": _api_key} if _api_key else {}
+print(f"[S2 DEBUG] headers = {list(_headers.keys())}")
+# ============================================================
+# Search
+# ============================================================
+async def search_semantic_scholar(
+    query: str,
+    limit: int = 10,
+    year_range: str = None,
+    discipline: str = None,
+) -> List[Dict]:
+    """
+    Search Semantic Scholar. Returns a normalized list of papers.
+    year_range like '2015-2025' or None.
+    """
+    params = {
+        "query": query,
+        "limit": limit,
+        "fields": S2_FIELDS,
+    }
+    if year_range:
+        params["year"] = year_range
+
+    # Discipline can narrow the search but S2 doesn't have a direct filter;
+    # append it to the query text instead.
+    if discipline and discipline.lower() != "all":
+        params["query"] = f"{query} {discipline}"
+
+    # Debug — show what we're about to send
+    print(f"[S2 DEBUG] sending GET {S2_BASE}")
+    print(f"[S2 DEBUG] headers = {_headers}")
+    print(f"[S2 DEBUG] params  = {params}")
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(S2_BASE, params=params, headers=_headers)
+
+    print(f"[S2 DEBUG] status = {resp.status_code}")
+
+    if resp.status_code == 429:
+        raise RuntimeError("Semantic Scholar rate limit — try again in a minute")
+
+    resp.raise_for_status()
+    data = resp.json()
+
+    papers = []
+    for p in data.get("data", []):
+        authors = ", ".join(
+            a.get("name", "") for a in (p.get("authors") or [])[:3]
+        )
+        if len(p.get("authors") or []) > 3:
+            authors += ", et al."
+
+        papers.append({
+            "id": p.get("paperId") or "",
+            "title": p.get("title") or "Untitled",
+            "authors": authors or "Unknown authors",
+            "year": str(p.get("year") or ""),
+            "abstract": (p.get("abstract") or "")[:1000],
+            "url": p.get("url") or "",
+            "citations": p.get("citationCount") or 0,
+            "venue": p.get("venue") or "",
+            "source": "Semantic Scholar",
+        })
+
+    print(f"[S2 DEBUG] parsed {len(papers)} papers")
+    return papers
