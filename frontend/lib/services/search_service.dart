@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'dart:io' show Platform;
 
 // ==================== MODELS ====================
 
@@ -100,7 +101,16 @@ class SearchService {
   // Android emulator: 10.0.2.2 points to host PC
   // iOS simulator: localhost
   // Real device: use PC LAN IP (e.g., 192.168.1.42)
-  static const String _baseUrl = 'http://localhost:8000';
+  static String get _baseUrl {
+  // Web (Chrome, Edge) — localhost works
+  if (kIsWeb) return 'http://localhost:8000';
+
+  // Android emulator — 10.0.2.2 maps to host PC's localhost
+  if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+
+  // iOS simulator, macOS, Windows desktop — localhost
+  return 'http://localhost:8000';
+}
 
   /// Step 1: AI extracts keywords + boolean query from the topic
   Future<SearchQuery?> buildSearchQuery(String topic) async {
