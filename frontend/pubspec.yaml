@@ -33,7 +33,7 @@ dependencies:
   # File Handling
   file_picker: ^8.1.2
   image_picker: ^1.1.2
-  path_provider: ^2.1.2
+  path_provider: ^2.1.6
   url_launcher: ^6.2.4
 
   # PDF
@@ -46,6 +46,7 @@ dependencies:
   flutter_animate: ^4.5.0
   flutter_svg: ^2.1.0
   http_parser: ^4.1.2
+  flutter_dotenv: ^6.0.1
 
 dev_dependencies:
   flutter_test:
@@ -58,4 +59,5 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - .env
   
