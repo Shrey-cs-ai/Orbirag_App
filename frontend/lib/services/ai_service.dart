@@ -1,18 +1,20 @@
 import 'dart:convert';
-import 'dart:io';
-
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:http/http.dart' as http;
 
 class AiService {
   static final AiService instance = AiService._internal();
   AiService._internal();
 
-  // ⚠️ Android emulator: 10.0.2.2 | iOS sim: localhost | Real device: your PC IP
-  static const String _baseUrl = 'http://10.0.2.2:8000';
+  // ✅ DYNAMIC URL: Works on Chrome, Android Emulator, and iOS
+  static String get _baseUrl {
+    if (kIsWeb) return 'http://localhost:8000'; // For Chrome
+    if (defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:8000'; // For Android Emulator
+    return 'http://localhost:8000'; // For iOS/Mac/Windows
+  }
 
   // ============================================================
-  // Ori Chatbot — general conversation
+  // 1. Ori Chatbot — general conversation
   // ============================================================
   Future<String> chat({
     required String message,
@@ -26,16 +28,10 @@ class AiService {
         };
       }).toList();
 
-      final user = FirebaseAuth.instance.currentUser;
-      final token = await user?.getIdToken();
-
       final response = await http
           .post(
             Uri.parse('$_baseUrl/chat'),
-            headers: {
-              'Content-Type': 'application/json',
-              if (token != null) 'Authorization': 'Bearer $token',
-            },
+            headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'message': message,
               'history': backendHistory,
@@ -47,7 +43,7 @@ class AiService {
         final data = jsonDecode(response.body);
         return data['response'] as String;
       } else {
-        throw Exception('Server error: ${response.statusCode}');
+        throw Exception('Server error: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       throw Exception('Failed to reach AI: $e');
@@ -55,22 +51,24 @@ class AiService {
   }
 
   // ============================================================
-  // Upload PDF to backend → returns paper_id
+  // 2. Upload PDF to backend → returns paper_id (WEB & MOBILE)
   // ============================================================
-  Future<Map<String, dynamic>> uploadPdf(String filePath) async {
+  Future<Map<String, dynamic>> uploadPdf({
+    required List<int> fileBytes,
+    required String filename,
+  }) async {
     try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        throw Exception('File not found: $filePath');
-      }
-
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$_baseUrl/upload-pdf'),
       );
 
       request.files.add(
-        await http.MultipartFile.fromPath('file', filePath),
+        http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: filename,
+        ),
       );
 
       final streamed = await request.send().timeout(
@@ -91,7 +89,7 @@ class AiService {
   }
 
   // ============================================================
-  // Chat with uploaded PDF → grounded answer
+  // 3. Chat with uploaded PDF → grounded answer
   // ============================================================
   Future<Map<String, dynamic>> chatWithPdf({
     required String paperId,

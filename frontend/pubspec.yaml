@@ -31,7 +31,7 @@ dependencies:
   permission_handler: ^11.3.1
 
   # File Handling
-  file_picker: ^8.1.2
+  file_picker: ^8.0.0
   image_picker: ^1.1.2
   path_provider: ^2.1.6
   url_launcher: ^6.2.4
@@ -40,7 +40,7 @@ dependencies:
   pdfx: ^2.5.0
 
   # Networking
-  http: ^1.2.2
+  http: ^1.2.0
 
   # UI Enhancements
   flutter_animate: ^4.5.0
