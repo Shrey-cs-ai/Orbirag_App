@@ -5,7 +5,7 @@ Loads .env itself so it works regardless of import order.
 
 import os
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import httpx
 
@@ -34,7 +34,7 @@ S2_FIELDS = "title,authors,year,abstract,url,citationCount,venue,externalIds"
 
 
 # ============================================================
-# Read key — with debug output
+# Read key
 # ============================================================
 _api_key = os.getenv("S2_API_KEY")
 
@@ -45,14 +45,16 @@ else:
 
 _headers = {"x-api-key": _api_key} if _api_key else {}
 print(f"[S2 DEBUG] headers = {list(_headers.keys())}")
+
+
 # ============================================================
 # Search
 # ============================================================
 async def search_semantic_scholar(
     query: str,
     limit: int = 10,
-    year_range: str = None,
-    discipline: str = None,
+    year_range: Optional[str] = None,
+    discipline: Optional[str] = None,
 ) -> List[Dict]:
     """
     Search Semantic Scholar. Returns a normalized list of papers.
@@ -66,33 +68,38 @@ async def search_semantic_scholar(
     if year_range:
         params["year"] = year_range
 
-    # Discipline can narrow the search but S2 doesn't have a direct filter;
-    # append it to the query text instead.
+    # Discipline narrows results by appending to the query text
     if discipline and discipline.lower() != "all":
         params["query"] = f"{query} {discipline}"
 
-    # Debug — show what we're about to send
     print(f"[S2 DEBUG] sending GET {S2_BASE}")
-    print(f"[S2 DEBUG] headers = {_headers}")
     print(f"[S2 DEBUG] params  = {params}")
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        resp = await client.get(S2_BASE, params=params, headers=_headers)
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(S2_BASE, params=params, headers=_headers)
+    except httpx.TimeoutException:
+        raise RuntimeError("Semantic Scholar request timed out — try again")
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Semantic Scholar unreachable: {e}")
 
     print(f"[S2 DEBUG] status = {resp.status_code}")
 
     if resp.status_code == 429:
         raise RuntimeError("Semantic Scholar rate limit — try again in a minute")
 
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise RuntimeError(
+            f"Semantic Scholar error {resp.status_code}: {resp.text[:200]}"
+        )
+
     data = resp.json()
 
     papers = []
     for p in data.get("data", []):
-        authors = ", ".join(
-            a.get("name", "") for a in (p.get("authors") or [])[:3]
-        )
-        if len(p.get("authors") or []) > 3:
+        authors_list = p.get("authors") or []
+        authors = ", ".join(a.get("name", "") for a in authors_list[:3])
+        if len(authors_list) > 3:
             authors += ", et al."
 
         papers.append({

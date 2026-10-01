@@ -172,12 +172,16 @@ async def chat_with_pdf(request: RagChatRequest):
         raise HTTPException(500, f"RAG error: {e}")
 
 # ============================================================
-# Literature Retrieval
+# Literature Retrieval — Step 1: Build Query
 # ============================================================
-
-@app.post("/api/ai/build-search", response_model=BuildQueryResponse)
+@app.post(
+    "/api/ai/build-search",
+    response_model=BuildQueryResponse,
+    tags=["Literature"],
+)
 async def build_search_route(req: BuildQueryRequest):
-    """Extract keywords + Boolean query from a topic."""
+    """Extract keywords + synonyms + Boolean query from a topic."""
+    print(f"[Literature] build-search for topic: {req.topic[:80]}")
     result = await build_search_query(req.topic)
     if not result:
         raise HTTPException(500, "Could not build search query")
@@ -189,16 +193,25 @@ async def build_search_route(req: BuildQueryRequest):
     )
 
 
-@app.post("/api/search", response_model=SearchResponse)
+# ============================================================
+# Literature Retrieval — Step 2: Search
+# ============================================================
+@app.post(
+    "/api/search",
+    response_model=SearchResponse,
+    tags=["Literature"],
+)
 async def search_route(req: SearchRequest):
     """
     Search Semantic Scholar → summarize each result with Gemini.
     Runs summaries in parallel for speed.
     """
+    print(f"[Literature] search: query='{req.query[:80]}', limit={req.limit}")
+
     try:
         papers = await search_semantic_scholar(
             query=req.query,
-            limit=req.limit,
+            limit=req.limit or 10,
             year_range=req.date_range,
             discipline=req.discipline,
         )
@@ -210,15 +223,104 @@ async def search_route(req: SearchRequest):
     if not papers:
         return SearchResponse(results=[], count=0)
 
-    # Summarize in parallel (asyncio.gather)
-    import asyncio
-    summaries = await asyncio.gather(*[
-        summarize_paper(p["title"], p["abstract"]) for p in papers
-    ])
+    # Summarize in parallel
+    try:
+        summaries = await asyncio.gather(
+            *[summarize_paper(p["title"], p["abstract"]) for p in papers],
+            return_exceptions=True,
+        )
+    except Exception as e:
+        print(f"[Literature] summarize error: {e}")
+        summaries = ["No summary available."] * len(papers)
 
-    results = [
-        PaperResult(**p, ai_summary=s)
-        for p, s in zip(papers, summaries)
-    ]
+    results = []
+    for p, s in zip(papers, summaries):
+        if isinstance(s, Exception):
+            s = "No summary available."
+        results.append(
+            PaperResult(**p, ai_summary=s)
+        )
 
+    print(f"[Literature] returning {len(results)} results")
     return SearchResponse(results=results, count=len(results))
+
+
+# ============================================================
+# Literature Retrieval — Step 3: Save Paper
+# ============================================================
+@app.post("/api/save-paper", tags=["Literature"])
+async def save_paper_route(req: SavePaperRequest):
+    """Save a paper to the user's library (Postgres)."""
+    print(f"[Literature] save-paper: {req.title[:80]}")
+
+    try:
+        from database import SessionLocal
+        from db_queries import save_paper
+
+        db = SessionLocal()
+        try:
+            save_paper(
+                db,
+                user_id="anonymous",   # TODO: wire up Firebase UID
+                data={
+                    "title": req.title,
+                    "authors": req.authors,
+                    "year": req.year,
+                    "source": req.source,
+                    "citations": req.citations,
+                    "journal": req.venue,
+                    "abstract": req.abstract,
+                    "url": req.url,
+                },
+            )
+            return {"success": True}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Literature] save-paper error: {e}")
+        raise HTTPException(500, f"Save failed: {e}")
+# ============================================================
+# Save Paper to Library
+# ============================================================
+from pydantic import BaseModel
+from typing import Optional
+
+class SavePaperRequest(BaseModel):
+    title: str
+    authors: Optional[str] = ""
+    year: Optional[str] = ""
+    source: Optional[str] = ""
+    citations: Optional[int] = 0
+    ai_summary: Optional[str] = ""
+    url: Optional[str] = ""
+    abstract: Optional[str] = ""
+    venue: Optional[str] = ""
+
+
+@app.post("/api/save-paper")
+async def save_paper_route(req: SavePaperRequest):
+    """Save a paper to the user's library (Postgres)."""
+    try:
+        from database import SessionLocal
+        from db_queries import save_paper
+        db = SessionLocal()
+        try:
+            save_paper(
+                db,
+                user_id="anonymous",   # TODO: wire up Firebase UID later
+                data={
+                    "title": req.title,
+                    "authors": req.authors,
+                    "year": req.year,
+                    "source": req.source,
+                    "citations": req.citations,
+                    "journal": req.venue,   # map venue → journal column
+                    "abstract": req.abstract,
+                    "url": req.url,
+                },
+            )
+            return {"success": True}
+        finally:
+            db.close()
+    except Exception as e:
+        raise HTTPException(500, f"Save failed: {e}")

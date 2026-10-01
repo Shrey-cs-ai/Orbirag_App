@@ -142,3 +142,8 @@ class PaperResult(BaseModel):
 class SearchResponse(BaseModel):
     results: List[PaperResult] = []
     count: int = 0  
+    
+# ============================================================
+# Legacy aliases (in case older code imports these)
+# ============================================================
+UploadPdfResponseLegacy = UploadPdfResponse

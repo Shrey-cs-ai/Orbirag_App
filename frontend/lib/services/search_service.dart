@@ -1,188 +1,194 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
-import 'dart:io' show Platform;
-
-// ==================== MODELS ====================
-
-class SearchQuery {
-  final String topic;
-  List<String> keywords;
-  final List<String> synonyms;
-  final String booleanQuery;
-  final String dateRange;
-  final String discipline;
-
-  SearchQuery({
-    required this.topic,
-    required this.keywords,
-    required this.synonyms,
-    required this.booleanQuery,
-    required this.dateRange,
-    required this.discipline,
-  });
-
-  factory SearchQuery.fromJson(String topic, Map<String, dynamic> json) {
-    return SearchQuery(
-      topic: topic,
-      keywords: List<String>.from(json['keywords'] ?? []),
-      synonyms: List<String>.from(json['synonyms'] ?? []),
-      booleanQuery: json['boolean_query'] ?? '',
-      dateRange: json['date_range'] ?? '2015-2025',
-      discipline: json['discipline'] ?? 'All',
-    );
-  }
-}
-
-class SearchResult {
-  final String id;
-  final String title;
-  final String authors;
-  final String year;
-  final String journal;
-  final String abstract;
-  final String source;
-  final int citations;
-  final String url;
-  String aiSummary;
-  final String aiMatchReason;
-
-  SearchResult({
-    required this.id,
-    required this.title,
-    required this.authors,
-    required this.year,
-    required this.journal,
-    required this.abstract,
-    required this.source,
-    required this.citations,
-    required this.url,
-    this.aiSummary = '',
-    this.aiMatchReason = '',
-  });
-
-  factory SearchResult.fromJson(Map<String, dynamic> json) {
-    return SearchResult(
-      id: (json['id'] ?? '').toString(),
-      title: json['title'] ?? 'Untitled',
-      authors: json['authors'] ?? 'Unknown',
-      year: json['year']?.toString() ?? 'N/A',
-      journal: json['venue'] ?? json['journal'] ?? '',   // ← backend uses 'venue'
-      abstract: json['abstract'] ?? '',
-      source: json['source'] ?? 'Unknown',
-      citations: json['citations'] ?? 0,
-      url: json['url'] ?? '',
-      aiSummary: json['ai_summary'] ?? '',
-      aiMatchReason: json['ai_match_reason'] ?? '',
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'authors': authors,
-        'year': year,
-        'journal': journal,
-        'abstract': abstract,
-        'source': source,
-        'citations': citations,
-        'url': url,
-        'ai_summary': aiSummary,
-      };
-}
-
-// ==================== SERVICE ====================
 
 class SearchService {
   static final SearchService instance = SearchService._internal();
   SearchService._internal();
 
-  // ⚠️ Backend URL
-  // Android emulator: 10.0.2.2 points to host PC
-  // iOS simulator: localhost
-  // Real device: use PC LAN IP (e.g., 192.168.1.42)
-  static String get _baseUrl {
-  // Web (Chrome, Edge) — localhost works
-  if (kIsWeb) return 'http://localhost:8000';
+  // ============================================================
+  // ✅ Research backend runs on port 8001
+  // ============================================================
+  String get baseUrl {
+    if (kIsWeb) return 'http://localhost:8001';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8001';
+    }
+    return 'http://localhost:8001';
+  }
 
-  // Android emulator — 10.0.2.2 maps to host PC's localhost
-  if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-
-  // iOS simulator, macOS, Windows desktop — localhost
-  return 'http://localhost:8000';
-}
-
-  /// Step 1: AI extracts keywords + boolean query from the topic
+  // ============================================================
+  // 1. Build Query → keywords + synonyms + boolean_query
+  // ============================================================
   Future<SearchQuery?> buildSearchQuery(String topic) async {
-    if (topic.trim().isEmpty) return null;
-
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/ai/build-search'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'topic': topic}),
-      );
+      debugPrint('[Search] POST $baseUrl/api/ai/build-search');
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/ai/build-search'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'topic': topic}),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      debugPrint('[Search] build-search status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return SearchQuery.fromJson(topic, data);
+        return SearchQuery(
+          keywords: List<String>.from(data['keywords'] ?? []),
+          synonyms: List<String>.from(data['synonyms'] ?? []),
+          booleanQuery: (data['boolean_query'] ?? '') as String,
+        );
       }
-      debugPrint('buildSearchQuery failed: ${response.statusCode} ${response.body}');
+      debugPrint('[Search] build-search error body: ${response.body}');
       return null;
     } catch (e) {
-      debugPrint('buildSearchQuery error: $e');
+      debugPrint('[Search] buildSearchQuery exception: $e');
       return null;
     }
   }
 
-  /// Step 2: Search Semantic Scholar + AI summaries
-  /// Backend returns: { "results": [...], "count": N }
+  // ============================================================
+  // 2. Search Papers → List<SearchResult>
+  // ============================================================
   Future<List<SearchResult>> searchPapers({
     required String query,
-    String dateRange = '2015-2025',
-    String discipline = 'All',
-    int limit = 20,
+    String? dateRange,
+    String? discipline,
+    int limit = 10,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/search'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'query': query,
-          'date_range': dateRange,
-          'discipline': discipline,
-          'limit': limit,
-        }),
-      );
+      debugPrint('[Search] POST $baseUrl/api/search');
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/search'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'query': query,
+              'limit': limit,
+              'date_range': dateRange,
+              'discipline': discipline,
+            }),
+          )
+          .timeout(const Duration(seconds: 90));
+
+      debugPrint('[Search] /api/search status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final List<dynamic> results = data['results'] ?? [];
-        return results.map((e) => SearchResult.fromJson(e)).toList();
+        final list = (data['results'] ?? []) as List;
+        return list
+            .map((p) => SearchResult.fromJson(p as Map<String, dynamic>))
+            .toList();
       }
-
-      if (response.statusCode == 429) {
-        throw Exception('Rate limit — please wait a minute and try again');
-      }
-      throw Exception('Search failed: ${response.statusCode}');
+      debugPrint('[Search] search error body: ${response.body}');
+      return [];
     } catch (e) {
-      debugPrint('searchPapers error: $e');
-      rethrow;
+      debugPrint('[Search] searchPapers exception: $e');
+      return [];
     }
   }
 
-  /// Save a paper to user's library
+  // ============================================================
+  // 3. Save Paper → bool
+  // ============================================================
   Future<bool> savePaper(SearchResult paper) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/papers/save?user_id=test-user'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(paper.toJson()),
-      );
+      debugPrint('[Search] POST $baseUrl/api/save-paper');
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/save-paper'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'title': paper.title,
+              'authors': paper.authors,
+              'year': paper.year,
+              'source': paper.source,
+              'citations': paper.citations,
+              'ai_summary': paper.aiSummary,
+              'url': paper.url,
+              'abstract': paper.abstract,
+              'venue': paper.venue,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('[Search] save-paper status: ${response.statusCode}');
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('savePaper error: $e');
+      debugPrint('[Search] savePaper exception: $e');
       return false;
     }
   }
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+class SearchQuery {
+  final List<String> keywords;
+  final List<String> synonyms;
+  final String booleanQuery;
+
+  SearchQuery({
+    required this.keywords,
+    required this.synonyms,
+    required this.booleanQuery,
+  });
+}
+
+class SearchResult {
+  final String title;
+  final String authors;
+  final String year;
+  final String source;
+  final int citations;
+  final String aiSummary;
+  final String url;
+  final String abstract;
+  final String venue;
+
+  SearchResult({
+    required this.title,
+    required this.authors,
+    required this.year,
+    required this.source,
+    required this.citations,
+    required this.aiSummary,
+    this.url = '',
+    this.abstract = '',
+    this.venue = '',
+  });
+
+  factory SearchResult.fromJson(Map<String, dynamic> json) {
+    return SearchResult(
+      title: (json['title'] ?? 'Untitled') as String,
+      authors: (json['authors'] ?? 'Unknown authors') as String,
+      year: json['year']?.toString() ?? '',
+      source: (json['source'] ?? 'Semantic Scholar') as String,
+      citations: (json['citations'] ?? 0) as int,
+      // ⚠️ Backend uses snake_case — match it
+      aiSummary: (json['ai_summary'] ?? '') as String,
+      url: (json['url'] ?? '') as String,
+      abstract: (json['abstract'] ?? '') as String,
+      venue: (json['venue'] ?? '') as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'authors': authors,
+        'year': year,
+        'source': source,
+        'citations': citations,
+        'ai_summary': aiSummary,
+        'url': url,
+        'abstract': abstract,
+        'venue': venue,
+      };
 }
