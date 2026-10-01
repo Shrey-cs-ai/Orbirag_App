@@ -1,20 +1,27 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:http/http.dart' as http;
 
 class AiService {
   static final AiService instance = AiService._internal();
   AiService._internal();
 
-  // ✅ DYNAMIC URL: Works on Chrome, Android Emulator, and iOS
-  static String get _baseUrl {
-    if (kIsWeb) return 'http://localhost:8000'; // For Chrome
-    if (defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:8000'; // For Android Emulator
-    return 'http://localhost:8000'; // For iOS/Mac/Windows
+  // ============================================================
+  // ✅ Dynamic Base URL
+  // ============================================================
+  String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:8000';
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000';
+    }
+    return 'http://localhost:8000';
   }
 
   // ============================================================
-  // 1. Ori Chatbot — general conversation
+  // 1. Ori Chatbot
   // ============================================================
   Future<String> chat({
     required String message,
@@ -30,7 +37,7 @@ class AiService {
 
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/chat'),
+            Uri.parse('$baseUrl/chat'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'message': message,
@@ -43,7 +50,8 @@ class AiService {
         final data = jsonDecode(response.body);
         return data['response'] as String;
       } else {
-        throw Exception('Server error: ${response.statusCode} - ${response.body}');
+        throw Exception(
+            'Server error: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       throw Exception('Failed to reach AI: $e');
@@ -51,7 +59,7 @@ class AiService {
   }
 
   // ============================================================
-  // 2. Upload PDF to backend → returns paper_id (WEB & MOBILE)
+  // 2. Upload PDF
   // ============================================================
   Future<Map<String, dynamic>> uploadPdf({
     required List<int> fileBytes,
@@ -60,7 +68,7 @@ class AiService {
     try {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_baseUrl/upload-pdf'),
+        Uri.parse('$baseUrl/upload-pdf'),
       );
 
       request.files.add(
@@ -71,17 +79,15 @@ class AiService {
         ),
       );
 
-      final streamed = await request.send().timeout(
-            const Duration(seconds: 60),
-          );
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 60));
       final response = await http.Response.fromStream(streamed);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
         throw Exception(
-          'Upload failed (${response.statusCode}): ${response.body}',
-        );
+            'Upload failed (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
       throw Exception('Upload error: $e');
@@ -89,7 +95,7 @@ class AiService {
   }
 
   // ============================================================
-  // 3. Chat with uploaded PDF → grounded answer
+  // 3. Chat with PDF
   // ============================================================
   Future<Map<String, dynamic>> chatWithPdf({
     required String paperId,
@@ -106,7 +112,7 @@ class AiService {
 
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/chat-with-pdf'),
+            Uri.parse('$baseUrl/chat-with-pdf'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'paper_id': paperId,
@@ -120,11 +126,47 @@ class AiService {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
         throw Exception(
-          'Chat failed (${response.statusCode}): ${response.body}',
-        );
+            'Chat failed (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
       throw Exception('PDF chat error: $e');
+    }
+  }
+
+  // ============================================================
+  // 4. Transcribe Audio (Voice Input)
+  // ============================================================
+  Future<String> transcribeAudio({
+    required List<int> audioBytes,
+    required String filename,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/voice/transcribe?language=en'),
+      );
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: filename,
+        ),
+      );
+
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['transcript'] as String;
+      } else {
+        throw Exception(
+            'Transcribe failed (${response.statusCode}): ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Transcription error: $e');
     }
   }
 }

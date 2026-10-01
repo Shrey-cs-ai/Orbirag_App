@@ -1,11 +1,11 @@
-import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:record/record.dart';
 import '../utils/app_colors.dart';
-import '../utils/deepgram_transcription_service.dart';
-import '../utils/env.dart';
-import '../services/audio_recorder_service.dart';
+import '../services/ai_service.dart';
 import '../widgets/app_scaffold.dart';
 
 class VoiceInputScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class VoiceInputScreen extends StatefulWidget {
 
 class _VoiceInputScreenState extends State<VoiceInputScreen>
     with SingleTickerProviderStateMixin {
-  final AudioRecorderService _recorder = AudioRecorderService();
+  final AudioRecorder _recorder = AudioRecorder();
   final TextEditingController _transcriptController = TextEditingController();
 
   late AnimationController _pulseController;
@@ -27,6 +27,10 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   bool _isProcessing = false;
   bool _hasTranscript = false;
   String _statusMessage = 'Tap the mic to start recording';
+
+  // ✅ Collects bytes from the stream (works on Web AND Mobile)
+  final List<int> _audioBytes = [];
+  StreamSubscription<Uint8List>? _audioStreamSubscription;
 
   @override
   void initState() {
@@ -45,6 +49,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
 
   @override
   void dispose() {
+    _audioStreamSubscription?.cancel();
     _pulseController.dispose();
     _transcriptController.dispose();
     _recorder.dispose();
@@ -52,7 +57,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   }
 
   Future<void> _requestPermissions() async {
-    final granted = await _recorder.requestPermission();
+    final granted = await _recorder.hasPermission();
     if (!granted) {
       setState(() => _statusMessage = 'Microphone permission denied');
     }
@@ -67,55 +72,73 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   }
 
   Future<void> _startRecording() async {
-    final path = await _recorder.startRecording();
-    if (path != null) {
+    try {
+      if (!await _recorder.hasPermission()) {
+        setState(() => _statusMessage = 'Microphone permission denied');
+        return;
+      }
+
+      _audioBytes.clear();
+
+      // ✅ Use the stream API — gives us bytes directly, works on Web + Mobile
+      final stream = await _recorder.startStream(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+      );
+
+      _audioStreamSubscription = stream.listen(
+        (data) => _audioBytes.addAll(data),
+        onError: (e) => debugPrint("Stream error: $e"),
+      );
+
       setState(() {
         _isRecording = true;
         _hasTranscript = false;
         _statusMessage = 'Recording...';
         _transcriptController.clear();
       });
-    } else {
-      setState(() => _statusMessage = 'Failed to start recording');
+    } catch (e) {
+      setState(() => _statusMessage = 'Failed to start recording: $e');
     }
   }
 
   Future<void> _stopRecording() async {
     setState(() {
       _isProcessing = true;
-      _statusMessage = 'Transcribing with Deepgram...';
+      _statusMessage = 'Transcribing...';
     });
 
-    final path = await _recorder.stopRecording();
-    if (path != null) {
-      await _transcribe(path);
-    } else {
-      setState(() {
-        _isRecording = false;
-        _isProcessing = false;
-        _statusMessage = 'Failed to stop recording';
-      });
-    }
-  }
-
-  Future<void> _transcribe(String path) async {
     try {
-      final file = File(path);
-      final service = DeepgramTranscriptionService(
-        apiKey: Env.deepgramApiKey,
-      );
-      final text = await service.transcribeFile(file);
+      await _recorder.stop();
+      await _audioStreamSubscription?.cancel();
+      _audioStreamSubscription = null;
 
+      if (_audioBytes.isEmpty) {
+        setState(() {
+          _isRecording = false;
+          _isProcessing = false;
+          _statusMessage = 'No audio captured. Try speaking a bit longer.';
+        });
+        return;
+      }
+
+      // ✅ Send the collected bytes to the backend
+      final transcript = await AiService.instance.transcribeAudio(
+        audioBytes: _audioBytes,
+        filename: 'voice_input.m4a',
+      );
+
+      if (!mounted) return;
       setState(() {
         _isRecording = false;
         _isProcessing = false;
-        _hasTranscript = text.trim().isNotEmpty;
-        _transcriptController.text = text.trim();
-        _statusMessage = text.trim().isNotEmpty
+        _hasTranscript = transcript.trim().isNotEmpty;
+        _transcriptController.text = transcript.trim();
+        _statusMessage = transcript.trim().isNotEmpty
             ? 'Transcription complete'
             : 'No speech detected';
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isRecording = false;
         _isProcessing = false;
@@ -125,7 +148,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
   }
 
   void _clear() {
-    _recorder.cancelRecording();
+    _audioBytes.clear();
     setState(() {
       _transcriptController.clear();
       _hasTranscript = false;
@@ -167,7 +190,9 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
                       _statusMessage,
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
-                        color: _isRecording ? AppColors.error : AppColors.textPrimary,
+                        color: _isRecording
+                            ? AppColors.error
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -222,7 +247,8 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
                         children: [
                           const Text(
                             "Speech detected",
-                            style: TextStyle(fontSize: 12, color: AppColors.success),
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.success),
                           ),
                           const Spacer(),
                           IconButton(
@@ -257,12 +283,15 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
                       width: 84,
                       height: 84,
                       decoration: BoxDecoration(
-                        color: _isRecording ? AppColors.error : AppColors.primary,
+                        color: _isRecording
+                            ? AppColors.error
+                            : AppColors.primary,
                         shape: BoxShape.circle,
                         boxShadow: _isRecording
                             ? [
                                 BoxShadow(
-                                  color: AppColors.error.withValues(alpha: 0.35),
+                                  color:
+                                      AppColors.error.withValues(alpha: 0.35),
                                   blurRadius: 18,
                                   spreadRadius: 4,
                                 )
