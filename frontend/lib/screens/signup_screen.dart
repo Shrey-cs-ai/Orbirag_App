@@ -49,6 +49,23 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  // ============================================================
+  // Strength meter helper
+  // ============================================================
+  Color _strengthColor(int score) {
+    switch (score) {
+      case 0:
+      case 1:
+        return Colors.red;
+      case 2:
+        return Colors.orange;
+      case 3:
+        return Colors.blue;
+      default:
+        return Colors.green;
+    }
+  }
+
   Future<void> _handleSignup() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -180,7 +197,8 @@ class _SignupScreenState extends State<SignupScreen> {
                         Row(
                           children: const [
                             Expanded(
-                              child: Divider(color: AppColors.border, thickness: 1),
+                              child: Divider(
+                                  color: AppColors.border, thickness: 1),
                             ),
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 12),
@@ -194,7 +212,8 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                             ),
                             Expanded(
-                              child: Divider(color: AppColors.border, thickness: 1),
+                              child: Divider(
+                                  color: AppColors.border, thickness: 1),
                             ),
                           ],
                         ),
@@ -217,13 +236,17 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: 18),
 
+                        // ============================================================
+                        // PASSWORD FIELD with strong validation
+                        // ============================================================
                         CustomTextField(
                           label: 'Password',
-                          hint: '••••••••',
+                          hint: 'Min 8 chars, 1 uppercase, 1 number, 1 symbol',
                           controller: _passwordController,
                           obscureText: _obscurePassword,
-                          validator: (value) =>
-                              Validators.password(value, minLength: 6),
+                          validator: (value) => Validators.password(value),
+                          // 👇 setState on change to update the strength meter
+                          onChanged: (value) => setState(() {}),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscurePassword
@@ -233,10 +256,62 @@ class _SignupScreenState extends State<SignupScreen> {
                               size: 20,
                             ),
                             onPressed: () {
-                              setState(() => _obscurePassword = !_obscurePassword);
+                              setState(
+                                  () => _obscurePassword = !_obscurePassword);
                             },
                           ),
                         ),
+
+                        // ============================================================
+                        // PASSWORD STRENGTH METER
+                        // ============================================================
+                        if (_passwordController.text.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: List.generate(4, (index) {
+                                    final score = Validators.passwordStrength(
+                                      _passwordController.text,
+                                    );
+                                    final isActive = index < score;
+                                    return Expanded(
+                                      child: Container(
+                                        height: 6,
+                                        margin: const EdgeInsets.symmetric(
+                                            horizontal: 2),
+                                        decoration: BoxDecoration(
+                                          color: isActive
+                                              ? _strengthColor(score)
+                                              : Colors.grey.shade300,
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Strength: ${Validators.passwordStrengthLabel(
+                                    Validators.passwordStrength(
+                                        _passwordController.text),
+                                  )}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _strengthColor(
+                                      Validators.passwordStrength(
+                                          _passwordController.text),
+                                    ),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                         const SizedBox(height: 18),
 
                         CustomTextField(
@@ -255,8 +330,8 @@ class _SignupScreenState extends State<SignupScreen> {
                               size: 20,
                             ),
                             onPressed: () {
-                              setState(() =>
-                                  _obscureConfirmPassword = !_obscureConfirmPassword);
+                              setState(() => _obscureConfirmPassword =
+                                  !_obscureConfirmPassword);
                             },
                           ),
                         ),
