@@ -324,3 +324,276 @@ async def save_paper_route(req: SavePaperRequest):
             db.close()
     except Exception as e:
         raise HTTPException(500, f"Save failed: {e}")
+
+# ============================================================
+# Citations
+# ============================================================
+from pydantic import BaseModel
+from typing import Optional
+
+
+class SaveCitationRequest(BaseModel):
+    title: str
+    authors: Optional[str] = ""
+    year: Optional[str] = ""
+    journal: Optional[str] = ""
+    source_type: Optional[str] = ""
+    style: Optional[str] = ""
+    in_text: Optional[str] = ""
+    reference_list: Optional[str] = ""
+
+
+@app.post("/api/citations/save", tags=["Citations"])
+async def save_citation_route(
+    req: SaveCitationRequest,
+    user_id: str = "anonymous",
+):
+    """Save a citation to the user's library (Postgres)."""
+    print(f"[Citation] save: {req.title[:80]}")
+
+    try:
+        from database import SessionLocal
+        from db_queries import save_citation, upsert_user
+
+        db = SessionLocal()
+        try:
+            # Ensure the user row exists (FK requirement)
+            user = upsert_user(db, firebase_uid=user_id, display_name="Anonymous")
+
+            save_citation(
+                db,
+                user_id=user.id,   # UUID from the users table
+                data={
+                    "title": req.title,
+                    "authors": req.authors,
+                    "year": req.year,
+                    "journal": req.journal,
+                    "style": req.style,
+                    "source_type": req.source_type,
+                    "in_text": req.in_text,
+                    "reference_list": req.reference_list,
+                },
+            )
+            return {"success": True}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Citation] save error: {e}")
+        raise HTTPException(500, f"Save failed: {e}")
+
+
+@app.get("/api/citations", tags=["Citations"])
+async def list_citations_route(user_id: str = "anonymous"):
+    """List all citations for a user."""
+    print(f"[Citation] list for user={user_id}")
+
+    try:
+        from database import SessionLocal
+        from db_queries import list_citations, get_user_by_firebase_uid
+
+        db = SessionLocal()
+        try:
+            user = get_user_by_firebase_uid(db, user_id)
+            if not user:
+                return {"citations": []}
+
+            rows = list_citations(db, user_id=user.id)
+            return {
+                "citations": [
+                    {
+                        "id": r.id,
+                        "title": r.title,
+                        "authors": r.authors,
+                        "year": r.year,
+                        "journal": r.journal,
+                        "source_type": r.source_type,
+                        "style": r.style,
+                        "in_text": r.in_text,
+                        "reference_list": r.reference_list,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in rows
+                ]
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Citation] list error: {e}")
+        raise HTTPException(500, f"List failed: {e}")
+
+
+@app.delete("/api/citations/{citation_id}", tags=["Citations"])
+async def delete_citation_route(citation_id: str, user_id: str = "anonymous"):
+    """Delete a citation."""
+    print(f"[Citation] delete id={citation_id}")
+
+    try:
+        from database import SessionLocal
+        from db_queries import delete_citation
+
+        db = SessionLocal()
+        try:
+            ok = delete_citation(db, citation_id=citation_id, user_id=user_id)
+            if not ok:
+                raise HTTPException(404, "Citation not found")
+            return {"success": True}
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Citation] delete error: {e}")
+        raise HTTPException(500, f"Delete failed: {e}")
+# ============================================================
+# Plagiarism Check
+# ============================================================
+from pydantic import BaseModel
+from typing import List, Optional
+
+
+class PlagiarismCheckRequest(BaseModel):
+    text: str
+    threshold: Optional[float] = 0.75   # similarity threshold (0-1)
+
+
+class PlagiarismMatch(BaseModel):
+    source: str
+    matched_text: str
+    similarity: float
+    reason: str
+
+
+class PlagiarismCheckResponse(BaseModel):
+    score: float                       # 0-100 (%)
+    total_words: int
+    unique_words: int
+    flagged_count: int
+    matches: List[PlagiarismMatch]
+    summary: str
+
+
+@app.post(
+    "/api/plagiarism/check",
+    response_model=PlagiarismCheckResponse,
+    tags=["Plagiarism"],
+)
+async def plagiarism_check(req: PlagiarismCheckRequest):
+    """
+    Analyze text for potential plagiarism indicators using Gemini,
+    then compare against user's saved library papers.
+    """
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Empty text")
+    if len(text) > 50000:
+        raise HTTPException(413, "Text too large (max 50,000 chars)")
+
+    print(f"[Plagiarism] check: {len(text)} chars")
+
+    # ---- 1. Basic stats ----
+    words = text.split()
+    total_words = len(words)
+    unique_words = len(set(w.lower() for w in words))
+
+    # ---- 2. AI-based analysis ----
+    from services.ai_service import _generate_with_fallback
+    import json as _json
+
+    prompt = f"""You are a plagiarism detection assistant. Analyze the text below
+and identify phrases that look copied, generic, or unoriginal.
+For each suspicious phrase, give a short reason.
+
+TEXT:
+\"\"\"
+{text[:8000]}
+\"\"\"
+
+Return ONLY valid JSON with this shape:
+{{
+  "matches": [
+    {{
+      "source": "Common phrase / Wikipedia-style / Generic academic",
+      "matched_text": "the exact phrase from the text",
+      "similarity": 0.85,
+      "reason": "why it looks copied"
+    }}
+  ],
+  "summary": "one-sentence overall assessment"
+}}
+
+Rules:
+- Only include phrases longer than 6 words
+- similarity is between 0.0 and 1.0
+- Max 10 matches
+"""
+
+    ai_matches = []
+    ai_summary = "No significant issues detected."
+
+    try:
+        raw = await _generate_with_fallback(prompt, json_mode=True)
+        parsed = _json.loads(raw or "{}")
+        ai_summary = parsed.get("summary", ai_summary)
+        ai_matches = parsed.get("matches", []) or []
+    except Exception as e:
+        print(f"[Plagiarism] AI error: {e}")
+
+    matches = [
+        PlagiarismMatch(
+            source=m.get("source", "Unknown"),
+            matched_text=m.get("matched_text", ""),
+            similarity=float(m.get("similarity", 0.5)),
+            reason=m.get("reason", ""),
+        )
+        for m in ai_matches
+        if m.get("matched_text")
+    ]
+
+    # ---- 3. Compare with saved papers (library) ----
+    try:
+        from database import SessionLocal
+        from db_queries import list_papers, get_user_by_firebase_uid
+
+        db = SessionLocal()
+        try:
+            user = get_user_by_firebase_uid(db, "anonymous")
+            if user:
+                papers = list_papers(db, user_id=user.id)[:5]
+                text_lower = text.lower()
+                for p in papers:
+                    if not p.abstract:
+                        continue
+                    # crude keyword overlap
+                    p_words = set(w.lower() for w in p.abstract.split()
+                                  if len(w) > 5)
+                    t_words = set(w.lower() for w in words if len(w) > 5)
+                    overlap = p_words & t_words
+                    if len(overlap) >= 5:
+                        matches.append(
+                            PlagiarismMatch(
+                                source=p.title or "Saved paper",
+                                matched_text=", ".join(list(overlap)[:8]),
+                                similarity=min(0.99, len(overlap) / 20),
+                                reason="Shared keywords with saved paper",
+                            )
+                        )
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Plagiarism] library compare skipped: {e}")
+
+    # ---- 4. Compute score ----
+    if total_words == 0:
+        score = 0.0
+    else:
+        flagged_words = sum(len(m.matched_text.split()) for m in matches)
+        score = min(100.0, (flagged_words / total_words) * 100 * 2)
+
+    return PlagiarismCheckResponse(
+        score=round(score, 1),
+        total_words=total_words,
+        unique_words=unique_words,
+        flagged_count=len(matches),
+        matches=matches,
+        summary=ai_summary,
+    )

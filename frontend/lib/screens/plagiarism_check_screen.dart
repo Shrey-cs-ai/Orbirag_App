@@ -1,209 +1,103 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/app_colors.dart';
-import '../widgets/app_drawer.dart';
-import '../widgets/bottom_nav_bar.dart';
-import '../services/citation_service.dart';
-import 'paper_orbit_screen.dart';
-import 'home_screen.dart';
-import 'ori_chatbot_screen.dart';
-import 'literature_retrieval_screen.dart';
-import 'profile_screen.dart';
+import '../services/plagiarism_service.dart';
 
-class PlagiarismCheckScreen extends StatefulWidget {
-  const PlagiarismCheckScreen({super.key});
+class PlagiarismScreen extends StatefulWidget {
+  const PlagiarismScreen({super.key});
 
   @override
-  State<PlagiarismCheckScreen> createState() => _PlagiarismCheckScreenState();
+  State<PlagiarismScreen> createState() => _PlagiarismScreenState();
 }
 
-class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
-  final int _currentIndex = 2; // Research tab
+class _PlagiarismScreenState extends State<PlagiarismScreen> {
+  final TextEditingController _textController = TextEditingController();
+  final PlagiarismService _service = PlagiarismService.instance;
 
-  final TextEditingController _documentController = TextEditingController(
-    text:
-        "Paste or Write you text",
-  );
-
-  Map<String, dynamic>? _selectedMatch;
-  String? _aiSuggestion;
-  String _suggestionType = "";
-
-  final List<Map<String, dynamic>> _matches = [
-    {
-      "id": 1,
-      "text":
-          "promising results. However, the reliance on automated systems for critical evaluation requires careful consideration of algorithmic bias. This is particularly",
-      "percentage": "78%",
-      "words": 28,
-      "source": "Pedagogical Balancing in AI Systems",
-      "year": "2023",
-      "excerpt":
-          "...the primary challenge lies in balancing scale with personalized pedagogical...",
-    },
-    {
-      "id": 3,
-      "text": "students often feel",
-      "percentage": "92%",
-      "words": 34,
-      "source": "Pedagogical Balancing in AI Systems",
-      "year": "2023",
-      "excerpt":
-          "...the primary challenge lies in balancing scale with personalized pedagogical...",
-    },
-  ];
+  bool _isChecking = false;
+  PlagiarismResult? _result;
 
   @override
   void dispose() {
-    _documentController.dispose();
+    _textController.dispose();
     super.dispose();
   }
 
-  void _onBottomNavTap(int index) {
-    if (index == _currentIndex) return;
-
-    final screens = [
-      const HomeScreen(),
-      const OriChatScreen(),
-      const LiteratureRetrievalScreen(),
-      const ProfileScreen(),
-    ];
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => screens[index]),
-    );
-  }
-
-  // ===================== ACTIONS =====================
-
-  void _onCite() {
-    if (_selectedMatch == null) {
-      _showMessage("Please select a matched text first");
-      return;
-    }
-
-    final match = _selectedMatch!;
-    final citation = CitationService.instance.quickInTextFromSource(
-      match["source"],
-      year: match["year"] ?? "2023",
-    );
-
-    final original = _documentController.text;
-    final matchedText = match["text"] as String;
-
-    if (original.contains(matchedText)) {
-      final updated = original.replaceFirst(
-        matchedText,
-        "$matchedText $citation",
+  Future<void> _runCheck() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter some text first')),
       );
-      setState(() {
-        _documentController.text = updated;
-        _aiSuggestion = null;
-      });
-      _showMessage("Citation added: $citation");
-    }
-  }
-
-  void _onParaphrase() {
-    if (_selectedMatch == null) {
-      _showMessage("Please select a matched text first");
       return;
     }
 
-    final paraphrased =
-        "AI applications in education have demonstrated encouraging outcomes. Still, depending heavily on automated tools for important assessments calls for careful attention to algorithmic fairness. This becomes especially relevant when evaluating student writing and authenticity.";
-
-    setState(() {
-      _aiSuggestion = paraphrased;
-      _suggestionType = "paraphrase";
-    });
-  }
-
-  void _onHumanize() {
-    if (_selectedMatch == null) {
-      _showMessage("Please select a matched text first");
+    if (text.split(' ').length < 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter at least 20 words')),
+      );
       return;
     }
 
-    final humanized =
-        "The use of artificial intelligence in education is showing real promise. At the same time, we need to be careful about relying too much on automated systems when judging important student work, especially when it comes to fairness and bias.";
-
     setState(() {
-      _aiSuggestion = humanized;
-      _suggestionType = "humanize";
+      _isChecking = true;
+      _result = null;
     });
-  }
 
-  void _replaceWithSuggestion() {
-    if (_selectedMatch == null || _aiSuggestion == null) return;
+    final result = await _service.check(text: text);
 
-    final original = _documentController.text;
-    final matchedText = _selectedMatch!["text"] as String;
+    if (!mounted) return;
+    setState(() {
+      _isChecking = false;
+      _result = result;
+    });
 
-    if (original.contains(matchedText)) {
-      final updated = original.replaceFirst(matchedText, _aiSuggestion!);
-      setState(() {
-        _documentController.text = updated;
-        _aiSuggestion = null;
-        _selectedMatch = null;
-      });
-      _showMessage("Text replaced successfully");
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Check failed — is the backend running?'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
-  void _keepOriginal() {
-    setState(() {
-      _aiSuggestion = null;
-    });
+  Color _scoreColor(double score) {
+    if (score < 20) return Colors.green;
+    if (score < 50) return Colors.orange;
+    return Colors.red;
   }
 
-  void _copyDocument() {
-    Clipboard.setData(ClipboardData(text: _documentController.text));
-    _showMessage("Copied to clipboard");
+  void _loadSample() {
+    _textController.text =
+        "Artificial intelligence has transformed modern medicine by enabling "
+        "faster and more accurate diagnoses. Machine learning models have been "
+        "shown to outperform traditional statistical methods in several domains. "
+        "The integration of AI into clinical workflows remains a critical "
+        "challenge. Recent studies indicate that deep learning techniques "
+        "can reduce diagnostic time by up to forty percent.";
   }
-
-  void _saveAsDraft() {
-    _showMessage("Draft saved successfully");
-  }
-
-  void _showMessage(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  // ===================== UI =====================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      drawer: const AppDrawer(),
       appBar: AppBar(
         backgroundColor: AppColors.white,
         elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
         title: const Text(
-          "Orbirag",
+          'Plagiarism Check',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
           ),
         ),
-        centerTitle: true,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.auto_awesome_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PaperOrbitScreen()),
-              );
-            },
+            icon: const Icon(Icons.auto_awesome),
+            tooltip: 'Load sample',
+            onPressed: _loadSample,
           ),
         ],
       ),
@@ -213,132 +107,83 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Check Similarity",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              'Paste your text',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             const Text(
-              "Verify your document against billions of sources.",
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              'We will check for copied phrases, generic writing, and matches against your saved library.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 20),
-
-            // Score Card
-            _buildScoreCard(),
             const SizedBox(height: 16),
 
-            // Info
-            _buildInfoBox(),
-            const SizedBox(height: 24),
-
-            // Matched Text Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Matched Text",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            // Text input
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: TextField(
+                controller: _textController,
+                maxLines: 10,
+                minLines: 6,
+                decoration: const InputDecoration(
+                  hintText: 'Paste your paragraph, essay, or abstract here...',
+                  border: InputBorder.none,
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBg,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Check button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isChecking ? null : _runCheck,
+                icon: _isChecking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.search, size: 18),
+                label: Text(_isChecking ? 'Checking...' : 'Run Plagiarism Check'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    "${_matches.length} Matches Found",
-                    style: const TextStyle(fontSize: 12),
-                  ),
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 12),
 
-            // Document
-            _buildDocumentPreview(),
-            const SizedBox(height: 20),
-
-            // Selected Match
-            if (_selectedMatch != null) _buildSelectedMatchCard(),
-
-            // AI Suggestion
-            if (_aiSuggestion != null) ...[
-              const SizedBox(height: 16),
-              _buildSuggestionCard(),
+            // Results
+            if (_result != null) ...[
+              const SizedBox(height: 28),
+              _buildScoreCard(_result!),
+              const SizedBox(height: 20),
+              _buildStats(_result!),
+              const SizedBox(height: 20),
+              if (_result!.matches.isNotEmpty) _buildMatches(_result!),
             ],
 
-            const SizedBox(height: 24),
-
-            // Copy + Save as Draft
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _copyDocument,
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text("Copy"),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _saveAsDraft,
-                    icon: const Icon(Icons.bookmark_border, size: 18),
-                    label: const Text("Save as Draft"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Run Check Again → Home
-            Center(
-              child: TextButton(
-                onPressed: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const HomeScreen()),
-                    (route) => false,
-                  );
-                },
-                child: const Text(
-                  "Run Check Again",
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-            const Center(
-              child: Text(
-                "Orbirag promotes academic integrity. Users are responsible for ensuring their work meets institutional guidelines.",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ),
             const SizedBox(height: 30),
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentIndex,
-        onTap: _onBottomNavTap,
-      ),
     );
   }
 
-  // ===================== WIDGETS =====================
-
-  Widget _buildScoreCard() {
+  Widget _buildScoreCard(PlagiarismResult r) {
+    final color = _scoreColor(r.score);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -349,281 +194,180 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       ),
       child: Column(
         children: [
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("Similarity Score",
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              Text("18%",
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-            ],
+          Text(
+            '${r.score.toStringAsFixed(1)}%',
+            style: TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            r.score < 20
+                ? 'Looks original'
+                : r.score < 50
+                    ? 'Some phrases need attention'
+                    : 'High similarity detected',
+            style: TextStyle(
+              fontSize: 14,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 12),
+          Text(
+            r.summary,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStats(PlagiarismResult r) {
+    return Row(
+      children: [
+        _statCard('Words', '${r.totalWords}', Icons.text_fields),
+        const SizedBox(width: 12),
+        _statCard('Unique', '${r.uniqueWords}', Icons.fingerprint),
+        const SizedBox(width: 12),
+        _statCard('Flagged', '${r.flaggedCount}', Icons.flag_outlined),
+      ],
+    );
+  }
+
+  Widget _statCard(String label, String value, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 20, color: AppColors.primary),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMatches(PlagiarismResult r) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Flagged Sections',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        ...r.matches.map((m) => _matchCard(m)),
+      ],
+    );
+  }
+
+  Widget _matchCard(PlagiarismMatch m) {
+    final color = _scoreColor(m.similarity * 100);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(20),
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text(
-                  "Low Similarity",
+                child: Text(
+                  '${(m.similarity * 100).toStringAsFixed(0)}% match',
                   style: TextStyle(
-                    color: Color(0xFF166534),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: color,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.verified,
-                  size: 16, color: AppColors.primaryLight),
-              const SizedBox(width: 4),
-              const Text("AI Scanned",
-                  style:
-                      TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoBox() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: AppColors.primaryLight),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              "A similarity match does not necessarily mean plagiarism. Review highlighted sections carefully to ensure proper citation.",
-              style: TextStyle(fontSize: 13, height: 1.4),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDocumentPreview() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _documentController,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              hintText: "Paste or write your text here...",
-            ),
-            style: const TextStyle(fontSize: 14, height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            "Tap a match below to select it for Cite / Paraphrase / Humanize",
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _matches.map((match) {
-              final isSelected = _selectedMatch?["id"] == match["id"];
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedMatch = match;
-                    _aiSuggestion = null;
-                  });
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary.withValues(alpha: 0.15)
-                        : const Color(0xFFE0E7FF),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          isSelected ? AppColors.primary : Colors.transparent,
-                    ),
-                  ),
-                  child: Text(
-                    "Match #${match["id"]}",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSelectedMatchCard() {
-    final match = _selectedMatch!;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: AppColors.primary,
-                child: Text(
-                  "${match["id"]}",
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text("Match #${match["id"]}",
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEE2E2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  "${match["percentage"]} Match",
-                  style: const TextStyle(
-                    color: Color(0xFFB91C1C),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              IconButton(
+                icon: const Icon(Icons.copy, size: 16),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: m.matchedText));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied')),
+                  );
+                },
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
-            "\"${match["text"]}\"",
-            style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Source: ${match["source"]}",
+            m.source,
             style: const TextStyle(
               fontSize: 12,
-              color: AppColors.primary,
               fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _actionButton("Cite", Icons.format_quote, _onCite),
-              const SizedBox(width: 8),
-              _actionButton("Paraphrase", Icons.auto_fix_high, _onParaphrase),
-              const SizedBox(width: 8),
-              _actionButton("Humanize", Icons.person_outline, _onHumanize),
-            ],
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '"${m.matchedText}"',
+              style: const TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                height: 1.5,
+              ),
+            ),
           ),
+          if (m.reason.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              m.reason,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestionCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.lightPurple.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.purple.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_awesome, size: 16, color: AppColors.purple),
-              const SizedBox(width: 6),
-              Text(
-                _suggestionType == "paraphrase" ? "PARAPHRASED" : "HUMANIZED",
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.purple,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(_aiSuggestion!,
-              style: const TextStyle(fontSize: 14, height: 1.4)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _replaceWithSuggestion,
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text("Replace"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _keepOriginal,
-                  child: const Text("Keep Original"),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionButton(String label, IconData icon, VoidCallback onTap) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-        ),
       ),
     );
   }
