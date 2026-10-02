@@ -13,8 +13,27 @@ from schemas import (
     BuildQueryRequest, BuildQueryResponse,
     SearchRequest, SearchResponse, PaperResult,
 )
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from uuid import UUID
 
+from database import get_db, init_db
+from schemas import (
+    LibraryItemCreate,
+    LibraryItemUpdate,
+    LibraryItemOut,
+    LibraryListResponse,
+)
+from services import library_service
 
+from schemas import (
+    # ... existing library imports ...
+    NoteCreate,
+    NoteUpdate,
+    NoteOut,
+    NoteListResponse,
+)
+from services import notes_service
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
     print(f"[ENV] Loading from: {env_path}")
@@ -600,3 +619,92 @@ Rules:
         matches=matches,
         summary=ai_summary,
     )
+# ============================================================
+# Library
+# ============================================================
+@app.post("/api/library/items", response_model=LibraryItemOut, tags=["Library"])
+def create_library_item(payload: LibraryItemCreate, db: Session = Depends(get_db)):
+    return library_service.create_item(db, payload)
+
+
+@app.get("/api/library/items", response_model=LibraryListResponse, tags=["Library"])
+def list_library_items(
+    user_id: str | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+):
+    items = library_service.list_items(db, user_id=user_id, search=search)
+    return LibraryListResponse(items=items, count=len(items))
+
+
+@app.patch("/api/library/items/{item_id}", response_model=LibraryItemOut, tags=["Library"])
+def update_library_item(
+    item_id: UUID,
+    payload: LibraryItemUpdate,
+    db: Session = Depends(get_db),
+):
+    item = library_service.update_item(db, item_id, payload)
+    if not item:
+        raise HTTPException(404, "Item not found")
+    return item
+
+
+@app.patch("/api/library/items/{item_id}/pin", response_model=LibraryItemOut, tags=["Library"])
+def toggle_library_pin(item_id: UUID, db: Session = Depends(get_db)):
+    item = library_service.toggle_pin(db, item_id)
+    if not item:
+        raise HTTPException(404, "Item not found")
+    return item
+
+
+@app.delete("/api/library/items/{item_id}", tags=["Library"])
+def delete_library_item(item_id: UUID, db: Session = Depends(get_db)):
+    ok = library_service.delete_item(db, item_id)
+    if not ok:
+        raise HTTPException(404, "Item not found")
+    return {"deleted": True}
+
+# ============================================================
+# Notes
+# ============================================================
+@app.post("/api/notes/items", response_model=NoteOut, tags=["Notes"])
+def create_note(payload: NoteCreate, db: Session = Depends(get_db)):
+    return notes_service.create_note(db, payload)
+
+
+@app.get("/api/notes/items", response_model=NoteListResponse, tags=["Notes"])
+def list_notes(
+    user_id: str | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+):
+    items = notes_service.list_notes(db, user_id=user_id, search=search)
+    return NoteListResponse(items=items, count=len(items))
+
+
+@app.patch("/api/notes/items/{note_id}", response_model=NoteOut, tags=["Notes"])
+def update_note(
+    note_id: UUID,
+    payload: NoteUpdate,
+    db: Session = Depends(get_db),
+):
+    note = notes_service.update_note(db, note_id, payload)
+    if not note:
+        raise HTTPException(404, "Note not found")
+    return note
+
+
+@app.patch("/api/notes/items/{note_id}/pin", response_model=NoteOut, tags=["Notes"])
+def toggle_note_pin(note_id: UUID, db: Session = Depends(get_db)):
+    note = notes_service.toggle_pin(db, note_id)
+    if not note:
+        raise HTTPException(404, "Note not found")
+    return note
+
+
+@app.delete("/api/notes/items/{note_id}", tags=["Notes"])
+def delete_note(note_id: UUID, db: Session = Depends(get_db)):
+    ok = notes_service.delete_note(db, note_id)
+    if not ok:
+        raise HTTPException(404, "Note not found")
+    return {"deleted": True}

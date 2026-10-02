@@ -15,7 +15,7 @@ class MyNotesScreen extends StatefulWidget {
 }
 
 class _MyNotesScreenState extends State<MyNotesScreen> {
-  int _selectedIndex = 0; // Home is index 0
+  int _selectedIndex = 0;
   final NotesService _notesService = NotesService();
   final TextEditingController _searchController = TextEditingController();
   List<Note> _filteredNotes = [];
@@ -34,12 +34,26 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     super.dispose();
   }
 
+  // ---------- Backend ----------
   Future<void> _loadNotes() async {
-    await _notesService.initialize();
-    setState(() {
-      _filteredNotes = _notesService.notes;
-      _isLoading = false;
-    });
+    setState(() => _isLoading = true);
+    try {
+      await _notesService.refresh();
+      if (!mounted) return;
+      setState(() {
+        _filteredNotes = _notesService.notes;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not reach the server'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   void _searchNotes(String query) {
@@ -56,6 +70,22 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
         _filteredNotes = _notesService.notes;
       }
     });
+  }
+
+  void _openNote(Note? note) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NewNoteScreen(note: note),
+      ),
+    );
+    if (result == true) {
+      await _loadNotes();
+    }
+  }
+
+  void _createNewNote() {
+    _openNote(null);
   }
 
   String _formatDate(DateTime date) {
@@ -76,23 +106,6 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       return 'Edited ${diff.inDays} days ago';
     }
     return 'Edited ${date.day}/${date.month}/${date.year}';
-  }
-
-  void _openNote(Note? note) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NewNoteScreen(note: note),
-      ),
-    );
-
-    if (result == true) {
-      await _loadNotes();
-    }
-  }
-
-  void _createNewNote() {
-    _openNote(null);
   }
 
   @override
@@ -139,13 +152,10 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(
-                color: AppColors.primary,
-              ),
+              child: CircularProgressIndicator(color: AppColors.primary),
             )
           : Column(
               children: [
-                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                   child: Row(
@@ -177,8 +187,6 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                     ],
                   ),
                 ),
-
-                // Notes List
                 Expanded(
                   child: _filteredNotes.isEmpty
                       ? Center(
@@ -201,8 +209,8 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(
-                                'Tap + New Note to create one',
+                              const Text(
+                                'Tap New Note to create one',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.textSecondary,
@@ -218,8 +226,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                           ),
                           itemCount: _filteredNotes.length,
                           itemBuilder: (context, index) {
-                            final note = _filteredNotes[index];
-                            return _buildNoteCard(note);
+                            return _buildNoteCard(_filteredNotes[index]);
                           },
                         ),
                 ),
@@ -229,7 +236,8 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() => _selectedIndex = index);
-          final route = AppConstants.bottomNavItems[index]['route'] as String;
+          final route =
+              AppConstants.bottomNavItems[index]['route'] as String;
           Navigator.of(context).pushReplacementNamed(route);
         },
       ),
@@ -271,25 +279,32 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (note.isPinned)
-                  const Icon(
-                    Icons.push_pin,
-                    size: 18,
-                    color: AppColors.primary,
-                  ),
                 IconButton(
                   icon: Icon(
-                    note.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    note.isPinned
+                        ? Icons.push_pin
+                        : Icons.push_pin_outlined,
                     size: 18,
                     color: note.isPinned
                         ? AppColors.primary
                         : AppColors.textSecondary,
                   ),
-                  onPressed: () {
-                    _notesService.togglePinNote(note.id);
-                    setState(() {
-                      _filteredNotes = _notesService.notes;
-                    });
+                  onPressed: () async {
+                    try {
+                      await _notesService.togglePinNote(note.id);
+                      if (!mounted) return;
+                      setState(() {
+                        _filteredNotes = _notesService.notes;
+                      });
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Pin failed'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   },
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),

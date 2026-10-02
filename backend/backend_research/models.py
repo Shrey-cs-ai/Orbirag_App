@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, Float,
-    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON,
+    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -214,3 +214,33 @@ class SearchResult(Base):
     created_at  = Column(DateTime, default=datetime.utcnow)
 
     search = relationship("Search", back_populates="results")
+
+# LITERATURE SEARCH
+class LibraryItem(Base):
+    __tablename__ = "library_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String(64), nullable=True, index=True)
+    title = Column(Text, nullable=False)
+    description = Column(Text, nullable=False, default="")
+    type = Column(String(32), nullable=False)  # insight | draft | citation | idea | note
+    is_pinned = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+#notes
+class Note(Base):
+    __tablename__ = "notes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String(64), nullable=True, index=True)
+    title = Column(Text, nullable=False, default="Untitled")
+    content = Column(Text, nullable=False, default="")
+    is_pinned = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

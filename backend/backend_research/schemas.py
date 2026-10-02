@@ -5,6 +5,8 @@ Keep models.py for SQLAlchemy ORM tables; keep schemas.py for API contracts.
 
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
+from datetime import datetime
+import uuid
 
 
 # ============================================================
@@ -159,7 +161,65 @@ class SavePaperRequest(BaseModel):
     url: Optional[str] = ""
     abstract: Optional[str] = ""
     venue: Optional[str] = ""
-        
+
+#library
+class LibraryItemCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str = Field(default="", max_length=5000)
+    type: str = Field(..., pattern="^(insight|draft|citation|idea|note)$")
+    user_id: Optional[str] = None
+
+
+class LibraryItemUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
+    is_pinned: Optional[bool] = None
+
+
+class LibraryItemOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    description: str
+    type: str
+    is_pinned: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LibraryListResponse(BaseModel):
+    items: List[LibraryItemOut]
+    count: int       
+    
+#notes
+class NoteCreate(BaseModel):
+    title: str = Field(default="Untitled", max_length=500)
+    content: str = Field(default="", max_length=50000)
+    user_id: Optional[str] = None
+
+
+class NoteUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=500)
+    content: Optional[str] = Field(None, max_length=50000)
+    is_pinned: Optional[bool] = None
+
+
+class NoteOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    content: str
+    is_pinned: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NoteListResponse(BaseModel):
+    items: List[NoteOut]
+    count: int
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================

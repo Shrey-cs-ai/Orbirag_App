@@ -21,6 +21,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   List<LibraryItem> _filteredItems = [];
   bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -34,12 +35,35 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
+  // ============================================================
+  // Backend calls
+  // ============================================================
   Future<void> _loadItems() async {
-    await _libraryService.initialize();
     setState(() {
-      _filteredItems = _libraryService.items;
-      _isLoading = false;
+      _isLoading = true;
+      _hasError = false;
     });
+
+    try {
+      await _libraryService.refresh();
+      if (!mounted) return;
+      setState(() {
+        _filteredItems = _libraryService.items;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not reach the server'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   void _searchItems(String query) {
@@ -74,24 +98,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
     );
 
-    if (confirm == true) {
+    if (confirm != true) return;
+
+    try {
       await _libraryService.deleteItem(item.id);
       await _loadItems();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Item deleted'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Item deleted'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delete failed'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
   Future<void> _togglePin(LibraryItem item) async {
-    await _libraryService.togglePin(item.id);
-    await _loadItems();
+    try {
+      await _libraryService.togglePin(item.id);
+      await _loadItems();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pin failed'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _openNewNote() async {
@@ -104,6 +147,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  // ============================================================
+  // Build
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,6 +168,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: const AppBrandTitle(),
         actions: [
           IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
+            onPressed: _loadItems,
+          ),
+          IconButton(
             tooltip: 'Paper Orbit',
             icon: const Icon(
               Icons.auto_awesome_outlined,
@@ -137,154 +188,134 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Personal Workspace Badge
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.person, size: 12, color: AppColors.primary),
-                        SizedBox(width: 4),
-                        Text(
-                          'PERSONAL WORKSPACE',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Title
-                  const Text(
-                    'My Library',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Search Bar
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _searchItems,
-                      decoration: const InputDecoration(
-                        hintText: 'Search notes, ideas, citations, drafts...',
-                        hintStyle: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: AppColors.textSecondary,
-                          size: 20,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+          : RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: _loadItems,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Personal Workspace Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Recent Activity Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Row(
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                          SizedBox(width: 6),
+                          Icon(Icons.person,
+                              size: 12, color: AppColors.primary),
+                          SizedBox(width: 4),
                           Text(
-                            'RECENT ACTIVITY',
+                            'PERSONAL WORKSPACE',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary,
+                              color: AppColors.primary,
                               letterSpacing: 0.5,
                             ),
                           ),
                         ],
                       ),
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text(
-                          'View All',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Title
+                    const Text(
+                      'My Library',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Search Bar
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: _searchItems,
+                        decoration: const InputDecoration(
+                          hintText:
+                              'Search notes, ideas, citations, drafts...',
+                          hintStyle: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
                           ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: AppColors.textSecondary,
+                            size: 20,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: 14),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 24),
 
-                  // Items List
-                  if (_filteredItems.isEmpty)
-                    Center(
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 60),
-                          Icon(
-                            Icons.library_books_outlined,
-                            size: 64,
-                            color:
-                                AppColors.textSecondary.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _searchController.text.isNotEmpty
-                                ? 'No results found'
-                                : 'Your library is empty',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _searchController.text.isNotEmpty
-                                ? 'Try a different search term'
-                                : 'Save notes, ideas, and citations',
-                            style: const TextStyle(
-                              fontSize: 14,
+                    // Recent Activity Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 16,
                               color: AppColors.textSecondary,
                             ),
+                            SizedBox(width: 6),
+                            Text(
+                              'RECENT ACTIVITY',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textSecondary,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        TextButton(
+                          onPressed: _loadItems,
+                          child: const Text(
+                            'Refresh',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
                           ),
-                        ],
-                      ),
-                    )
-                  else
-                    ..._filteredItems.map((item) => _buildLibraryItem(item)),
-                ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Items / empty state
+                    if (_hasError)
+                      _buildErrorState()
+                    else if (_filteredItems.isEmpty)
+                      _buildEmptyState()
+                    else
+                      ..._filteredItems
+                          .map((item) => _buildLibraryItem(item)),
+                  ],
+                ),
               ),
             ),
       floatingActionButton: FloatingActionButton(
@@ -296,9 +327,92 @@ class _LibraryScreenState extends State<LibraryScreen> {
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() => _selectedIndex = index);
-          final route = AppConstants.bottomNavItems[index]['route'] as String;
+          final route =
+              AppConstants.bottomNavItems[index]['route'] as String;
           Navigator.of(context).pushReplacementNamed(route);
         },
+      ),
+    );
+  }
+
+  // ============================================================
+  // Widgets
+  // ============================================================
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 60),
+          const Icon(
+            Icons.cloud_off,
+            size: 64,
+            color: AppColors.error,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Could not load library',
+            style: TextStyle(
+              fontSize: 18,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Check that the research backend is running on port 8001',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: _loadItems,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 60),
+          Icon(
+            Icons.library_books_outlined,
+            size: 64,
+            color: AppColors.textSecondary.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _searchController.text.isNotEmpty
+                ? 'No results found'
+                : 'Your library is empty',
+            style: const TextStyle(
+              fontSize: 18,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _searchController.text.isNotEmpty
+                ? 'Try a different search term'
+                : 'Tap + to save a note, insight, or citation',
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -350,7 +464,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Type + Time
                 Row(
                   children: [
                     Container(
@@ -383,8 +496,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ],
                 ),
                 const SizedBox(height: 6),
-
-                // Title
                 Text(
                   item.title,
                   style: const TextStyle(
@@ -397,8 +508,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-
-                // Description
                 Text(
                   item.description,
                   style: const TextStyle(
@@ -413,7 +522,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
 
-          // Actions (Pin + Delete)
+          // Actions
           Column(
             children: [
               IconButton(
@@ -479,12 +588,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           'icon': Icons.sticky_note_2_outlined,
           'color': const Color(0xFFEF4444),
           'bgColor': const Color(0xFFFEE2E2),
-        };
-      case 'paper':
-        return {
-          'icon': Icons.description_outlined,
-          'color': const Color(0xFF0EA5E9),
-          'bgColor': const Color(0xFFE0F2FE),
         };
       default:
         return {

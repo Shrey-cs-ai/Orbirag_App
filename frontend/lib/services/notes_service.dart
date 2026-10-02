@@ -1,11 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import '../utils/app_constants.dart';
 
+// ============================================================
+// Model
+// ============================================================
 class Note {
   final String id;
   String title;
   String content;
+  DateTime createdAt;
   DateTime updatedAt;
   bool isPinned;
 
@@ -13,134 +18,151 @@ class Note {
     required this.id,
     required this.title,
     required this.content,
-    required this.updatedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
     this.isPinned = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'content': content,
-    'updatedAt': updatedAt.toIso8601String(),
-    'isPinned': isPinned,
-  };
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
   factory Note.fromJson(Map<String, dynamic> json) => Note(
-    id: json['id'],
-    title: json['title'],
-    content: json['content'],
-    updatedAt: DateTime.parse(json['updatedAt']),
-    isPinned: json['isPinned'] ?? false,
-  );
+        id: json['id'].toString(),
+        title: json['title'] ?? 'Untitled',
+        content: json['content'] ?? '',
+        createdAt: DateTime.parse(json['created_at']).toLocal(),
+        updatedAt: DateTime.parse(json['updated_at']).toLocal(),
+        isPinned: json['is_pinned'] ?? false,
+      );
+
+  Map<String, dynamic> toCreateJson() => {
+        'title': title,
+        'content': content,
+      };
+
+  Map<String, dynamic> toUpdateJson() => {
+        'title': title,
+        'content': content,
+        'is_pinned': isPinned,
+      };
 }
 
+// ============================================================
+// Service
+// ============================================================
 class NotesService {
   static final NotesService _instance = NotesService._internal();
   factory NotesService() => _instance;
   NotesService._internal();
 
+  final String _baseUrl = AppConstants.researchBaseUrl;
   List<Note> _notes = [];
-  bool _isInitialized = false;
 
   List<Note> get notes => _notes;
 
+  // ---------- Read ----------
   Future<void> initialize() async {
-    if (_isInitialized) return;
-    await _loadNotes();
-    _isInitialized = true;
+    await refresh();
   }
 
-  Future<void> _loadNotes() async {
+  Future<void> refresh({String? search}) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final notesJson = prefs.getString('notes');
-      if (notesJson != null) {
-        final List<dynamic> decoded = jsonDecode(notesJson);
-        _notes = decoded.map((e) => Note.fromJson(e as Map<String, dynamic>)).toList();
-        _sortNotes();
-      } else {
-        // Add sample notes for first launch
-        _notes = [
-          Note(
-            id: '1',
-            title: 'AI Research Idea',
-            content: 'Explore how artificial intelligence can improve disease detection in early-stage diagnostics. Focus on deep learning models and their application in radiology.',
-            updatedAt: DateTime.now().subtract(const Duration(hours: 2)),
-          ),
-          Note(
-            id: '2',
-            title: 'Literature Notes',
-            content: 'Key takeaways from the Smith et al. (2023) paper on neural networks: The primary contribution is a novel architecture for medical image segmentation. The model achieved 94.7% accuracy on the test dataset.',
-            updatedAt: DateTime.now().subtract(const Duration(days: 1)),
-          ),
-          Note(
-            id: '3',
-            title: 'Methodology Thought',
-            content: 'Possible quantitative approach for the upcoming study involves a mixed-methods design. Consider using surveys for data collection and statistical analysis for hypothesis testing.',
-            updatedAt: DateTime.now().subtract(const Duration(days: 3)),
-          ),
-        ];
-        await _saveNotes();
+      final uri = Uri.parse('$_baseUrl/notes/items').replace(
+        queryParameters: (search != null && search.isNotEmpty)
+            ? {'search': search}
+            : null,
+      );
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load notes: ${response.statusCode}');
       }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final list = (data['items'] as List).cast<Map<String, dynamic>>();
+      _notes = list.map(Note.fromJson).toList();
     } catch (e) {
-      debugPrint('Error loading notes: $e');
-    }
-  }
-
-  Future<void> _saveNotes() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final notesJson = jsonEncode(_notes.map((e) => e.toJson()).toList());
-      await prefs.setString('notes', notesJson);
-    } catch (e) {
-      debugPrint('Error saving notes: $e');
-    }
-  }
-
-  void _sortNotes() {
-    _notes.sort((a, b) {
-      // Pinned notes first
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      // Then by updated date
-      return b.updatedAt.compareTo(a.updatedAt);
-    });
-  }
-
-  Future<void> addNote(Note note) async {
-    _notes.insert(0, note);
-    _sortNotes();
-    await _saveNotes();
-  }
-
-  Future<void> updateNote(Note note) async {
-    final index = _notes.indexWhere((n) => n.id == note.id);
-    if (index != -1) {
-      _notes[index] = note;
-      _sortNotes();
-      await _saveNotes();
-    }
-  }
-
-  Future<void> deleteNote(String id) async {
-    _notes.removeWhere((n) => n.id == id);
-    await _saveNotes();
-  }
-
-  Future<void> togglePinNote(String id) async {
-    final index = _notes.indexWhere((n) => n.id == id);
-    if (index != -1) {
-      _notes[index].isPinned = !_notes[index].isPinned;
-      _sortNotes();
-      await _saveNotes();
+      debugPrint('NotesService.refresh error: $e');
+      rethrow;
     }
   }
 
   List<Note> searchNotes(String query) {
     if (query.isEmpty) return _notes;
-    return _notes.where((note) =>
-      note.title.toLowerCase().contains(query.toLowerCase()) ||
-      note.content.toLowerCase().contains(query.toLowerCase())
-    ).toList();
+    final q = query.toLowerCase();
+    return _notes
+        .where((n) =>
+            n.title.toLowerCase().contains(q) ||
+            n.content.toLowerCase().contains(q))
+        .toList();
+  }
+
+  // ---------- Create ----------
+  Future<Note> addNote(Note note) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/notes/items'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(note.toCreateJson()),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create note: ${response.statusCode}');
+    }
+    final created = Note.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+    _notes.insert(0, created);
+    _sort();
+    return created;
+  }
+
+  // ---------- Update (used by auto-save) ----------
+  Future<Note> updateNote(Note note) async {
+    final response = await http.patch(
+      Uri.parse('$_baseUrl/notes/items/${note.id}'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(note.toUpdateJson()),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update note: ${response.statusCode}');
+    }
+    final updated = Note.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+
+    final index = _notes.indexWhere((n) => n.id == updated.id);
+    if (index != -1) {
+      _notes[index] = updated;
+    } else {
+      _notes.insert(0, updated);
+    }
+    _sort();
+    return updated;
+  }
+
+  // ---------- Pin ----------
+  Future<void> togglePinNote(String id) async {
+    final response = await http.patch(
+      Uri.parse('$_baseUrl/notes/items/$id/pin'),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to toggle pin: ${response.statusCode}');
+    }
+    await refresh();
+  }
+
+  // ---------- Delete ----------
+  Future<void> deleteNote(String id) async {
+    final response = await http.delete(
+      Uri.parse('$_baseUrl/notes/items/$id'),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete note: ${response.statusCode}');
+    }
+    _notes.removeWhere((n) => n.id == id);
+  }
+
+  // ---------- Helpers ----------
+  void _sort() {
+    _notes.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
   }
 }

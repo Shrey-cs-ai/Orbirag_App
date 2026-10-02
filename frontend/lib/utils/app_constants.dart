@@ -4,6 +4,19 @@ import 'app_colors.dart';
 /// Static strings, route names and reusable text styles.
 class AppConstants {
   AppConstants._();
+//backend url
+
+  // ---------- Chat backend (port 8000) ----------
+  static const String chatBaseUrl = 'http://10.0.2.2:8000/api';
+
+  // ---------- Research backend (port 8001) ----------
+  static const String researchBaseUrl = 'http://10.0.2.2:8001/api';
+
+  // iOS simulator / web:    use 'http://localhost:PORT/api'
+  // Real phone (same Wi-Fi): use 'http://<your-pc-ip>:PORT/api'
+
+  // Your other existing constants (routes, nav items, etc.) stay here
+
 
   // ==================== APP INFO ====================
   static const String appName = 'Orbirag';
@@ -332,5 +345,4 @@ class AppTextStyles {
 
   // Backend URL
   static const String apiBaseUrl = 'http://10.0.2.2:8000/api'; 
-  );
-  }
+  static const String apiBaseUrl = 'http://10.0.2.2:8000/api';

@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
@@ -256,3 +257,5 @@ async def analyze_text(request: AnalyzeRequest):
         suggestions=[Suggestion(**s) for s in suggestions_list],
         meta={"ignored": len(ignore_words)},
     )
+    
+#library

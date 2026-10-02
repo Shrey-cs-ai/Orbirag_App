@@ -1,4 +1,4 @@
-import 'dart:async'; // ← Added for Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
@@ -18,18 +18,25 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
   late TextEditingController _titleController;
   late TextEditingController _contentController;
   final NotesService _notesService = NotesService();
+
+  // For new notes — we don't have a server id until first save
+  String? _serverId;
+
   bool _isAutoSaved = false;
   bool _hasChanges = false;
-  Timer? _autoSaveTimer; // Now works with dart:async import
-  int _selectedIndex = 0; // Home is index 0
+  bool _isSaving = false;
+  Timer? _autoSaveTimer;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.note?.title ?? "");
-    _contentController = TextEditingController(text: widget.note?.content ?? "");
-    
-    // Listen for changes to enable auto-save
+    _titleController =
+        TextEditingController(text: widget.note?.title ?? "");
+    _contentController =
+        TextEditingController(text: widget.note?.content ?? "");
+    _serverId = widget.note?.id;
+
     _titleController.addListener(_onTextChanged);
     _contentController.addListener(_onTextChanged);
   }
@@ -48,17 +55,21 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
-    // Reset auto-save timer
     _autoSaveTimer?.cancel();
     _autoSaveTimer = Timer(const Duration(seconds: 2), _autoSave);
   }
 
   Future<void> _autoSave() async {
-    if (!_hasChanges) return;
-    await _saveNote(showSnackbar: false);
+    if (!_hasChanges || _isSaving) return;
+    await _saveNote(showSnackbar: false, pop: false);
   }
 
-  Future<void> _saveNote({bool showSnackbar = true}) async {
+  Future<void> _saveNote({
+    bool showSnackbar = true,
+    bool pop = true,
+  }) async {
+    if (_isSaving) return;
+
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
@@ -74,48 +85,62 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
       return;
     }
 
-    final now = DateTime.now();
+    setState(() => _isSaving = true);
 
-    if (widget.note == null) {
-      // Create new note
-      final newNote = Note(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: title.isEmpty ? "Untitled" : title,
-        content: content,
-        updatedAt: now,
-      );
-      await _notesService.addNote(newNote);
+    try {
+      if (_serverId == null) {
+        // First save — create on backend
+        final created = await _notesService.addNote(
+          Note(
+            id: '', // ignored by backend
+            title: title.isEmpty ? "Untitled" : title,
+            content: content,
+          ),
+        );
+        _serverId = created.id;
+      } else {
+        // Subsequent saves — update on backend (auto-save path)
+        await _notesService.updateNote(
+          Note(
+            id: _serverId!,
+            title: title.isEmpty ? "Untitled" : title,
+            content: content,
+          ),
+        );
+      }
+
       if (!mounted) return;
-    } else {
-      // Update existing note
-      widget.note!.title = title.isEmpty ? "Untitled" : title;
-      widget.note!.content = content;
-      widget.note!.updatedAt = now;
-      await _notesService.updateNote(widget.note!);
+      setState(() {
+        _isAutoSaved = true;
+        _hasChanges = false;
+        _isSaving = false;
+      });
+
+      if (showSnackbar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Note saved"),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+
+      if (pop) Navigator.pop(context, true);
+    } catch (e) {
       if (!mounted) return;
-    }
-
-    setState(() {
-      _isAutoSaved = true;
-      _hasChanges = false;
-    });
-
-    if (showSnackbar) {
+      setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Note saved"),
-          backgroundColor: AppColors.success,
-          duration: Duration(seconds: 1),
+          content: Text('Could not save note'),
+          backgroundColor: AppColors.error,
         ),
       );
     }
-
-    // Return true to indicate changes were saved
-    Navigator.pop(context, true);
   }
 
   Future<void> _deleteNote() async {
-    if (widget.note == null) return;
+    if (_serverId == null) return;
 
     showDialog(
       context: context,
@@ -132,11 +157,23 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              await _notesService.deleteNote(widget.note!.id);
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              if (!mounted) return;
-              Navigator.pop(context, true);
+              try {
+                await _notesService.deleteNote(_serverId!);
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                Navigator.pop(context, true);
+              } catch (e) {
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Delete failed'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
@@ -160,11 +197,12 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () {
+          onPressed: () async {
             if (_hasChanges) {
-              _saveNote(showSnackbar: false);
+              await _saveNote(showSnackbar: false, pop: false);
             }
-            Navigator.pop(context);
+            if (!mounted) return;
+            Navigator.pop(context, true);
           },
         ),
         title: Column(
@@ -177,21 +215,20 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
                 fontSize: 17,
               ),
             ),
-            if (_isAutoSaved && !_hasChanges)
+            if (_isSaving)
+              const Text(
+                "Saving...",
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              )
+            else if (_isAutoSaved && !_hasChanges)
               const Text(
                 "Auto-saved",
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.success,
-                ),
-              ),
-            if (_hasChanges)
+                style: TextStyle(fontSize: 11, color: AppColors.success),
+              )
+            else if (_hasChanges)
               const Text(
                 "Unsaved changes",
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.warning,
-                ),
+                style: TextStyle(fontSize: 11, color: AppColors.warning),
               ),
           ],
         ),
@@ -219,7 +256,6 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // Title
             TextField(
               controller: _titleController,
               style: const TextStyle(
@@ -237,8 +273,6 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
               ),
             ),
             const SizedBox(height: 8),
-
-            // Content
             Expanded(
               child: TextField(
                 controller: _contentController,
@@ -257,8 +291,6 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
                 ),
               ),
             ),
-
-            // Word count
             Align(
               alignment: Alignment.bottomRight,
               child: Text(
