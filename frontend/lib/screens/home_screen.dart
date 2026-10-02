@@ -443,7 +443,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const PlagiarismScreen()),
+                    builder: (_) => const PlagiarismCheckScreen()),
               ),
             ),
             _toolCard(
@@ -686,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const PlagiarismScreen()),
+                    builder: (_) => const PlagiarismCheckScreen()),
               ),
             ),
             _toolCard(

@@ -3,7 +3,9 @@
 # ============================================================
 import asyncio
 import os
+import httpx
 from pathlib import Path
+from typing import List
 
 from google import genai
 
@@ -160,3 +162,72 @@ async def get_paper_response(
     except Exception as e:
         print(f"[AI] paper error: {type(e).__name__}: {e}")
         return "I'm having trouble responding right now. Please try again."
+
+#word counter
+LANGUAGETOOL_URL = os.getenv("LANGUAGETOOL_URL", "https://api.languagetool.org/v2/check")
+AI_PROVIDER = os.getenv("AI_PROVIDER", "languagetool")
+
+async def get_suggestions(text: str, ignore_words: List[str] = []) -> List[dict]:
+    if not text.strip():
+        return []
+
+    if AI_PROVIDER == "openai":
+        raw = await _get_from_openai(text)
+    else:
+        raw = await _get_from_languagetool(text)
+
+    # Filter ignored words (case-insensitive)
+    ignore_set = {w.lower() for w in ignore_words}
+    return [s for s in raw if s["original"].lower() not in ignore_set]
+
+async def _get_from_languagetool(text: str) -> List[dict]:
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.post(
+                LANGUAGETOOL_URL,
+                data={"text": text, "language": "en-US"}
+            )
+            response.raise_for_status()
+            data = response.json()
+            matches = data.get("matches", [])
+
+            suggestions = []
+            for i, match in enumerate(matches):
+                replacements = match.get("replacements", [])
+                if not replacements:
+                    continue
+                
+                replacement = replacements[0].get("value", "")
+                offset = match.get("offset", 0)
+                length = match.get("length", 0)
+                original = text[offset:offset + length]
+
+                suggestions.append({
+                    "id": f"lt-{i}-{offset}",
+                    "type": _map_type(match.get("rule", {}).get("issueType")),
+                    "original": original,
+                    "replacement": replacement,
+                    "message": match.get("message", ""),
+                    "start": offset,
+                    "end": offset + length,
+                })
+            return suggestions
+    except Exception as e:
+        print(f"[AI Service] LanguageTool error: {e}")
+        return []
+
+def _map_type(issue_type: str) -> str:
+    mapping = {
+        "misspelling": "spelling",
+        "grammar": "grammar",
+        "style": "style",
+    }
+    return mapping.get(issue_type, "suggestion")
+
+async def _get_from_openai(text: str) -> List[dict]:
+    """Optional: Use OpenAI instead of LanguageTool."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return []
+    # (Implement OpenAI logic here if needed)
+    return []

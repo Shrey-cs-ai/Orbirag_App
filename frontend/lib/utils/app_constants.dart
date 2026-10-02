@@ -329,3 +329,8 @@ class AppTextStyles {
     color: AppColors.primary,
   );
 }
+
+  // Backend URL
+  static const String apiBaseUrl = 'http://10.0.2.2:8000/api'; 
+  );
+  }

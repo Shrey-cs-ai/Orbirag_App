@@ -30,4 +30,27 @@ class PdfUploadResponse(BaseModel):
     chunk_count: int
 class PdfChatResponse(BaseModel):
     response: str
-    sources: List[dict]   # [{"text": "...", "page": 3}, ...]
+    sources: List[dict]   
+
+class AnalyzeRequest(BaseModel):
+    text: str
+    ignore_words: List[str] = []
+
+class TextStats(BaseModel):
+    words: int
+    characters: int
+    sentences: int
+
+class Suggestion(BaseModel):
+    id: str
+    type: str  # "spelling", "grammar", "style"
+    original: str
+    replacement: str
+    message: str
+    start: int
+    end: int
+
+class AnalyzeResponse(BaseModel):
+    stats: TextStats
+    suggestions: List[Suggestion]
+    meta: dict = {}

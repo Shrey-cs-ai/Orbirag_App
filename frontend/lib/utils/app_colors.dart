@@ -105,4 +105,9 @@ class AppColors {
   static const Color darkTextPrimary = Color(0xFFF5EDE6);     // Warm ivory text
   static const Color darkTextSecondary = Color(0xFFB8A9B5);   // Muted mauve
   static const Color darkBorder = Color(0xFF4A3546);          // Dark plum border
+
+
+// ---- NEW: Backend URL ----
+  static const String apiBaseUrl = 'http://10.0.2.2:8000/api';
 }
+

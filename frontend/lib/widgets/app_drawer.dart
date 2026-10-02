@@ -122,7 +122,7 @@ class AppDrawer extends StatelessWidget {
                     context,
                     icon: Icons.shield_outlined,
                     title: "Plagiarism Check",
-                    screen: const PlagiarismScreen(),
+                    screen: const PlagiarismCheckScreen(),
                   ),
                   _item(
                     context,

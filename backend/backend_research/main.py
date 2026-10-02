@@ -285,8 +285,8 @@ async def save_paper_route(req: SavePaperRequest):
 # ============================================================
 # Save Paper to Library
 # ============================================================
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
 class SavePaperRequest(BaseModel):
     title: str

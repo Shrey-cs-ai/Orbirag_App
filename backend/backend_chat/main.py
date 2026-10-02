@@ -4,7 +4,9 @@ Orbirag Chat Backend — Ori chatbot + PDF chat + voice transcription.
 
 import os
 from pathlib import Path
-
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
@@ -29,13 +31,18 @@ print(f"[ENV] DEEPGRAM : {'OK' if os.getenv('DEEPGRAM_API_KEY') else 'MISSING'}"
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+# ✅ ADDED — needed for RewriteRequest / RewriteResponse
+from pydantic import BaseModel
+
 from models import (
     ChatRequest, ChatResponse,
     TranscribeResponse,
     PdfChatRequest, PdfChatResponse,
     PdfUploadResponse,
+    # ✅ Word counter models (must exist in models.py)
+    AnalyzeRequest, AnalyzeResponse, TextStats, Suggestion,
 )
-from services.ai_service import get_chat_response, get_paper_response
+from services.ai_service import get_chat_response, get_paper_response, get_suggestions
 from services.deepgram_service import transcribe_audio
 from services.pdf_service import (
     extract_text_from_pdf,
@@ -44,10 +51,12 @@ from services.pdf_service import (
     get_paper,
     find_relevant_chunks,
 )
+# ✅ Word counter service (new file)
+from services.word_counter_service import build_stats
 
 
 # ============================================================
-# App
+# App  — ONLY ONE app instance in the whole file
 # ============================================================
 app = FastAPI(title="Orbirag Chat API")
 
@@ -168,6 +177,8 @@ async def chat_with_pdf(request: PdfChatRequest):
     )
 
     return PdfChatResponse(response=response, sources=relevant)
+
+
 # ============================================================
 # AI Rewrite (Paraphrase / Humanize)
 # ============================================================
@@ -224,3 +235,24 @@ async def rewrite_route(req: RewriteRequest):
     except Exception as e:
         print(f"[Rewrite] error: {type(e).__name__}: {e}")
         raise HTTPException(500, f"Rewrite failed: {e}")
+
+
+# ============================================================
+# Word Counter
+# ============================================================
+@app.post("/api/analyze", response_model=AnalyzeResponse, tags=["Word Counter"])
+async def analyze_text(request: AnalyzeRequest):
+    text = request.text
+    ignore_words = request.ignore_words
+
+    if len(text) > 10000:
+        raise HTTPException(status_code=413, detail="Text too long. Max 10000 characters.")
+
+    stats_dict = build_stats(text)
+    suggestions_list = await get_suggestions(text, ignore_words)
+
+    return AnalyzeResponse(
+        stats=TextStats(**stats_dict),
+        suggestions=[Suggestion(**s) for s in suggestions_list],
+        meta={"ignored": len(ignore_words)},
+    )

@@ -68,7 +68,7 @@ class MyApp extends StatelessWidget {
         AppConstants.routeLogin: (context) => const LoginScreen(),
         AppConstants.routeSignup: (context) => const SignupScreen(),
         AppConstants.routeProfile: (context) => const ProfileScreen(),
-        AppConstants.routePlagiarismCheck: (context) => const PlagiarismScreen(),
+        AppConstants.routePlagiarismCheck: (context) => const PlagiarismCheckScreen(),
         AppConstants.routeVoiceInput: (context) => const VoiceInputScreen(),
         AppConstants.routeHome: (context) => const HomeScreen(),
         AppConstants.routeOriChat: (context) => const OriChatScreen(),
