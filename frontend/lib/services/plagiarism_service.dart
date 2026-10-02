@@ -7,6 +7,9 @@ class PlagiarismService {
   static final PlagiarismService instance = PlagiarismService._internal();
   PlagiarismService._internal();
 
+  // ============================================================
+  // ✅ Research backend URL — port 8001
+  // ============================================================
   String get baseUrl {
     if (kIsWeb) return 'http://localhost:8001';
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -15,6 +18,9 @@ class PlagiarismService {
     return 'http://localhost:8001';
   }
 
+  // ============================================================
+  // 1. Run Plagiarism Check
+  // ============================================================
   Future<PlagiarismResult?> check({
     required String text,
     double threshold = 0.75,
@@ -46,13 +52,45 @@ class PlagiarismService {
       return null;
     }
   }
+
+  // ============================================================
+  // 2. Rewrite — paraphrase or humanize
+  // ============================================================
+  Future<String?> rewrite({
+    required String text,
+    required String mode, // "paraphrase" or "humanize"
+  }) async {
+    try {
+      debugPrint('[Rewrite] POST $baseUrl/api/ai/rewrite (mode=$mode)');
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/ai/rewrite'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'text': text, 'mode': mode}),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      debugPrint('[Rewrite] status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return (data['result'] ?? '') as String;
+      }
+      debugPrint('[Rewrite] error body: ${response.body}');
+      return null;
+    } catch (e) {
+      debugPrint('[Rewrite] exception: $e');
+      return null;
+    }
+  }
 }
 
 // ============================================================
 // MODELS
 // ============================================================
 class PlagiarismResult {
-  final double score;            // 0-100
+  final double score;
   final int totalWords;
   final int uniqueWords;
   final int flaggedCount;
@@ -70,7 +108,7 @@ class PlagiarismResult {
 
   factory PlagiarismResult.fromJson(Map<String, dynamic> json) {
     return PlagiarismResult(
-      score: (json['score'] ?? 0).toDouble(),
+      score: ((json['score'] ?? 0) as num).toDouble(),
       totalWords: (json['total_words'] ?? 0) as int,
       uniqueWords: (json['unique_words'] ?? 0) as int,
       flaggedCount: (json['flagged_count'] ?? 0) as int,
@@ -99,7 +137,7 @@ class PlagiarismMatch {
     return PlagiarismMatch(
       source: (json['source'] ?? 'Unknown') as String,
       matchedText: (json['matched_text'] ?? '') as String,
-      similarity: (json['similarity'] ?? 0).toDouble(),
+      similarity: ((json['similarity'] ?? 0) as num).toDouble(),
       reason: (json['reason'] ?? '') as String,
     );
   }

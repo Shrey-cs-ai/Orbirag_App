@@ -65,7 +65,6 @@ async def transcribe_audio(audio_bytes: bytes, language: str = "en") -> dict:
         confidence = float(alt.confidence or 0.0)
         words = len(transcript.split())
 
-        # Duration isn't always populated — use 0.0 if missing
         duration = 0.0
         try:
             duration = float(response.metadata.duration or 0.0)

@@ -10,6 +10,7 @@ import '../services/citation_service.dart';
 import 'paper_orbit_screen.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
+import '../models/citation.dart';
 import 'literature_retrieval_screen.dart';
 import 'profile_screen.dart';
 

@@ -142,7 +142,24 @@ class PaperResult(BaseModel):
 class SearchResponse(BaseModel):
     results: List[PaperResult] = []
     count: int = 0  
-    
+# ============================================================
+# Save Paper (Literature)
+# ============================================================
+from pydantic import BaseModel
+from typing import Optional
+
+
+class SavePaperRequest(BaseModel):
+    title: str
+    authors: Optional[str] = ""
+    year: Optional[str] = ""
+    source: Optional[str] = ""
+    citations: Optional[int] = 0
+    ai_summary: Optional[str] = ""
+    url: Optional[str] = ""
+    abstract: Optional[str] = ""
+    venue: Optional[str] = ""
+        
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================

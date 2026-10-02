@@ -48,6 +48,9 @@ from schemas import (
     TranscribeResponse,
     UploadPdfResponse,
     RagChatRequest, RagChatResponse,
+    BuildQueryRequest, BuildQueryResponse,
+    SearchRequest, SearchResponse, PaperResult,
+    SavePaperRequest,      
 )
 from services.ai_service import get_chat_response
 from services.deepgram_service import transcribe_audio
