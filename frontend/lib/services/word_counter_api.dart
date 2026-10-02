@@ -6,7 +6,7 @@ import '../utils/app_constants.dart';
 class WordCounterApi {
   final String baseUrl;
 
-  WordCounterApi({String? baseUrl}) : baseUrl = baseUrl ?? AppConstants.apiBaseUrl;
+  WordCounterApi({String? baseUrl}) : baseUrl = baseUrl ?? AppConstants.chatBaseUrl;
 
   Future<AnalysisResult> analyze({
     required String text,
