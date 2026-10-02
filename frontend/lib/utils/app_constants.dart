@@ -49,6 +49,9 @@ class AppConstants {
   static const String routeWordCounter = '/word-counter';
   static const String routePlagiarismCheck = '/plagiarism-check';
   static const String routeCitationGenerator = '/citation-generator';
+  //admin routes
+  static const String routeAdminLogin = '/admin-login';
+  static const String routeAdminDashboard = '/admin-dashboard';
 
   // ==================== BOTTOM NAVIGATION ====================
   static const List<Map<String, dynamic>> bottomNavItems = [

@@ -220,6 +220,47 @@ class NoteOut(BaseModel):
 class NoteListResponse(BaseModel):
     items: List[NoteOut]
     count: int
+    
+#user(admin)
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64)
+    email: Optional[str] = None
+    password: str = Field(..., min_length=6, max_length=128)
+    role: str = Field(default="user", pattern="^(user|admin)$")
+
+
+class UserOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    email: Optional[str]
+    role: str
+    is_active: bool
+    created_at: datetime
+    last_login: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class UserListResponse(BaseModel):
+    items: List[UserOut]
+    count: int
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str = Field(..., min_length=6, max_length=128)
+
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================

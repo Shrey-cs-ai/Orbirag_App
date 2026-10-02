@@ -7,6 +7,7 @@ Orbirag FastAPI backend — Phase 1 + Phase 2 (RAG).
 # ============================================================
 import os
 from pathlib import Path
+from Orbirag_App.backend.backend_research.models import User
 from services.search_service import search_semantic_scholar
 from services.ai_service import build_search_query, summarize_paper
 from schemas import (
@@ -34,6 +35,16 @@ from schemas import (
     NoteListResponse,
 )
 from services import notes_service
+
+from schemas import (
+    # ... existing ...
+    UserCreate, UserOut, UserListResponse,
+    LoginRequest, LoginResponse, PasswordResetRequest,
+)
+from services import user_service
+from services.deps import get_current_user, require_admin
+from services.auth_service import verify_password, create_access_token
+from datetime import datetime, timezone
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
     print(f"[ENV] Loading from: {env_path}")
@@ -707,4 +718,114 @@ def delete_note(note_id: UUID, db: Session = Depends(get_db)):
     ok = notes_service.delete_note(db, note_id)
     if not ok:
         raise HTTPException(404, "Note not found")
+    return {"deleted": True}
+
+# ============================================================
+# Auth
+# ============================================================
+@app.post("/api/auth/login", response_model=LoginResponse, tags=["Auth"])
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = user_service.get_by_username(db, payload.username)
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(401, "Invalid username or password")
+    if not user.is_active:
+        raise HTTPException(403, "Account is disabled")
+
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(str(user.id), user.role)
+    return LoginResponse(access_token=token, user=user)
+
+
+@app.get("/api/auth/me", response_model=UserOut, tags=["Auth"])
+def me(current: User = Depends(get_current_user)):
+    return current
+
+
+# ============================================================
+# Admin — users
+# ============================================================
+@app.get("/api/admin/users", response_model=UserListResponse, tags=["Admin"])
+def admin_list_users(
+    search: str | None = None,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    users = user_service.list_users(db, search=search)
+    return UserListResponse(items=users, count=len(users))
+
+
+@app.post("/api/admin/users", response_model=UserOut, tags=["Admin"])
+def admin_create_user(
+    payload: UserCreate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if user_service.get_by_username(db, payload.username):
+        raise HTTPException(409, "Username already exists")
+    return user_service.create_user(db, payload)
+
+
+@app.patch("/api/admin/users/{user_id}/ban", response_model=UserOut, tags=["Admin"])
+def admin_ban_user(
+    user_id: UUID,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = user_service.set_active(db, user_id, False)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+
+@app.patch("/api/admin/users/{user_id}/unban", response_model=UserOut, tags=["Admin"])
+def admin_unban_user(
+    user_id: UUID,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = user_service.set_active(db, user_id, True)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+
+@app.patch("/api/admin/users/{user_id}/role", response_model=UserOut, tags=["Admin"])
+def admin_set_role(
+    user_id: UUID,
+    role: str,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if role not in ("user", "admin"):
+        raise HTTPException(400, "Invalid role")
+    user = user_service.set_role(db, user_id, role)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+
+@app.patch("/api/admin/users/{user_id}/password", response_model=UserOut, tags=["Admin"])
+def admin_reset_password(
+    user_id: UUID,
+    payload: PasswordResetRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = user_service.reset_password(db, user_id, payload.new_password)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+
+@app.delete("/api/admin/users/{user_id}", tags=["Admin"])
+def admin_delete_user(
+    user_id: UUID,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if not user_service.delete_user(db, user_id):
+        raise HTTPException(404, "User not found")
     return {"deleted": True}

@@ -23,11 +23,15 @@ import 'screens/saved_papers_screen.dart';
 import 'screens/word_counter_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/literature_retrieval_screen.dart';
+import 'screens/admin_login_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
+import 'package:url_strategy/url_strategy.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env', isOptional: true);
+  setUrlStrategy(PathUrlStrategy());
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -82,6 +86,8 @@ class MyApp extends StatelessWidget {
         AppConstants.routeWordCounter: (context) => const WordCounterScreen(),
         AppConstants.routeNewNote: (context) => const NewNoteScreen(),
         AppConstants.routeLibrary: (context) => const LibraryScreen(),
+        AppConstants.routeAdminLogin: (_) => const AdminLoginScreen(),
+  AppConstants.routeAdminDashboard: (_) => const AdminDashboardScreen(),
       },
     );
   }

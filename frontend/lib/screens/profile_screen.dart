@@ -279,6 +279,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () => setState(() => _isAboutExpanded = !_isAboutExpanded),
               content: _buildAboutContent(),
             ),
+
+            // ⚠️ TEMPORARY — remove before submission
+            const SizedBox(height: 24),
+            Center(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onDoubleTap: () {
+                  Navigator.pushNamed(context, AppConstants.routeAdminLogin);
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24, horizontal: 40),
+                  child: Text(
+                    'v1.0.0',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 20),
           ],
         ),
@@ -312,7 +334,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              // ✅ FIXED: Prioritize _profileImageBytes (uploaded), then network, then local file
               CircleAvatar(
                 radius: 48,
                 backgroundColor: AppColors.primary,
