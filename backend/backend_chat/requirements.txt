@@ -4,3 +4,4 @@ pydantic
 python-dotenv
 httpx
 pypdf
+deepgram-sdk

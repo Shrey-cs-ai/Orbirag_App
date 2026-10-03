@@ -44,22 +44,21 @@ async def transcribe_audio(audio_bytes: bytes, language: str = "en") -> dict:
         raise RuntimeError("DEEPGRAM_API_KEY not set in .env")
 
     try:
-        from deepgram import DeepgramClient, PrerecordedOptions
+        from deepgram import AsyncDeepgramClient
 
-        client = DeepgramClient(_api_key)
+        # v7: AsyncDeepgramClient accepts api_key as a keyword argument
+        client = AsyncDeepgramClient(api_key=_api_key)
 
-        payload = {"buffer": audio_bytes}
-        options = PrerecordedOptions(
+        # v7: transcription parameters are now keyword arguments
+        response = await client.listen.v1.media.transcribe_file(
+            request=audio_bytes,
             model="nova-2",
             language=language,
             smart_format=True,
             punctuate=True,
         )
 
-        response = client.listen.prerecorded.v("1").transcribe_file(
-            payload, options
-        )
-
+        # Response shape is unchanged in v7
         alt = response.results.channels[0].alternatives[0]
         transcript = alt.transcript or ""
         confidence = float(alt.confidence or 0.0)
@@ -71,8 +70,10 @@ async def transcribe_audio(audio_bytes: bytes, language: str = "en") -> dict:
         except Exception:
             pass
 
-        print(f"[Deepgram] Transcribed {len(transcript)} chars "
-              f"(confidence={confidence:.2f})")
+        print(
+            f"[Deepgram] Transcribed {len(transcript)} chars "
+            f"(confidence={confidence:.2f})"
+        )
 
         return {
             "transcript": transcript,
