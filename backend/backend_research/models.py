@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, Float,
-    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, func
+    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, Uuid,func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -18,27 +18,6 @@ from database import Base
 
 def _uuid():
     return str(uuid.uuid4())
-
-
-# ============================================================
-# USERS
-# ============================================================
-
-class User(Base):
-    __tablename__ = "users"
-
-    id           = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    firebase_uid = Column(String, unique=True, nullable=False, index=True)
-    email        = Column(String, unique=True)
-    display_name = Column(String)
-    role         = Column(String)
-    created_at   = Column(DateTime, default=datetime.utcnow)
-    updated_at   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    papers    = relationship("Paper", back_populates="user", cascade="all, delete-orphan")
-    citations = relationship("Citation", back_populates="user", cascade="all, delete-orphan")
-    chats     = relationship("ChatConversation", back_populates="user", cascade="all, delete-orphan")
-    scopings  = relationship("ScopingSession", back_populates="user", cascade="all, delete-orphan")
 
 
 # ============================================================
@@ -219,7 +198,7 @@ class SearchResult(Base):
 class LibraryItem(Base):
     __tablename__ = "library_items"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(String(64), nullable=True, index=True)
     title = Column(Text, nullable=False)
     description = Column(Text, nullable=False, default="")
@@ -257,3 +236,14 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
+    
+#plagiarismCheck model
+class PlagiarismCheck(Base):
+    __tablename__ = "plagiarism_checks"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(String(64), nullable=True, index=True)
+    document_text = Column(Text, nullable=False)
+    similarity_score = Column(String(8), nullable=False)   # e.g. "18%"
+    matches = Column(JSON, nullable=False, default=list)   # list of matched dicts
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

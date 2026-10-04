@@ -76,3 +76,10 @@ def delete_user(db: Session, user_id: UUID) -> bool:
     db.delete(user)
     db.commit()
     return True
+
+def get_by_id(db: Session, user_id) -> Optional[User]:
+    try:
+        uid = UUID(str(user_id))
+    except (ValueError, AttributeError):
+        return None
+    return db.query(User).filter(User.id == uid).first()

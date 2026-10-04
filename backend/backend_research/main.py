@@ -7,7 +7,7 @@ Orbirag FastAPI backend — Phase 1 + Phase 2 (RAG).
 # ============================================================
 import os
 from pathlib import Path
-from Orbirag_App.backend.backend_research.models import User
+from models import User
 from services.search_service import search_semantic_scholar
 from services.ai_service import build_search_query, summarize_paper
 from schemas import (
@@ -45,6 +45,15 @@ from services import user_service
 from services.deps import get_current_user, require_admin
 from services.auth_service import verify_password, create_access_token
 from datetime import datetime, timezone
+from sqlalchemy import Column, String, Boolean, Text, DateTime, func
+from schemas import (
+    # ... existing ...
+    PlagiarismCheckRequest, PlagiarismCheckResponse, PlagiarismMatch,
+    RewriteRequest, RewriteResponse,
+    CitationRequest, CitationResponse,
+)
+from services import plagiarism_service
+
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
     print(f"[ENV] Loading from: {env_path}")
@@ -477,159 +486,7 @@ async def delete_citation_route(citation_id: str, user_id: str = "anonymous"):
     except Exception as e:
         print(f"[Citation] delete error: {e}")
         raise HTTPException(500, f"Delete failed: {e}")
-# ============================================================
-# Plagiarism Check
-# ============================================================
-from pydantic import BaseModel
-from typing import List, Optional
 
-
-class PlagiarismCheckRequest(BaseModel):
-    text: str
-    threshold: Optional[float] = 0.75   # similarity threshold (0-1)
-
-
-class PlagiarismMatch(BaseModel):
-    source: str
-    matched_text: str
-    similarity: float
-    reason: str
-
-
-class PlagiarismCheckResponse(BaseModel):
-    score: float                       # 0-100 (%)
-    total_words: int
-    unique_words: int
-    flagged_count: int
-    matches: List[PlagiarismMatch]
-    summary: str
-
-
-@app.post(
-    "/api/plagiarism/check",
-    response_model=PlagiarismCheckResponse,
-    tags=["Plagiarism"],
-)
-async def plagiarism_check(req: PlagiarismCheckRequest):
-    """
-    Analyze text for potential plagiarism indicators using Gemini,
-    then compare against user's saved library papers.
-    """
-    text = (req.text or "").strip()
-    if not text:
-        raise HTTPException(400, "Empty text")
-    if len(text) > 50000:
-        raise HTTPException(413, "Text too large (max 50,000 chars)")
-
-    print(f"[Plagiarism] check: {len(text)} chars")
-
-    # ---- 1. Basic stats ----
-    words = text.split()
-    total_words = len(words)
-    unique_words = len(set(w.lower() for w in words))
-
-    # ---- 2. AI-based analysis ----
-    from services.ai_service import _generate_with_fallback
-    import json as _json
-
-    prompt = f"""You are a plagiarism detection assistant. Analyze the text below
-and identify phrases that look copied, generic, or unoriginal.
-For each suspicious phrase, give a short reason.
-
-TEXT:
-\"\"\"
-{text[:8000]}
-\"\"\"
-
-Return ONLY valid JSON with this shape:
-{{
-  "matches": [
-    {{
-      "source": "Common phrase / Wikipedia-style / Generic academic",
-      "matched_text": "the exact phrase from the text",
-      "similarity": 0.85,
-      "reason": "why it looks copied"
-    }}
-  ],
-  "summary": "one-sentence overall assessment"
-}}
-
-Rules:
-- Only include phrases longer than 6 words
-- similarity is between 0.0 and 1.0
-- Max 10 matches
-"""
-
-    ai_matches = []
-    ai_summary = "No significant issues detected."
-
-    try:
-        raw = await _generate_with_fallback(prompt, json_mode=True)
-        parsed = _json.loads(raw or "{}")
-        ai_summary = parsed.get("summary", ai_summary)
-        ai_matches = parsed.get("matches", []) or []
-    except Exception as e:
-        print(f"[Plagiarism] AI error: {e}")
-
-    matches = [
-        PlagiarismMatch(
-            source=m.get("source", "Unknown"),
-            matched_text=m.get("matched_text", ""),
-            similarity=float(m.get("similarity", 0.5)),
-            reason=m.get("reason", ""),
-        )
-        for m in ai_matches
-        if m.get("matched_text")
-    ]
-
-    # ---- 3. Compare with saved papers (library) ----
-    try:
-        from database import SessionLocal
-        from db_queries import list_papers, get_user_by_firebase_uid
-
-        db = SessionLocal()
-        try:
-            user = get_user_by_firebase_uid(db, "anonymous")
-            if user:
-                papers = list_papers(db, user_id=user.id)[:5]
-                text_lower = text.lower()
-                for p in papers:
-                    if not p.abstract:
-                        continue
-                    # crude keyword overlap
-                    p_words = set(w.lower() for w in p.abstract.split()
-                                  if len(w) > 5)
-                    t_words = set(w.lower() for w in words if len(w) > 5)
-                    overlap = p_words & t_words
-                    if len(overlap) >= 5:
-                        matches.append(
-                            PlagiarismMatch(
-                                source=p.title or "Saved paper",
-                                matched_text=", ".join(list(overlap)[:8]),
-                                similarity=min(0.99, len(overlap) / 20),
-                                reason="Shared keywords with saved paper",
-                            )
-                        )
-        finally:
-            db.close()
-    except Exception as e:
-        print(f"[Plagiarism] library compare skipped: {e}")
-
-    # ---- 4. Compute score ----
-    if total_words == 0:
-        score = 0.0
-    else:
-        flagged_words = sum(len(m.matched_text.split()) for m in matches)
-        score = min(100.0, (flagged_words / total_words) * 100 * 2)
-
-    return PlagiarismCheckResponse(
-        score=round(score, 1),
-        total_words=total_words,
-        unique_words=unique_words,
-        flagged_count=len(matches),
-        matches=matches,
-        summary=ai_summary,
-    )
 # ============================================================
 # Library
 # ============================================================
@@ -828,4 +685,126 @@ def admin_delete_user(
 ):
     if not user_service.delete_user(db, user_id):
         raise HTTPException(404, "User not found")
+    return {"deleted": True}
+
+# ============================================================
+# Plagiarism
+# ============================================================
+@app.post("/api/plagiarism/check", response_model=PlagiarismCheckResponse, tags=["Plagiarism"])
+async def plagiarism_check(payload: PlagiarismCheckRequest, db: Session = Depends(get_db)):
+    result = await plagiarism_service.analyze_text(payload.text)
+    row = plagiarism_service.save_check(
+        db,
+        text=payload.text,
+        similarity_score=result["similarity_score"],
+        matches=result["matches"],
+        user_id=payload.user_id,
+    )
+    return PlagiarismCheckResponse(
+        id=row.id,
+        similarity_score=row.similarity_score,
+        matches=row.matches,
+        created_at=row.created_at,
+    )
+
+
+@app.post("/api/plagiarism/paraphrase", response_model=RewriteResponse, tags=["Plagiarism"])
+async def plagiarism_paraphrase(payload: RewriteRequest):
+    result = await plagiarism_service.rewrite_text(payload.text, "paraphrase")
+    return RewriteResponse(result=result)
+
+
+@app.post("/api/plagiarism/humanize", response_model=RewriteResponse, tags=["Plagiarism"])
+async def plagiarism_humanize(payload: RewriteRequest):
+    result = await plagiarism_service.rewrite_text(payload.text, "humanize")
+    return RewriteResponse(result=result)
+
+
+@app.post("/api/plagiarism/cite", response_model=CitationResponse, tags=["Plagiarism"])
+def plagiarism_cite(payload: CitationRequest):
+    citation = plagiarism_service.format_citation(
+        payload.source, payload.year, payload.style
+    )
+    return CitationResponse(citation=citation)
+
+
+@app.get("/api/plagiarism/history", tags=["Plagiarism"])
+def plagiarism_history(user_id: str | None = None, db: Session = Depends(get_db)):
+    rows = plagiarism_service.list_checks(db, user_id=user_id)
+    return {"items": [
+        {
+            "id": str(r.id),
+            "similarity_score": r.similarity_score,
+            "matches_count": len(r.matches or []),
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]}
+
+
+@app.delete("/api/plagiarism/{check_id}", tags=["Plagiarism"])
+def plagiarism_delete(check_id: UUID, db: Session = Depends(get_db)):
+    if not plagiarism_service.delete_check(db, check_id):
+        raise HTTPException(404, "Check not found")
+    return {"deleted": True}
+
+# ============================================================
+# Plagiarism  (single block — service-based, saves to DB)
+# ============================================================
+@app.post("/api/plagiarism/check", response_model=PlagiarismCheckResponse, tags=["Plagiarism"])
+async def plagiarism_check(payload: PlagiarismCheckRequest, db: Session = Depends(get_db)):
+    result = await plagiarism_service.analyze_text(payload.text)
+    row = plagiarism_service.save_check(
+        db,
+        text=payload.text,
+        similarity_score=result["similarity_score"],
+        matches=result["matches"],
+        user_id=payload.user_id,
+    )
+    return PlagiarismCheckResponse(
+        id=row.id,
+        similarity_score=row.similarity_score,
+        matches=row.matches,
+        created_at=row.created_at,
+    )
+
+
+@app.post("/api/plagiarism/paraphrase", response_model=RewriteResponse, tags=["Plagiarism"])
+async def plagiarism_paraphrase(payload: RewriteRequest):
+    result = await plagiarism_service.rewrite_text(payload.text, "paraphrase")
+    return RewriteResponse(result=result)
+
+
+@app.post("/api/plagiarism/humanize", response_model=RewriteResponse, tags=["Plagiarism"])
+async def plagiarism_humanize(payload: RewriteRequest):
+    result = await plagiarism_service.rewrite_text(payload.text, "humanize")
+    return RewriteResponse(result=result)
+
+
+@app.post("/api/plagiarism/cite", response_model=CitationResponse, tags=["Plagiarism"])
+def plagiarism_cite(payload: CitationRequest):
+    citation = plagiarism_service.format_citation(
+        payload.source, payload.year, payload.style
+    )
+    return CitationResponse(citation=citation)
+
+
+@app.get("/api/plagiarism/history", tags=["Plagiarism"])
+def plagiarism_history(user_id: str | None = None, db: Session = Depends(get_db)):
+    rows = plagiarism_service.list_checks(db, user_id=user_id)
+    return {"items": [
+        {
+            "id": str(r.id),
+            "similarity_score": r.similarity_score,
+            "matches_count": len(r.matches or []),
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]}
+
+
+@app.delete("/api/plagiarism/{check_id}", tags=["Plagiarism"])
+def plagiarism_delete(check_id: UUID, db: Session = Depends(get_db)):
+    if not plagiarism_service.delete_check(db, check_id):
+        raise HTTPException(404, "Check not found")
     return {"deleted": True}

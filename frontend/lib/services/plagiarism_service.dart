@@ -1,144 +1,130 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
-
-class PlagiarismService {
-  static final PlagiarismService instance = PlagiarismService._internal();
-  PlagiarismService._internal();
-
-  // ============================================================
-  // ✅ Research backend URL — port 8001
-  // ============================================================
-  String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8001';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8001';
-    }
-    return 'http://localhost:8001';
-  }
-
-  // ============================================================
-  // 1. Run Plagiarism Check
-  // ============================================================
-  Future<PlagiarismResult?> check({
-    required String text,
-    double threshold = 0.75,
-  }) async {
-    try {
-      debugPrint('[Plagiarism] POST $baseUrl/api/plagiarism/check');
-
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/plagiarism/check'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'text': text,
-              'threshold': threshold,
-            }),
-          )
-          .timeout(const Duration(seconds: 60));
-
-      debugPrint('[Plagiarism] status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return PlagiarismResult.fromJson(data);
-      }
-      debugPrint('[Plagiarism] error body: ${response.body}');
-      return null;
-    } catch (e) {
-      debugPrint('[Plagiarism] exception: $e');
-      return null;
-    }
-  }
-
-  // ============================================================
-  // 2. Rewrite — paraphrase or humanize
-  // ============================================================
-  Future<String?> rewrite({
-    required String text,
-    required String mode, // "paraphrase" or "humanize"
-  }) async {
-    try {
-      debugPrint('[Rewrite] POST $baseUrl/api/ai/rewrite (mode=$mode)');
-
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/ai/rewrite'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'text': text, 'mode': mode}),
-          )
-          .timeout(const Duration(seconds: 60));
-
-      debugPrint('[Rewrite] status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return (data['result'] ?? '') as String;
-      }
-      debugPrint('[Rewrite] error body: ${response.body}');
-      return null;
-    } catch (e) {
-      debugPrint('[Rewrite] exception: $e');
-      return null;
-    }
-  }
-}
+import '../utils/app_constants.dart';
 
 // ============================================================
-// MODELS
+// Models
 // ============================================================
-class PlagiarismResult {
-  final double score;
-  final int totalWords;
-  final int uniqueWords;
-  final int flaggedCount;
-  final List<PlagiarismMatch> matches;
-  final String summary;
-
-  PlagiarismResult({
-    required this.score,
-    required this.totalWords,
-    required this.uniqueWords,
-    required this.flaggedCount,
-    required this.matches,
-    required this.summary,
-  });
-
-  factory PlagiarismResult.fromJson(Map<String, dynamic> json) {
-    return PlagiarismResult(
-      score: ((json['score'] ?? 0) as num).toDouble(),
-      totalWords: (json['total_words'] ?? 0) as int,
-      uniqueWords: (json['unique_words'] ?? 0) as int,
-      flaggedCount: (json['flagged_count'] ?? 0) as int,
-      summary: (json['summary'] ?? '') as String,
-      matches: ((json['matches'] ?? []) as List)
-          .map((m) => PlagiarismMatch.fromJson(m as Map<String, dynamic>))
-          .toList(),
-    );
-  }
-}
-
 class PlagiarismMatch {
+  final int id;
+  final String text;
+  final String percentage;
+  final int words;
   final String source;
-  final String matchedText;
-  final double similarity;
-  final String reason;
+  final String year;
+  final String excerpt;
 
   PlagiarismMatch({
+    required this.id,
+    required this.text,
+    required this.percentage,
+    required this.words,
     required this.source,
-    required this.matchedText,
-    required this.similarity,
-    required this.reason,
+    required this.year,
+    required this.excerpt,
   });
 
-  factory PlagiarismMatch.fromJson(Map<String, dynamic> json) {
-    return PlagiarismMatch(
-      source: (json['source'] ?? 'Unknown') as String,
-      matchedText: (json['matched_text'] ?? '') as String,
-      similarity: ((json['similarity'] ?? 0) as num).toDouble(),
-      reason: (json['reason'] ?? '') as String,
+  factory PlagiarismMatch.fromJson(Map<String, dynamic> json) => PlagiarismMatch(
+        id: json['id'] ?? 0,
+        text: json['text'] ?? '',
+        percentage: json['percentage'] ?? '0%',
+        words: json['words'] ?? 0,
+        source: json['source'] ?? '',
+        year: json['year'] ?? '',
+        excerpt: json['excerpt'] ?? '',
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'text': text,
+        'percentage': percentage,
+        'words': words,
+        'source': source,
+        'year': year,
+        'excerpt': excerpt,
+      };
+}
+
+class PlagiarismResult {
+  final String id;
+  final String similarityScore;
+  final List<PlagiarismMatch> matches;
+
+  PlagiarismResult({
+    required this.id,
+    required this.similarityScore,
+    required this.matches,
+  });
+
+  factory PlagiarismResult.fromJson(Map<String, dynamic> json) =>
+      PlagiarismResult(
+        id: json['id'].toString(),
+        similarityScore: json['similarity_score'] ?? '0%',
+        matches: (json['matches'] as List? ?? [])
+            .map((m) => PlagiarismMatch.fromJson(m as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+// ============================================================
+// Service
+// ============================================================
+class PlagiarismService {
+  static final PlagiarismService _instance = PlagiarismService._internal();
+  factory PlagiarismService() => _instance;
+  PlagiarismService._internal();
+
+  final String _baseUrl = AppConstants.researchBaseUrl;
+
+  Future<PlagiarismResult> check(String text) async {
+    final r = await http.post(
+      Uri.parse('$_baseUrl/plagiarism/check'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'text': text, 'user_id': null}),
     );
+    if (r.statusCode != 200) {
+      throw Exception('Check failed: ${r.statusCode} — ${r.body}');
+    }
+    return PlagiarismResult.fromJson(jsonDecode(r.body));
+  }
+
+  Future<String> paraphrase(String text) async {
+    final r = await http.post(
+      Uri.parse('$_baseUrl/plagiarism/paraphrase'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'text': text, 'mode': 'paraphrase'}),
+    );
+    if (r.statusCode != 200) {
+      throw Exception('Paraphrase failed: ${r.statusCode}');
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['result'] as String;
+  }
+
+  Future<String> humanize(String text) async {
+    final r = await http.post(
+      Uri.parse('$_baseUrl/plagiarism/humanize'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'text': text, 'mode': 'humanize'}),
+    );
+    if (r.statusCode != 200) {
+      throw Exception('Humanize failed: ${r.statusCode}');
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['result'] as String;
+  }
+
+  Future<String> cite(String source, String year) async {
+    final r = await http.post(
+      Uri.parse('$_baseUrl/plagiarism/cite'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'source': source,
+        'year': year,
+        'style': 'APA 7',
+      }),
+    );
+    if (r.statusCode != 200) {
+      throw Exception('Citation failed: ${r.statusCode}');
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['citation'] as String;
   }
 }

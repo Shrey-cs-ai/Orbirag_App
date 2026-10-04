@@ -1,4 +1,8 @@
-from fastapi import Depends, HTTPException, status
+"""
+FastAPI dependencies: get_current_user, require_admin.
+"""
+
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 

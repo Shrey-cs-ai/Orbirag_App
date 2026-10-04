@@ -79,6 +79,10 @@ class SavePaperRequest(BaseModel):
     abstract: Optional[str] = None
     source: Optional[str] = None
     citations: Optional[int] = 0
+    ai_summary: Optional[str] = ""
+    url: Optional[str] = ""
+    abstract: Optional[str] = ""
+    venue: Optional[str] = ""
 
 
 class SavedPaper(BaseModel):
@@ -261,6 +265,48 @@ class LoginResponse(BaseModel):
 class PasswordResetRequest(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=128)
 
+class PlagiarismMatch(BaseModel):
+    id: int
+    text: str
+    percentage: str
+    words: int
+    source: str
+    year: str
+    excerpt: str
+
+
+class PlagiarismCheckRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=50000)
+    user_id: Optional[str] = None
+
+
+class PlagiarismCheckResponse(BaseModel):
+    id: uuid.UUID
+    similarity_score: str
+    matches: List[PlagiarismMatch]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RewriteRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000)
+    mode: str = Field(..., pattern="^(paraphrase|humanize)$")
+
+
+class RewriteResponse(BaseModel):
+    result: str
+
+
+class CitationRequest(BaseModel):
+    source: str
+    year: str = "2023"
+    style: str = "APA 7"
+
+
+class CitationResponse(BaseModel):
+    citation: str
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================
