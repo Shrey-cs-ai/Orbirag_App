@@ -249,3 +249,26 @@ class PlagiarismCheck(Base):
     similarity_score = Column(String(8), nullable=False)   # e.g. "18%"
     matches = Column(JSON, nullable=False, default=list)   # list of matched dicts
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+class Methodology(Base):
+    __tablename__ = "methodologies"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(String(64), nullable=True, index=True)
+    paper_title = Column(Text, nullable=True)
+    raw_text = Column(Text, nullable=False)
+
+    study_type = Column(String(32), nullable=True)
+    design = Column(Text, nullable=True)
+    sample_size = Column(Text, nullable=True)
+    sampling_method = Column(Text, nullable=True)
+    data_collection = Column(Text, nullable=True)
+    analysis_method = Column(Text, nullable=True)
+    databases_searched = Column(Text, nullable=True)
+    inclusion_criteria = Column(Text, nullable=True)
+    exclusion_criteria = Column(Text, nullable=True)
+    studies_included_count = Column(Text, nullable=True)
+    additional_notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

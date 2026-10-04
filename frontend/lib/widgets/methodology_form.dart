@@ -142,7 +142,6 @@ class _MethodologyFormState extends State<MethodologyForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // SECTION HEADER
         const Text(
           'EXTRACTED METHODOLOGY',
           style: TextStyle(
@@ -154,19 +153,15 @@ class _MethodologyFormState extends State<MethodologyForm> {
         ),
         const SizedBox(height: 10),
 
-        // STUDY TYPE
         _buildStudyTypeSection(),
         const SizedBox(height: 20),
 
-        // CONDITIONAL FIELDS
         ..._relevantFields.map((key) => _buildField(key)),
 
-        // ADDITIONAL NOTES (always shown)
         _buildField('additionalNotes'),
 
         const SizedBox(height: 12),
 
-        // SAVE BUTTON
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(

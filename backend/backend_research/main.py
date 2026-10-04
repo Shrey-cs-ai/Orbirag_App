@@ -56,6 +56,11 @@ from services import plagiarism_service
 
 from services import citation_service
 
+from schemas import (
+    MethodologyExtractRequest, MethodologyExtractResponse,
+    MethodologySaveRequest, MethodologyOut, MethodologyData,
+)
+from services import methodology_service
 
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
@@ -861,3 +866,54 @@ async def generate_citation_from_pdf(
 
     result = await citation_service.generate(style=style, raw_text=text)
     return CitationGenerateResponse(**result)
+
+# ============================================================
+# Methodology
+# ============================================================
+@app.post("/api/methodology/extract",
+          response_model=MethodologyExtractResponse,
+          tags=["Methodology"])
+async def methodology_extract(req: MethodologyExtractRequest):
+    data = await methodology_service.extract(req.text)
+    return MethodologyExtractResponse(data=MethodologyData(**data))
+
+
+@app.post("/api/methodology/save",
+          response_model=MethodologyOut,
+          tags=["Methodology"])
+def methodology_save(req: MethodologySaveRequest, db: Session = Depends(get_db)):
+    row = methodology_service.save(
+        db,
+        raw_text=req.raw_text or req.data.raw_highlighted_text,
+        data=req.data.model_dump(),
+        paper_title=req.paper_title,
+        user_id=req.user_id,
+    )
+    return MethodologyOut(
+        id=row.id,
+        paper_title=row.paper_title,
+        raw_text=row.raw_text,
+        data=MethodologyData(**methodology_service.to_data_dict(row)),
+        created_at=row.created_at,
+    )
+
+
+@app.get("/api/methodology/history", tags=["Methodology"])
+def methodology_history(user_id: str | None = None, db: Session = Depends(get_db)):
+    rows = methodology_service.list_all(db, user_id=user_id)
+    return {"items": [
+        {
+            "id": str(r.id),
+            "paper_title": r.paper_title,
+            "summary": r.summary,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]}
+
+
+@app.delete("/api/methodology/{m_id}", tags=["Methodology"])
+def methodology_delete(m_id: UUID, db: Session = Depends(get_db)):
+    if not methodology_service.delete(db, m_id):
+        raise HTTPException(404, "Methodology not found")
+    return {"deleted": True}

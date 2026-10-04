@@ -325,7 +325,47 @@ class CitationRequest(BaseModel):
 class CitationResponse(BaseModel):
     citation: str
     
-    
+
+class MethodologyData(BaseModel):
+    study_type: str = ""
+    design: str = ""
+    sample_size: str = ""
+    sampling_method: str = ""
+    data_collection: str = ""
+    analysis_method: str = ""
+    databases_searched: str = ""
+    inclusion_criteria: str = ""
+    exclusion_criteria: str = ""
+    studies_included_count: str = ""
+    additional_notes: str = ""
+    raw_highlighted_text: str = ""
+
+
+class MethodologyExtractRequest(BaseModel):
+    text: str = Field(..., min_length=10, max_length=50000)
+    paper_title: Optional[str] = None
+
+
+class MethodologyExtractResponse(BaseModel):
+    data: MethodologyData
+
+
+class MethodologySaveRequest(BaseModel):
+    paper_title: Optional[str] = None
+    raw_text: str = ""
+    data: MethodologyData
+    user_id: Optional[str] = None
+
+
+class MethodologyOut(BaseModel):
+    id: uuid.UUID
+    paper_title: Optional[str]
+    raw_text: str
+    data: MethodologyData
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================

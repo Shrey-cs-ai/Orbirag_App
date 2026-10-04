@@ -26,6 +26,7 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
   MethodologyData? _extractedData;
   bool _isExtracting = false;
   bool _hasExtracted = false;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -45,26 +46,53 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
     setState(() {
       _isExtracting = true;
       _hasExtracted = false;
+      _extractedData = null;
     });
 
-    final result = await _service.extractMethodology(text);
+    final result = await _service.extractMethodology(
+      text,
+      paperTitle: widget.paperTitle,
+    );
 
     if (!mounted) return;
+
     setState(() {
-      _extractedData = result ?? MethodologyData(rawHighlightedText: text);
+      // Always keep raw_highlighted_text = the original pasted text
+      _extractedData = result != null
+          ? (result..rawHighlightedText = text)
+          : MethodologyData(rawHighlightedText: text);
       _isExtracting = false;
       _hasExtracted = true;
     });
 
     if (result == null) {
       _showMessage('Could not auto-extract. Please fill in manually.');
+    } else {
+      _showMessage('✅ Fields extracted successfully');
     }
   }
 
-  void _saveMethodology(MethodologyData data) async {
-    final success = await _service.saveMethodology(data);
+  Future<void> _saveMethodology(MethodologyData data) async {
+    setState(() => _isSaving = true);
+
+    final success = await _service.saveMethodology(
+      data,
+      paperTitle: widget.paperTitle,
+      rawText: _textController.text.trim(),
+    );
+
     if (!mounted) return;
+    setState(() => _isSaving = false);
+
     _showMessage(success ? '✅ Methodology saved' : '❌ Save failed');
+  }
+
+  void _clearAll() {
+    setState(() {
+      _textController.clear();
+      _extractedData = null;
+      _hasExtracted = false;
+    });
   }
 
   void _showMessage(String msg) {
@@ -125,6 +153,12 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
         ),
         centerTitle: true,
         actions: [
+          if (_hasExtracted)
+            IconButton(
+              tooltip: 'Clear',
+              icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
+              onPressed: _clearAll,
+            ),
           IconButton(
             icon: const Icon(Icons.bolt_outlined, color: AppColors.textPrimary),
             onPressed: () {
@@ -149,7 +183,8 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              widget.paperTitle ?? 'Paste the methods section to extract structured fields',
+              widget.paperTitle ??
+                  'Paste the methods section to extract structured fields',
               style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
@@ -194,6 +229,32 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
             // RESULT FORM
             if (_hasExtracted && _extractedData != null) ...[
               const SizedBox(height: 24),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    size: 18,
+                    color: AppColors.success,
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Extracted Fields',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_isSaving)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
               MethodologyForm(
                 initialData: _extractedData!,
                 onSave: _saveMethodology,
@@ -220,17 +281,28 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.description_outlined,
-                  size: 16, color: AppColors.primary),
-              SizedBox(width: 6),
-              Text(
+              const Icon(
+                Icons.description_outlined,
+                size: 16,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 6),
+              const Text(
                 'Methods Section Text',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                   color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_textController.text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -239,11 +311,15 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
           TextField(
             controller: _textController,
             maxLines: 6,
+            onChanged: (_) => setState(() {}), // update word count live
             style: const TextStyle(fontSize: 14, height: 1.5),
             decoration: const InputDecoration(
               hintText:
                   'Paste the highlighted methods text from the paper here...',
-              hintStyle: TextStyle(color: AppColors.hintText, fontSize: 14),
+              hintStyle: TextStyle(
+                color: AppColors.hintText,
+                fontSize: 14,
+              ),
               border: InputBorder.none,
               contentPadding: EdgeInsets.zero,
             ),
@@ -251,12 +327,20 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
           const SizedBox(height: 8),
           const Row(
             children: [
-              Icon(Icons.auto_awesome,
-                  size: 12, color: AppColors.purple),
+              Icon(
+                Icons.auto_awesome,
+                size: 12,
+                color: AppColors.purple,
+              ),
               SizedBox(width: 4),
-              Text(
-                'AI will extract structured fields from this text',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              Expanded(
+                child: Text(
+                  'AI will extract structured fields from this text',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
             ],
           ),
