@@ -237,6 +237,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     
+    papers = relationship("Paper", back_populates="user", cascade="all, delete-orphan")
+    citations = relationship("Citation", back_populates="user", cascade="all, delete-orphan")
 #plagiarismCheck model
 class PlagiarismCheck(Base):
     __tablename__ = "plagiarism_checks"

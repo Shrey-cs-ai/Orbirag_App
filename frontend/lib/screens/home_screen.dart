@@ -434,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const CitationGenerationScreen()),
+                    builder: (_) => const CitationGeneratorScreen()),
               ),
             ),
             _toolCard(
@@ -677,7 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const CitationGenerationScreen()),
+                    builder: (_) => const CitationGeneratorScreen()),
               ),
             ),
             _toolCard(

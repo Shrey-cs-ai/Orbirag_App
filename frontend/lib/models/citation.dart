@@ -34,11 +34,14 @@ class Citation {
       style: json['style'] ?? '',
       inTextCitation: json['in_text'] ?? '',
       referenceList: json['reference_list'] ?? '',
-      savedAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-    );
+      savedAt: json['saved_at'] != null
+            ? DateTime.parse(json['saved_at'])
+            : DateTime.now(),
+      );
   }
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'title': title,
         'authors': authors,
         'year': year,
@@ -47,5 +50,6 @@ class Citation {
         'style': style,
         'in_text': inTextCitation,
         'reference_list': referenceList,
+        'saved_at': savedAt.toIso8601String(),
       };
 }

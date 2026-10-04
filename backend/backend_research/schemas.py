@@ -98,18 +98,35 @@ class SavedPaper(BaseModel):
 # Citation Generator
 # ============================================================
 
-class CitationRequest(BaseModel):
-    doi_or_url: str
-    style: Literal["APA 7", "MLA 9", "Chicago", "IEEE", "Harvard"] = "APA 7"
+class CitationMetadata(BaseModel):
+    title: str = ""
+    authors: str = ""
+    year: str = ""
+    journal: str = ""
+    publisher: str = ""
+    doi: str = ""
+    url: str = ""
 
 
-class CitationResponse(BaseModel):
-    title: str
-    authors: str
-    year: str
-    journal: str
+class CitationGenerateRequest(BaseModel):
+    source: str = Field(..., pattern="^(pdf|url|manual)$")
+    style: str = Field(default="APA 7")
+
+    # For source == "url"
+    url: Optional[str] = None
+
+    # For source == "manual"
+    metadata: Optional[CitationMetadata] = None
+
+    # For source == "pdf" this is a separate multipart upload —
+    # not part of this JSON schema (see /generate-pdf route)
+
+
+class CitationGenerateResponse(BaseModel):
+    metadata: CitationMetadata
+    style: str
     in_text: str
-    reference: str
+    reference_list: str
 
 # ============================================================
 # Literature Retrieval
@@ -307,6 +324,8 @@ class CitationRequest(BaseModel):
 
 class CitationResponse(BaseModel):
     citation: str
+    
+    
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================

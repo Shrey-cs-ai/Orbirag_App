@@ -7,6 +7,7 @@ import '../models/citation.dart';
 
 class CitationService {
   static final CitationService instance = CitationService._internal();
+  factory CitationService() => instance;   // ✅ public access to singleton
   CitationService._internal();
 
   // ============================================================
@@ -30,13 +31,12 @@ class CitationService {
   int get citationsCount => _citations.length;
 
   // ============================================================
-  // Initialize — load from local cache, then refresh from backend
+  // Initialize
   // ============================================================
   Future<void> initialize() async {
     if (_isInitialized) return;
     await _loadFromPrefs();
     _isInitialized = true;
-    // Fire-and-forget backend sync
     listCitations();
   }
 
@@ -80,11 +80,9 @@ class CitationService {
   // SAVE — POST backend + local cache
   // ============================================================
   Future<bool> saveCitation(Citation citation) async {
-    // 1. Add locally first (UI feedback is instant)
     _citations.insert(0, citation);
     await _saveToPrefs();
 
-    // 2. Send to backend
     try {
       debugPrint('[Citation] POST $baseUrl/api/citations/save');
 
@@ -127,7 +125,7 @@ class CitationService {
         await _saveToPrefs();
         return _citations;
       }
-      return _citations; // fallback to local cache
+      return _citations;
     } catch (e) {
       debugPrint('[Citation] listCitations exception: $e');
       return _citations;
@@ -138,11 +136,9 @@ class CitationService {
   // DELETE — backend + local
   // ============================================================
   Future<bool> deleteCitation(String id) async {
-    // Local first
     _citations.removeWhere((c) => c.id == id);
     await _saveToPrefs();
 
-    // Then backend
     try {
       debugPrint('[Citation] DELETE $baseUrl/api/citations/$id');
 
@@ -214,5 +210,130 @@ class CitationService {
   void clearCache() {
     _citations.clear();
     _saveToPrefs();
+  }
+
+  // ============================================================
+  // GENERATE — from URL
+  // ============================================================
+  Future<Map<String, dynamic>?> generateFromUrl(String url, String style) async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse('$baseUrl/api/citations/generate'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'source': 'url',
+              'style': style,
+              'url': url,
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (r.statusCode != 200) {
+        debugPrint(
+            '[Citation] generateFromUrl failed: ${r.statusCode} ${r.body}');
+        return null;
+      }
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[Citation] generateFromUrl exception: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
+  // GENERATE — from manual entry
+  // ============================================================
+  Future<Map<String, dynamic>?> generateManual({
+    required String title,
+    required String authors,
+    String year = '',
+    String journal = '',
+    String publisher = '',
+    String doi = '',
+    String url = '',
+    String style = 'APA 7',
+  }) async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse('$baseUrl/api/citations/generate'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'source': 'manual',
+              'style': style,
+              'metadata': {
+                'title': title,
+                'authors': authors,
+                'year': year,
+                'journal': journal,
+                'publisher': publisher,
+                'doi': doi,
+                'url': url,
+              },
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (r.statusCode != 200) {
+        debugPrint(
+            '[Citation] generateManual failed: ${r.statusCode} ${r.body}');
+        return null;
+      }
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[Citation] generateManual exception: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
+  // GENERATE — from PDF upload
+  // ============================================================
+  Future<Map<String, dynamic>?> generateFromPdf(
+    String filePath,
+    String style,
+  ) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/citations/generate-pdf');
+      final req = http.MultipartRequest('POST', uri);
+      req.fields['style'] = style;
+      req.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+      final streamed = await req.send().timeout(const Duration(seconds: 90));
+      final r = await http.Response.fromStream(streamed);
+
+      if (r.statusCode != 200) {
+        debugPrint(
+            '[Citation] generateFromPdf failed: ${r.statusCode} ${r.body}');
+        return null;
+      }
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[Citation] generateFromPdf exception: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
+  // Build a Citation object from a generate() response
+  // ============================================================
+  Citation citationFromGenerateResponse(
+    Map<String, dynamic> res, {
+    required String sourceType,
+  }) {
+    final meta = (res['metadata'] ?? {}) as Map<String, dynamic>;
+    return Citation(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: (meta['title'] ?? '').toString(),
+      authors: (meta['authors'] ?? '').toString(),
+      year: (meta['year'] ?? '').toString(),
+      journal: (meta['journal'] ?? '').toString(),
+      sourceType: sourceType,
+      style: (res['style'] ?? 'APA 7').toString(),
+      inTextCitation: (res['in_text'] ?? '').toString(),
+      referenceList: (res['reference_list'] ?? '').toString(),
+      savedAt: DateTime.now(),
+    );
   }
 }

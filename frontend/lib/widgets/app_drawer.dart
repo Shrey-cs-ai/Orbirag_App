@@ -127,8 +127,8 @@ class AppDrawer extends StatelessWidget {
                   _item(
                     context,
                     icon: Icons.format_quote,
-                    title: "Citation Generation",
-                    screen: const CitationGenerationScreen(),
+                    title: "Citation Generator",
+                    screen: const CitationGeneratorScreen(),
                   ),
                   _item(
                     context,

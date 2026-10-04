@@ -11,7 +11,7 @@ from models import User
 from services.search_service import search_semantic_scholar
 from services.ai_service import build_search_query, summarize_paper
 from schemas import (
-    BuildQueryRequest, BuildQueryResponse,
+    BuildQueryRequest, BuildQueryResponse, CitationGenerateRequest, CitationGenerateResponse,
     SearchRequest, SearchResponse, PaperResult,
 )
 from fastapi import Depends
@@ -53,6 +53,9 @@ from schemas import (
     CitationRequest, CitationResponse,
 )
 from services import plagiarism_service
+
+from services import citation_service
+
 
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
@@ -808,3 +811,53 @@ def plagiarism_delete(check_id: UUID, db: Session = Depends(get_db)):
     if not plagiarism_service.delete_check(db, check_id):
         raise HTTPException(404, "Check not found")
     return {"deleted": True}
+
+#citation generation endpoints
+# ---------- Generate from URL or Manual ----------
+@app.post("/api/citations/generate", response_model=CitationGenerateResponse, tags=["Citations"])
+async def generate_citation(req: CitationGenerateRequest):
+    """
+    Generate a citation from:
+      - source="url"    → uses req.url
+      - source="manual" → uses req.metadata
+    """
+    if req.source == "url":
+        if not req.url:
+            raise HTTPException(400, "url is required when source='url'")
+        result = await citation_service.generate(
+            style=req.style,
+            url=req.url,
+        )
+    elif req.source == "manual":
+        if not req.metadata:
+            raise HTTPException(400, "metadata is required when source='manual'")
+        result = await citation_service.generate(
+            style=req.style,
+            metadata=req.metadata.model_dump(),
+        )
+    else:
+        raise HTTPException(400, "Use /generate-pdf for PDF source")
+
+    return CitationGenerateResponse(**result)
+
+
+# ---------- Generate from PDF upload ----------
+@app.post("/api/citations/generate-pdf", response_model=CitationGenerateResponse, tags=["Citations"])
+async def generate_citation_from_pdf(
+    file: UploadFile = File(...),
+    style: str = Form("APA 7"),
+):
+    """Extract text from an uploaded PDF and produce a citation."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported")
+
+    pdf_bytes = await file.read()
+    if len(pdf_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(413, "PDF too large (max 20 MB)")
+
+    text = citation_service.extract_text_from_pdf(pdf_bytes)
+    if not text.strip():
+        raise HTTPException(400, "Could not extract text from PDF")
+
+    result = await citation_service.generate(style=style, raw_text=text)
+    return CitationGenerateResponse(**result)
