@@ -24,7 +24,7 @@ def _gemini_model():
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY not set")
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")
+    return genai.GenerativeModel("gemini-3.8-flash")
 
 
 _EXTRACT_PROMPT = """You are an academic methods-section analyzer.

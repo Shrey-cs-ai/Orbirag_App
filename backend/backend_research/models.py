@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, Float,
-    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, Uuid,func
+    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, Uuid, func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -28,8 +28,7 @@ class Paper(Base):
     __tablename__ = "papers"
 
     id          = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    user_id     = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"),
-                         nullable=False, index=True)
+    user_id     = Column(String(64), nullable=True, index=True)
     title       = Column(Text, nullable=False)
     authors     = Column(Text)
     year        = Column(String)
@@ -44,8 +43,6 @@ class Paper(Base):
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    user = relationship("User", back_populates="papers")
-
     __table_args__ = (
         CheckConstraint("status IN ('unread','reading','analyzed')", name="papers_status_check"),
     )
@@ -59,8 +56,7 @@ class Citation(Base):
     __tablename__ = "citations"
 
     id             = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    user_id        = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"),
-                            nullable=False, index=True)
+    user_id        = Column(String(64), nullable=True, index=True)
     title          = Column(Text, nullable=False)
     authors        = Column(Text)
     year           = Column(String)
@@ -71,8 +67,6 @@ class Citation(Base):
     reference_list = Column(Text)
     created_at     = Column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="citations")
-
 
 # ============================================================
 # CHAT
@@ -82,8 +76,7 @@ class ChatConversation(Base):
     __tablename__ = "chat_conversations"
 
     id            = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    user_id       = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"),
-                           nullable=False, index=True)
+    user_id       = Column(String(64), nullable=True, index=True)
     title         = Column(Text, default="New Conversation")
     paper_id      = Column(UUID(as_uuid=False), ForeignKey("papers.id", ondelete="SET NULL"),
                            nullable=True)
@@ -92,7 +85,6 @@ class ChatConversation(Base):
     updated_at    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     archived_at   = Column(DateTime, nullable=True)
 
-    user     = relationship("User", back_populates="chats")
     messages = relationship("ChatMessage", back_populates="conversation",
                             cascade="all, delete-orphan",
                             order_by="ChatMessage.created_at")
@@ -126,8 +118,7 @@ class ScopingSession(Base):
     __tablename__ = "scoping_sessions"
 
     id                = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    user_id           = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"),
-                               nullable=False, index=True)
+    user_id           = Column(String(64), nullable=True, index=True)
     raw_topic         = Column(Text, nullable=False)
     population        = Column(Text)
     intervention      = Column(Text)
@@ -139,8 +130,6 @@ class ScopingSession(Base):
     created_at        = Column(DateTime, default=datetime.utcnow)
     updated_at        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at      = Column(DateTime, nullable=True)
-
-    user = relationship("User", back_populates="scopings")
 
     __table_args__ = (
         CheckConstraint("status IN ('draft','completed','searched','archived')",
@@ -156,8 +145,7 @@ class Search(Base):
     __tablename__ = "searches"
 
     id            = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    user_id       = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"),
-                           nullable=False, index=True)
+    user_id       = Column(String(64), nullable=True, index=True)
     topic         = Column(Text, nullable=False)
     boolean_query = Column(Text)
     keywords      = Column(JSON)
@@ -167,7 +155,6 @@ class Search(Base):
     result_count  = Column(Integer, default=0)
     created_at    = Column(DateTime, default=datetime.utcnow)
 
-    user    = relationship("User", backref="searches")
     results = relationship("SearchResult", back_populates="search",
                            cascade="all, delete-orphan")
 
@@ -194,6 +181,7 @@ class SearchResult(Base):
 
     search = relationship("Search", back_populates="results")
 
+
 # LITERATURE SEARCH
 class LibraryItem(Base):
     __tablename__ = "library_items"
@@ -206,6 +194,7 @@ class LibraryItem(Base):
     is_pinned = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 
 #notes
 class Note(Base):
@@ -223,7 +212,8 @@ class Note(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    
+
+
 #user model
 class User(Base):
     __tablename__ = "users"
@@ -236,9 +226,8 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
-    
-    papers = relationship("Paper", back_populates="user", cascade="all, delete-orphan")
-    citations = relationship("Citation", back_populates="user", cascade="all, delete-orphan")
+
+
 #plagiarismCheck model
 class PlagiarismCheck(Base):
     __tablename__ = "plagiarism_checks"
@@ -249,6 +238,7 @@ class PlagiarismCheck(Base):
     similarity_score = Column(String(8), nullable=False)   # e.g. "18%"
     matches = Column(JSON, nullable=False, default=list)   # list of matched dicts
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
 
 class Methodology(Base):
     __tablename__ = "methodologies"

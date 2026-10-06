@@ -5,6 +5,7 @@ python-multipart==0.0.17
 
 # AI providers
 google-genai==1.0.0
+google-generativeai
 deepgram-sdk==3.7.0
 
 # Embeddings + vector search

@@ -8,6 +8,15 @@ Notes:
 """
 
 import os
+
+if hasattr(os, "add_dll_directory"):
+    for pg_bin in [r"C:\Program Files\PostgreSQL\18\bin", r"C:\Program Files\PostgreSQL\17\bin", r"C:\Program Files\PostgreSQL\16\bin"]:
+        if os.path.isdir(pg_bin):
+            try:
+                os.add_dll_directory(pg_bin)
+            except Exception:
+                pass
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 

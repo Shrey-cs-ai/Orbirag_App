@@ -19,7 +19,8 @@ from models import (
 # ============================================================
 
 def get_user_by_firebase_uid(db: Session, firebase_uid: str) -> Optional[User]:
-    return db.query(User).filter(User.firebase_uid == firebase_uid).first()
+    # Treat firebase_uid as the username field
+    return db.query(User).filter(User.username == firebase_uid).first()
 
 
 def upsert_user(db: Session, firebase_uid: str, email: str = None,
@@ -27,18 +28,15 @@ def upsert_user(db: Session, firebase_uid: str, email: str = None,
     user = get_user_by_firebase_uid(db, firebase_uid)
     if user is None:
         user = User(
-            firebase_uid=firebase_uid,
+            username=firebase_uid,
             email=email,
-            display_name=display_name,
-            role=role,
+            password_hash="placeholder-no-login",
+            role=role or "user",
+            is_active=True,
         )
         db.add(user)
-    else:
-        if email:        user.email = email
-        if display_name: user.display_name = display_name
-        if role:         user.role = role
-    db.commit()
-    db.refresh(user)
+        db.commit()
+        db.refresh(user)
     return user
 
 

@@ -6,6 +6,7 @@ Orbirag FastAPI backend — Phase 1 + Phase 2 (RAG).
 # STEP 1: Load .env BEFORE importing services
 # ============================================================
 import os
+import asyncio  
 from pathlib import Path
 from models import User
 from services.search_service import search_semantic_scholar
@@ -112,7 +113,7 @@ app = FastAPI(title="Orbirag API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -301,55 +302,6 @@ async def search_route(req: SearchRequest):
 @app.post("/api/save-paper", tags=["Literature"])
 async def save_paper_route(req: SavePaperRequest):
     """Save a paper to the user's library (Postgres)."""
-    print(f"[Literature] save-paper: {req.title[:80]}")
-
-    try:
-        from database import SessionLocal
-        from db_queries import save_paper
-
-        db = SessionLocal()
-        try:
-            save_paper(
-                db,
-                user_id="anonymous",   # TODO: wire up Firebase UID
-                data={
-                    "title": req.title,
-                    "authors": req.authors,
-                    "year": req.year,
-                    "source": req.source,
-                    "citations": req.citations,
-                    "journal": req.venue,
-                    "abstract": req.abstract,
-                    "url": req.url,
-                },
-            )
-            return {"success": True}
-        finally:
-            db.close()
-    except Exception as e:
-        print(f"[Literature] save-paper error: {e}")
-        raise HTTPException(500, f"Save failed: {e}")
-# ============================================================
-# Save Paper to Library
-# ============================================================
-from pydantic import BaseModel, Field
-from typing import Optional, List
-
-class SavePaperRequest(BaseModel):
-    title: str
-    authors: Optional[str] = ""
-    year: Optional[str] = ""
-    source: Optional[str] = ""
-    citations: Optional[int] = 0
-    ai_summary: Optional[str] = ""
-    url: Optional[str] = ""
-    abstract: Optional[str] = ""
-    venue: Optional[str] = ""
-
-
-@app.post("/api/save-paper")
-async def save_paper_route(req: SavePaperRequest):
-    """Save a paper to the user's library (Postgres)."""
     try:
         from database import SessionLocal
         from db_queries import save_paper
@@ -373,6 +325,7 @@ async def save_paper_route(req: SavePaperRequest):
         finally:
             db.close()
     except Exception as e:
+        print(f"[Literature] save-paper error: {e}")
         raise HTTPException(500, f"Save failed: {e}")
 
 # ============================================================
@@ -407,12 +360,12 @@ async def save_citation_route(
 
         db = SessionLocal()
         try:
-            # Ensure the user row exists (FK requirement)
-            user = upsert_user(db, firebase_uid=user_id, display_name="Anonymous")
+            # Ensure the user row exists
+            upsert_user(db, firebase_uid=user_id, display_name="Anonymous")
 
             save_citation(
                 db,
-                user_id=user.id,   # UUID from the users table
+                user_id=user_id,
                 data={
                     "title": req.title,
                     "authors": req.authors,
@@ -439,15 +392,11 @@ async def list_citations_route(user_id: str = "anonymous"):
 
     try:
         from database import SessionLocal
-        from db_queries import list_citations, get_user_by_firebase_uid
+        from db_queries import list_citations
 
         db = SessionLocal()
         try:
-            user = get_user_by_firebase_uid(db, user_id)
-            if not user:
-                return {"citations": []}
-
-            rows = list_citations(db, user_id=user.id)
+            rows = list_citations(db, user_id=user_id)
             return {
                 "citations": [
                     {
@@ -700,82 +649,25 @@ def admin_delete_user(
 # ============================================================
 @app.post("/api/plagiarism/check", response_model=PlagiarismCheckResponse, tags=["Plagiarism"])
 async def plagiarism_check(payload: PlagiarismCheckRequest, db: Session = Depends(get_db)):
-    result = await plagiarism_service.analyze_text(payload.text)
-    row = plagiarism_service.save_check(
-        db,
-        text=payload.text,
-        similarity_score=result["similarity_score"],
-        matches=result["matches"],
-        user_id=payload.user_id,
-    )
-    return PlagiarismCheckResponse(
-        id=row.id,
-        similarity_score=row.similarity_score,
-        matches=row.matches,
-        created_at=row.created_at,
-    )
-
-
-@app.post("/api/plagiarism/paraphrase", response_model=RewriteResponse, tags=["Plagiarism"])
-async def plagiarism_paraphrase(payload: RewriteRequest):
-    result = await plagiarism_service.rewrite_text(payload.text, "paraphrase")
-    return RewriteResponse(result=result)
-
-
-@app.post("/api/plagiarism/humanize", response_model=RewriteResponse, tags=["Plagiarism"])
-async def plagiarism_humanize(payload: RewriteRequest):
-    result = await plagiarism_service.rewrite_text(payload.text, "humanize")
-    return RewriteResponse(result=result)
-
-
-@app.post("/api/plagiarism/cite", response_model=CitationResponse, tags=["Plagiarism"])
-def plagiarism_cite(payload: CitationRequest):
-    citation = plagiarism_service.format_citation(
-        payload.source, payload.year, payload.style
-    )
-    return CitationResponse(citation=citation)
-
-
-@app.get("/api/plagiarism/history", tags=["Plagiarism"])
-def plagiarism_history(user_id: str | None = None, db: Session = Depends(get_db)):
-    rows = plagiarism_service.list_checks(db, user_id=user_id)
-    return {"items": [
-        {
-            "id": str(r.id),
-            "similarity_score": r.similarity_score,
-            "matches_count": len(r.matches or []),
-            "created_at": r.created_at,
-        }
-        for r in rows
-    ]}
-
-
-@app.delete("/api/plagiarism/{check_id}", tags=["Plagiarism"])
-def plagiarism_delete(check_id: UUID, db: Session = Depends(get_db)):
-    if not plagiarism_service.delete_check(db, check_id):
-        raise HTTPException(404, "Check not found")
-    return {"deleted": True}
-
-# ============================================================
-# Plagiarism  (single block — service-based, saves to DB)
-# ============================================================
-@app.post("/api/plagiarism/check", response_model=PlagiarismCheckResponse, tags=["Plagiarism"])
-async def plagiarism_check(payload: PlagiarismCheckRequest, db: Session = Depends(get_db)):
-    result = await plagiarism_service.analyze_text(payload.text)
-    row = plagiarism_service.save_check(
-        db,
-        text=payload.text,
-        similarity_score=result["similarity_score"],
-        matches=result["matches"],
-        user_id=payload.user_id,
-    )
-    return PlagiarismCheckResponse(
-        id=row.id,
-        similarity_score=row.similarity_score,
-        matches=row.matches,
-        created_at=row.created_at,
-    )
-
+    try:
+        result = await plagiarism_service.analyze_text(payload.text)
+        row = plagiarism_service.save_check(
+            db,
+            text=payload.text,
+            similarity_score=result["similarity_score"],
+            matches=result["matches"],
+            user_id=payload.user_id,
+        )
+        return PlagiarismCheckResponse(
+            id=row.id,
+            similarity_score=row.similarity_score,
+            matches=row.matches,
+            created_at=row.created_at,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 @app.post("/api/plagiarism/paraphrase", response_model=RewriteResponse, tags=["Plagiarism"])
 async def plagiarism_paraphrase(payload: RewriteRequest):

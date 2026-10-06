@@ -44,37 +44,39 @@ async def transcribe_audio(audio_bytes: bytes, language: str = "en") -> dict:
         raise RuntimeError("DEEPGRAM_API_KEY not set in .env")
 
     try:
-        from deepgram import DeepgramClient, PrerecordedOptions
-
-        client = DeepgramClient(_api_key)
-
-        payload = {"buffer": audio_bytes}
-        options = PrerecordedOptions(
-            model="nova-2",
-            language=language,
-            smart_format=True,
-            punctuate=True,
-        )
-
-        response = client.listen.prerecorded.v("1").transcribe_file(
-            payload, options
-        )
+        try:
+            from deepgram import AsyncDeepgramClient
+            client = AsyncDeepgramClient(api_key=_api_key)
+            response = await client.listen.v1.media.transcribe_file(
+                request=audio_bytes,
+                model="nova-2",
+                language=language,
+                smart_format=True,
+                punctuate=True,
+            )
+        except (ImportError, AttributeError):
+            from deepgram import DeepgramClient, PrerecordedOptions
+            client = DeepgramClient(_api_key)
+            payload = {"buffer": audio_bytes}
+            options = PrerecordedOptions(
+                model="nova-2",
+                language=language,
+                smart_format=True,
+                punctuate=True,
+            )
+            response = client.listen.prerecorded.v("1").transcribe_file(
+                payload, options
+            )
 
         alt = response.results.channels[0].alternatives[0]
         transcript = alt.transcript or ""
         confidence = float(alt.confidence or 0.0)
-        words = len(transcript.split())
-
-        # Duration isn't always populated — use 0.0 if missing
         duration = 0.0
         try:
             duration = float(response.metadata.duration or 0.0)
         except Exception:
             pass
-
-        print(f"[Deepgram] Transcribed {len(transcript)} chars "
-              f"(confidence={confidence:.2f})")
-
+        words = len(transcript.split())
         return {
             "transcript": transcript,
             "confidence": confidence,

@@ -4,7 +4,7 @@ import '../utils/app_constants.dart';
 import 'auth_service.dart';
 
 class AdminService {
-  final String _baseUrl = AppConstants.researchBaseUrl;
+  String get _baseUrl => AppConstants.researchBaseUrl;
   final AuthService _auth = AuthService();
 
   Future<List<AuthUser>> listUsers({String? search}) async {

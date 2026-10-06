@@ -53,7 +53,7 @@ class NotesService {
   factory NotesService() => _instance;
   NotesService._internal();
 
-  final String _baseUrl = AppConstants.researchBaseUrl;
+  String get _baseUrl => AppConstants.researchBaseUrl;
   List<Note> _notes = [];
 
   List<Note> get notes => _notes;

@@ -1,16 +1,23 @@
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 /// Static strings, route names and reusable text styles.
 class AppConstants {
   AppConstants._();
-//backend url
+
+  // ---------- Dynamic Host ----------
+  static String get _host {
+    if (kIsWeb) return 'localhost';
+    if (defaultTargetPlatform == TargetPlatform.android) return '10.0.2.2';
+    return 'localhost';
+  }
 
   // ---------- Chat backend (port 8000) ----------
-  static const String chatBaseUrl = 'http://10.0.2.2:8000/api';
+  static String get chatBaseUrl => 'http://$_host:8000/api';
 
   // ---------- Research backend (port 8001) ----------
-  static const String researchBaseUrl = 'http://10.0.2.2:8001/api';
+  static String get researchBaseUrl => 'http://$_host:8001/api';
 
   // iOS simulator / web:    use 'http://localhost:PORT/api'
   // Real phone (same Wi-Fi): use 'http://<your-pc-ip>:PORT/api'

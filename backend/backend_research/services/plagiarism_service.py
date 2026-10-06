@@ -1,8 +1,8 @@
 """
 Plagiarism service: AI similarity analysis, paraphrase/humanize, citation, DB CRUD.
+Uses the multi-model fallback chain from ai_service to survive per-model quota errors.
 """
 
-import os
 import json
 import re
 from typing import List, Optional
@@ -15,27 +15,17 @@ from models import PlagiarismCheck
 
 
 # ============================================================
-# Gemini
+# Gemini helper — goes through the fallback chain
 # ============================================================
-def _gemini_model():
-    import google.generativeai as genai
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")
+async def _ask_gemini(prompt: str, json_mode: bool = False) -> str:
+    from services.ai_service import _generate_with_fallback
+    return await _generate_with_fallback(prompt, json_mode=json_mode)
 
 
+# ============================================================
+# Similarity analysis
+# ============================================================
 async def analyze_text(text: str) -> dict:
-    """
-    Returns:
-      {
-        "similarity_score": "18%",
-        "matches": [{id, text, percentage, words, source, year, excerpt}, ...]
-      }
-    """
-    model = _gemini_model()
-
     prompt = f"""You are an academic integrity analyzer.
 
 Analyze the text below for potential plagiarism. Return ONLY valid JSON in this shape:
@@ -64,15 +54,7 @@ TEXT:
 \"\"\"{text[:8000]}\"\"\"
 """
 
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.2,
-            "response_mime_type": "application/json",
-        },
-    )
-
-    raw = response.text.strip()
+    raw = (await _ask_gemini(prompt, json_mode=True)).strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE)
 
@@ -128,13 +110,8 @@ HUMANIZED:""",
 async def rewrite_text(text: str, mode: str) -> str:
     if mode not in _PROMPTS:
         raise ValueError(f"Invalid mode: {mode}")
-    model = _gemini_model()
     prompt = _PROMPTS[mode].format(text=text)
-    response = model.generate_content(
-        prompt,
-        generation_config={"temperature": 0.7},
-    )
-    return response.text.strip()
+    return (await _ask_gemini(prompt)).strip()
 
 
 # ============================================================

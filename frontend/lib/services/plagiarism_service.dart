@@ -74,7 +74,7 @@ class PlagiarismService {
   factory PlagiarismService() => _instance;
   PlagiarismService._internal();
 
-  final String _baseUrl = AppConstants.researchBaseUrl;
+  String get _baseUrl => AppConstants.researchBaseUrl;
 
   Future<PlagiarismResult> check(String text) async {
     final r = await http.post(

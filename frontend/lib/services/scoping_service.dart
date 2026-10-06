@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../utils/app_constants.dart';
 
 // ==================== MODELS ====================
 
@@ -41,7 +42,7 @@ class ScopingService {
   static final ScopingService instance = ScopingService._internal();
   ScopingService._internal();
 
-  static const String _baseUrl = 'http://10.0.2.2:8000';
+  String get _baseUrl => AppConstants.chatBaseUrl;
 
   /// Step 1: Parse topic into PICO fields using AI
   Future<ScopingData?> parseTopic(String topic) async {
@@ -50,7 +51,7 @@ class ScopingService {
     try {
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/api/ai/parse-topic'),
+            Uri.parse('$_baseUrl/ai/parse-topic'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'topic': topic}),
           )
@@ -81,7 +82,7 @@ class ScopingService {
     try {
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/api/ai/suggest'),
+            Uri.parse('$_baseUrl/ai/suggest'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'field_name': fieldName,
@@ -106,7 +107,7 @@ class ScopingService {
     try {
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/api/ai/synthesize'),
+            Uri.parse('$_baseUrl/ai/synthesize'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'population': data.population,

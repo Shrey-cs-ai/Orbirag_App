@@ -47,7 +47,7 @@ class LibraryService {
   factory LibraryService() => _instance;
   LibraryService._internal();
 
-  final String _baseUrl = AppConstants.researchBaseUrl;
+  String get _baseUrl => AppConstants.researchBaseUrl;
   List<LibraryItem> _items = [];
 
   List<LibraryItem> get items => _items;
