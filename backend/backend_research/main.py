@@ -63,6 +63,12 @@ from schemas import (
 )
 from services import methodology_service
 
+from schemas import (
+    ScopingParseRequest, ScopingSynthesizeRequest,
+    ScopingSaveRequest, ScopingSessionOut, ScopingListResponse,
+)
+from services import scoping_service
+
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
     print(f"[ENV] Loading from: {env_path}")
@@ -809,3 +815,40 @@ def methodology_delete(m_id: UUID, db: Session = Depends(get_db)):
     if not methodology_service.delete(db, m_id):
         raise HTTPException(404, "Methodology not found")
     return {"deleted": True}
+
+# ============================================================
+# Guided Topic Scoping
+# ============================================================
+@app.post("/api/scoping/parse", tags=["Scoping"])
+async def scoping_parse(req: ScopingParseRequest):
+    try:
+        data = await scoping_service.parse_topic(req.topic)
+        return data
+    except Exception as e:
+        print(f"[Scoping] parse error: {type(e).__name__}: {e}")
+        raise HTTPException(500, f"Parse failed: {e}")
+
+
+@app.post("/api/scoping/synthesize", tags=["Scoping"])
+async def scoping_synthesize(req: ScopingSynthesizeRequest):
+    try:
+        question = await scoping_service.synthesize_question(req.model_dump())
+        return {**req.model_dump(), "research_question": question}
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:
+        print(f"[Scoping] synthesize error: {type(e).__name__}: {e}")
+        raise HTTPException(500, f"Synthesize failed: {e}")
+
+
+@app.post("/api/scoping/sessions", response_model=ScopingSessionOut, tags=["Scoping"])
+def scoping_save(req: ScopingSaveRequest, db: Session = Depends(get_db)):
+    row = scoping_service.save_session(db, req.model_dump(), user_id=req.user_id)
+    return ScopingSessionOut(**scoping_service.to_dict(row))
+
+
+@app.get("/api/scoping/sessions", response_model=ScopingListResponse, tags=["Scoping"])
+def scoping_list(user_id: str | None = None, db: Session = Depends(get_db)):
+    rows = scoping_service.list_sessions(db, user_id=user_id)
+    items = [ScopingSessionOut(**scoping_service.to_dict(r)) for r in rows]
+    return ScopingListResponse(items=items, count=len(items))

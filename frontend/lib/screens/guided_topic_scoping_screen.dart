@@ -671,21 +671,33 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
         ),
         const SizedBox(height: 12),
         Center(
-          child: TextButton(
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const HomeScreen()),
-              );
-            },
-            child: const Text(
-              'Save to My Library & Exit',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
+          child: 
+          TextButton(
+  onPressed: () async {
+    _data.researchQuestion = _data.researchQuestion; // ensure latest
+
+    final ok = await _service.saveSession(_data);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? '✅ Saved to library' : '❌ Save failed'),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+      ),
+    );
+
+    if (ok) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
+  },
+  child: const Text(
+    'Save to My Library & Exit',
+    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+  ),
+),
         ),
       ],
     );

@@ -1,20 +1,18 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 import '../utils/app_constants.dart';
 
-// ==================== MODELS ====================
-
+// ============================================================
+// Model
+// ============================================================
 class ScopingData {
   String topic;
   String population;
   String intervention;
   String comparison;
   String outcome;
-  String dateRange;
-  String discipline;
-  String language;
-  bool peerReviewedOnly;
   String researchQuestion;
 
   ScopingData({
@@ -23,123 +21,116 @@ class ScopingData {
     this.intervention = '',
     this.comparison = '',
     this.outcome = '',
-    this.dateRange = '2015-2025',
-    this.discipline = 'All',
-    this.language = 'English',
-    this.peerReviewedOnly = true,
     this.researchQuestion = '',
   });
 
-  bool get isComplete =>
-      population.isNotEmpty &&
-      intervention.isNotEmpty &&
-      outcome.isNotEmpty;
+  factory ScopingData.fromJson(Map<String, dynamic> j) => ScopingData(
+        topic: (j['topic'] ?? '').toString(),
+        population: (j['population'] ?? '').toString(),
+        intervention: (j['intervention'] ?? '').toString(),
+        comparison: (j['comparison'] ?? '').toString(),
+        outcome: (j['outcome'] ?? '').toString(),
+        researchQuestion: (j['research_question'] ?? '').toString(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'topic': topic,
+        'population': population,
+        'intervention': intervention,
+        'comparison': comparison,
+        'outcome': outcome,
+        'research_question': researchQuestion,
+      };
 }
 
-// ==================== SERVICE ====================
-
+// ============================================================
+// Service
+// ============================================================
 class ScopingService {
   static final ScopingService instance = ScopingService._internal();
+  factory ScopingService() => instance;
   ScopingService._internal();
 
-  String get _baseUrl => AppConstants.chatBaseUrl;
+  String get baseUrl {
+    if (kIsWeb) return 'http://localhost:8001';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8001';
+    }
+    return 'http://localhost:8001';
+  }
 
-  /// Step 1: Parse topic into PICO fields using AI
   Future<ScopingData?> parseTopic(String topic) async {
-    if (topic.trim().isEmpty) return null;
-
     try {
-      final response = await http
+      final r = await http
           .post(
-            Uri.parse('$_baseUrl/ai/parse-topic'),
+            Uri.parse('$baseUrl/api/scoping/parse'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'topic': topic}),
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return ScopingData(
-          topic: topic,
-          population: data['population'] ?? '',
-          intervention: data['intervention'] ?? '',
-          comparison: data['comparison'] ?? '',
-          outcome: data['outcome'] ?? '',
-        );
+      if (r.statusCode != 200) {
+        debugPrint('[Scoping] parse failed: ${r.statusCode} ${r.body}');
+        return null;
       }
+      return ScopingData.fromJson(jsonDecode(r.body));
     } catch (e) {
-      debugPrint('Parse error: $e');
+      debugPrint('[Scoping] parse exception: $e');
+      return null;
     }
-    return ScopingData(topic: topic);
   }
 
-  /// Step 2: Get AI suggestions for a field
-  Future<List<String>> getSuggestions({
-    required String fieldName,
-    required String fieldValue,
-    required String topic,
-  }) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/ai/suggest'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'field_name': fieldName,
-              'field_value': fieldValue,
-              'topic': topic,
-            }),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return List<String>.from(data['suggestions'] ?? []);
-      }
-    } catch (e) {
-      debugPrint('Suggestions error: $e');
-    }
-    return [];
-  }
-
-  /// Step 3: Synthesize research question from PICO
   Future<String?> synthesizeQuestion(ScopingData data) async {
     try {
-      final response = await http
+      final r = await http
           .post(
-            Uri.parse('$_baseUrl/ai/synthesize'),
+            Uri.parse('$baseUrl/api/scoping/synthesize'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'population': data.population,
-              'intervention': data.intervention,
-              'comparison': data.comparison,
-              'outcome': data.outcome,
-            }),
+            body: jsonEncode(data.toJson()),
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        return responseData['question'];
+      if (r.statusCode != 200) {
+        debugPrint('[Scoping] synthesize failed: ${r.statusCode} ${r.body}');
+        return null;
       }
+      final json = jsonDecode(r.body) as Map<String, dynamic>;
+      return (json['research_question'] ?? '').toString();
     } catch (e) {
-      debugPrint('Synthesis error: $e');
+      debugPrint('[Scoping] synthesize exception: $e');
+      return null;
     }
-    // Fallback: build manually
-    return _buildFallbackQuestion(data);
   }
 
-  String _buildFallbackQuestion(ScopingData data) {
-    final buffer = StringBuffer('How does ');
-    if (data.intervention.isNotEmpty) buffer.write(data.intervention);
-    if (data.comparison.isNotEmpty) {
-      buffer.write(' compared to ${data.comparison}');
+  Future<bool> saveSession(ScopingData data) async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse('$baseUrl/api/scoping/sessions'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({...data.toJson(), 'user_id': 'anonymous'}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      return r.statusCode == 200;
+    } catch (e) {
+      debugPrint('[Scoping] save exception: $e');
+      return false;
     }
-    if (data.outcome.isNotEmpty) buffer.write(' affect ${data.outcome}');
-    if (data.population.isNotEmpty) {
-      buffer.write(' in ${data.population}');
+  }
+
+  Future<List<ScopingData>> listSessions() async {
+    try {
+      final r = await http
+          .get(Uri.parse('$baseUrl/api/scoping/sessions?user_id=anonymous'))
+          .timeout(const Duration(seconds: 30));
+      if (r.statusCode != 200) return [];
+      final json = jsonDecode(r.body) as Map<String, dynamic>;
+      final items = (json['items'] as List? ?? []);
+      return items.map((e) => ScopingData.fromJson(e)).toList();
+    } catch (e) {
+      debugPrint('[Scoping] list exception: $e');
+      return [];
     }
-    buffer.write('?');
-    return buffer.toString();
   }
 }

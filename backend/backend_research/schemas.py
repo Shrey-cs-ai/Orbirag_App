@@ -347,6 +347,48 @@ class MethodologyOut(BaseModel):
 
     class Config:
         from_attributes = True
+        
+# ============================================================
+# Guided Topic Scoping
+# ============================================================
+class ScopingPayload(BaseModel):
+    topic: str = ""
+    population: str = ""
+    intervention: str = ""
+    comparison: str = ""
+    outcome: str = ""
+    research_question: str = ""
+
+
+class ScopingParseRequest(BaseModel):
+    topic: str = Field(..., min_length=3, max_length=1000)
+
+
+class ScopingSynthesizeRequest(ScopingPayload):
+    pass
+
+
+class ScopingSaveRequest(ScopingPayload):
+    user_id: Optional[str] = None
+
+
+class ScopingSessionOut(BaseModel):
+    id: uuid.UUID
+    topic: str
+    population: str
+    intervention: str
+    comparison: str
+    outcome: str
+    research_question: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScopingListResponse(BaseModel):
+    items: List[ScopingSessionOut]
+    count: int
 # ============================================================
 # Legacy aliases (in case older code imports these)
 # ============================================================
