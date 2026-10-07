@@ -13,7 +13,6 @@ from sqlalchemy import desc
 
 from models import PlagiarismCheck
 
-
 # ============================================================
 # Gemini helper — goes through the fallback chain
 # ============================================================

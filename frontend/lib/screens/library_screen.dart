@@ -5,7 +5,7 @@ import '../services/library_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
-import 'new_notes_screen.dart';
+import 'new_library_item_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -140,7 +140,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Future<void> _openNewNote() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const NewNoteScreen()),
+      MaterialPageRoute(builder: (_) => const NewLibraryItemScreen()),
     );
     if (result == true) {
       await _loadItems();

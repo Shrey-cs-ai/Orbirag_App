@@ -310,29 +310,80 @@ async def save_paper_route(req: SavePaperRequest):
     """Save a paper to the user's library (Postgres)."""
     try:
         from database import SessionLocal
-        from db_queries import save_paper
+        from db_queries import save_paper, upsert_user
         db = SessionLocal()
         try:
+            upsert_user(db, firebase_uid="anonymous", display_name="Anonymous")
             save_paper(
                 db,
                 user_id="anonymous",   # TODO: wire up Firebase UID later
                 data={
                     "title": req.title,
-                    "authors": req.authors,
-                    "year": req.year,
-                    "source": req.source,
-                    "citations": req.citations,
-                    "journal": req.venue,   # map venue → journal column
-                    "abstract": req.abstract,
-                    "url": req.url,
+                    "authors": req.authors or "",
+                    "year": str(req.year or ""),
+                    "source": req.source or "Semantic Scholar",
+                    "citations": req.citations or 0,
+                    "journal": req.venue or "",   # map venue → journal column
+                    "abstract": req.abstract or "",
+                    "url": req.url or "",
                 },
             )
             return {"success": True}
         finally:
             db.close()
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[Literature] save-paper error: {e}")
         raise HTTPException(500, f"Save failed: {e}")
+
+
+# ============================================================
+# Literature Retrieval — Step 4: Recommendations
+# ============================================================
+@app.get(
+    "/api/recommendations",
+    response_model=SearchResponse,
+    tags=["Literature"],
+)
+async def recommendations_route(
+    user_id: str = "anonymous",
+    limit: int = 5,
+):
+    """
+    Get paper recommendations based on user's recent search or saved papers.
+    """
+    topic = None
+    try:
+        from database import SessionLocal
+        from db_queries import list_searches, list_papers
+        db = SessionLocal()
+        try:
+            searches = list_searches(db, user_id=user_id, limit=1)
+            if searches and searches[0].topic:
+                topic = searches[0].topic
+            else:
+                papers = list_papers(db, user_id=user_id)
+                if papers and papers[0].title:
+                    topic = papers[0].title
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Recommendations] DB lookup error: {e}")
+
+    if not topic:
+        topic = "artificial intelligence machine learning"
+
+    print(f"[Recommendations] query='{topic}', limit={limit}")
+    try:
+        papers = await search_semantic_scholar(query=topic, limit=limit)
+    except Exception as e:
+        print(f"[Recommendations] search error: {e}")
+        papers = []
+
+    results = [PaperResult(**p) for p in papers]
+    return SearchResponse(results=results, count=len(results))
+
 
 # ============================================================
 # Citations
@@ -724,24 +775,31 @@ async def generate_citation(req: CitationGenerateRequest):
       - source="url"    → uses req.url
       - source="manual" → uses req.metadata
     """
-    if req.source == "url":
-        if not req.url:
-            raise HTTPException(400, "url is required when source='url'")
-        result = await citation_service.generate(
-            style=req.style,
-            url=req.url,
-        )
-    elif req.source == "manual":
-        if not req.metadata:
-            raise HTTPException(400, "metadata is required when source='manual'")
-        result = await citation_service.generate(
-            style=req.style,
-            metadata=req.metadata.model_dump(),
-        )
-    else:
-        raise HTTPException(400, "Use /generate-pdf for PDF source")
+    try:
+        if req.source == "url":
+            if not req.url:
+                raise HTTPException(400, "url is required when source='url'")
+            result = await citation_service.generate(
+                style=req.style,
+                url=req.url,
+            )
+        elif req.source == "manual":
+            if not req.metadata:
+                raise HTTPException(400, "metadata is required when source='manual'")
+            result = await citation_service.generate(
+                style=req.style,
+                metadata=req.metadata.model_dump(),
+            )
+        else:
+            raise HTTPException(400, "Use /generate-pdf for PDF source")
 
-    return CitationGenerateResponse(**result)
+        return CitationGenerateResponse(**result)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(500, detail=f"Citation generation failed: {e}")
 
 
 # ---------- Generate from PDF upload ----------

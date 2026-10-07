@@ -21,7 +21,6 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   final WordCounterApi _api = WordCounterApi();
 
   int _selectedIndex = 0;
-  Timer? _debounce;
   int _requestId = 0;
 
   // Backend state
@@ -29,6 +28,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   List<Suggestion> _suggestions = [];
   bool _isAnalyzing = false;
   bool _hasError = false;
+  bool _hasChecked = false;
   final Set<String> _ignoredWords = {};
 
   @override
@@ -39,7 +39,6 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     super.dispose();
@@ -54,8 +53,6 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
 
   void _onTextChanged() {
     setState(() {}); // Update local count instantly
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 800), _analyze);
   }
 
   Future<void> _analyze() async {
@@ -65,6 +62,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
         _stats = null;
         _suggestions = [];
         _isAnalyzing = false;
+        _hasChecked = false;
       });
       return;
     }
@@ -87,6 +85,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
         _stats = result.stats;
         _suggestions = result.suggestions;
         _isAnalyzing = false;
+        _hasChecked = true;
       });
     } catch (e) {
       if (!mounted || requestId != _requestId) return;
@@ -123,6 +122,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
     setState(() {
       _stats = null;
       _suggestions = [];
+      _hasChecked = false;
     });
   }
 
@@ -146,7 +146,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasText = _controller.text.isNotEmpty;
+    final bool hasText = _controller.text.trim().isNotEmpty;
     final int wordCount = _stats?.words ?? _localWordCount;
 
     return Scaffold(
@@ -214,12 +214,48 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _actionButton(icon: Icons.copy, label: "Copy", onPressed: hasText ? _copyText : null),
+                      _actionButton(icon: Icons.copy, label: "Copy", onPressed: _controller.text.isNotEmpty ? _copyText : null),
                       _actionButton(icon: Icons.paste, label: "Paste", onPressed: _pasteText),
-                      _actionButton(icon: Icons.clear, label: "Clear", onPressed: hasText ? _clearText : null),
+                      _actionButton(icon: Icons.clear, label: "Clear", onPressed: _controller.text.isNotEmpty ? _clearText : null),
                     ],
                   ),
                 ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Check Now Button
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: (hasText && !_isAnalyzing) ? _analyze : null,
+                icon: _isAnalyzing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.spellcheck, color: Colors.white),
+                label: Text(
+                  _isAnalyzing ? "Checking..." : "Check Now",
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
 
@@ -252,31 +288,33 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
               const Text("Couldn't reach the server. Word count is still accurate.", style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ],
 
-            const SizedBox(height: 16),
+            if (_hasChecked) ...[
+              const SizedBox(height: 16),
 
-            // AI Suggestions
-            ..._suggestions.map((s) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildSuggestionCard(s),
-            )),
+              // AI Suggestions
+              ..._suggestions.map((s) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildSuggestionCard(s),
+              )),
 
-            if (hasText && !_isAnalyzing && _suggestions.isEmpty && !_hasError)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
+              if (hasText && !_isAnalyzing && _suggestions.isEmpty && !_hasError)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+                      SizedBox(width: 8),
+                      Text("No issues found.", style: TextStyle(color: AppColors.textSecondary)),
+                    ],
+                  ),
                 ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
-                    SizedBox(width: 8),
-                    Text("No issues found.", style: TextStyle(color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
+            ],
 
             const SizedBox(height: 20),
           ],

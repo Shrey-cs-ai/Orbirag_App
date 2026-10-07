@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/citation.dart';
 
@@ -290,15 +291,23 @@ class CitationService {
   // ============================================================
   // GENERATE — from PDF upload
   // ============================================================
-  Future<Map<String, dynamic>?> generateFromPdf(
-    String filePath,
-    String style,
-  ) async {
+  Future<Map<String, dynamic>?> generateFromPdf({
+    required List<int> bytes,
+    required String filename,
+    required String style,
+  }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/citations/generate-pdf');
       final req = http.MultipartRequest('POST', uri);
       req.fields['style'] = style;
-      req.files.add(await http.MultipartFile.fromPath('file', filePath));
+      req.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+          contentType: MediaType('application', 'pdf'),
+        ),
+      );
 
       final streamed = await req.send().timeout(const Duration(seconds: 90));
       final r = await http.Response.fromStream(streamed);

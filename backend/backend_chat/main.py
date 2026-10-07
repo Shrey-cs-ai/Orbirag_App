@@ -1,13 +1,13 @@
 """
-Orbirag Chat Backend — Ori chatbot + PDF chat + voice transcription.
+Orbirag Chat Backend — Ori chatbot + PDF chat + voice transcription + text analysis.
 """
 
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
@@ -29,21 +29,16 @@ print(f"[ENV] GEMINI   : {'OK' if os.getenv('GEMINI_API_KEY') else 'MISSING'}")
 print(f"[ENV] DEEPGRAM : {'OK' if os.getenv('DEEPGRAM_API_KEY') else 'MISSING'}")
 
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-
-# ✅ ADDED — needed for RewriteRequest / RewriteResponse
-from pydantic import BaseModel
-
 from models import (
     ChatRequest, ChatResponse,
     TranscribeResponse,
     PdfChatRequest, PdfChatResponse,
     PdfUploadResponse,
-    # ✅ Word counter models (must exist in models.py)
     AnalyzeRequest, AnalyzeResponse, TextStats, Suggestion,
 )
-from services.ai_service import get_chat_response, get_paper_response, get_suggestions
+from services.ai_service import (
+    get_chat_response, get_paper_response, get_suggestions, _generate_with_fallback
+)
 from services.deepgram_service import transcribe_audio
 from services.pdf_service import (
     extract_text_from_pdf,
@@ -52,12 +47,11 @@ from services.pdf_service import (
     get_paper,
     find_relevant_chunks,
 )
-# ✅ Word counter service (new file)
 from services.word_counter_service import build_stats
 
 
 # ============================================================
-# App  — ONLY ONE app instance in the whole file
+# App
 # ============================================================
 app = FastAPI(title="Orbirag Chat API")
 
@@ -81,7 +75,7 @@ def _validate_file_size(data: bytes, max_mb: int):
 
 
 def _to_history_dicts(messages):
-    return [{"role": m.role, "content": m.content} for m in (messages or [])]
+    return [{"role": getattr(m, "role", "user"), "content": getattr(m, "content", "")} for m in (messages or [])]
 
 
 # ============================================================
@@ -95,7 +89,8 @@ def root():
 # ---------- Ori Chatbot ----------
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
 async def chat(request: ChatRequest):
-    response = await get_chat_response(request.message, request.history)
+    history_dicts = _to_history_dicts(request.history)
+    response = await get_chat_response(request.message, history_dicts)
     return ChatResponse(response=response)
 
 
@@ -126,9 +121,10 @@ async def voice_transcribe(
 
 
 # ---------- Paper Orbit: Upload PDF ----------
+@app.post("/api/ai/upload-pdf", response_model=PdfUploadResponse, tags=["Paper Orbit"])
 @app.post("/upload-pdf", response_model=PdfUploadResponse, tags=["Paper Orbit"])
 async def upload_pdf(file: UploadFile = File(...)):
-    if file.content_type not in {"application/pdf", "application/octet-stream"}:
+    if file.content_type not in {"application/pdf", "application/octet-stream"} and not (file.filename and file.filename.lower().endswith(".pdf")):
         raise HTTPException(400, f"Only PDF files allowed. Got: {file.content_type}")
 
     pdf_bytes = await file.read()
@@ -144,8 +140,11 @@ async def upload_pdf(file: UploadFile = File(...)):
 
         return PdfUploadResponse(
             paper_id=paper_id,
+            doc_id=paper_id,
             filename=file.filename or "untitled.pdf",
             chunk_count=len(chunks),
+            num_chunks=len(chunks),
+            num_pages=len(pages),
         )
     except HTTPException:
         raise
@@ -155,13 +154,22 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 
 # ---------- Paper Orbit: Chat with PDF ----------
+@app.post("/api/ai/chat-with-pdf", response_model=PdfChatResponse, tags=["Paper Orbit"])
 @app.post("/chat-with-pdf", response_model=PdfChatResponse, tags=["Paper Orbit"])
 async def chat_with_pdf(request: PdfChatRequest):
-    paper = get_paper(request.paper_id)
+    paper_id = request.paper_id or request.doc_id
+    question = request.question or request.message
+    if not paper_id:
+        raise HTTPException(400, "paper_id or doc_id is required")
+    if not question:
+        raise HTTPException(400, "question or message is required")
+
+    paper = get_paper(paper_id)
     if not paper:
         raise HTTPException(404, "Paper not found")
 
-    relevant = find_relevant_chunks(request.question, paper["chunks"], top_k=3)
+    top_k = request.top_k or 3
+    relevant = find_relevant_chunks(question, paper["chunks"], top_k=top_k)
 
     if not relevant:
         return PdfChatResponse(
@@ -172,7 +180,7 @@ async def chat_with_pdf(request: PdfChatRequest):
     context = "\n\n".join(f"[Page {c['page']}]\n{c['text']}" for c in relevant)
 
     response = await get_paper_response(
-        question=request.question,
+        question=question,
         context=context,
         history=_to_history_dicts(request.history),
     )
@@ -217,7 +225,7 @@ HUMANIZED:""",
 
 @app.post("/api/ai/rewrite", response_model=RewriteResponse, tags=["Plagiarism"])
 async def rewrite_route(req: RewriteRequest):
-    """Paraphrase or humanize a piece of text using Gemini."""
+    """Paraphrase or humanize a piece of text using Groq/Gemini."""
     text = (req.text or "").strip()
     if not text:
         raise HTTPException(400, "Empty text")
@@ -257,5 +265,3 @@ async def analyze_text(request: AnalyzeRequest):
         suggestions=[Suggestion(**s) for s in suggestions_list],
         meta={"ignored": len(ignore_words)},
     )
-    
-#library

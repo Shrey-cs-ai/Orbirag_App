@@ -1,13 +1,22 @@
 # ============================================================
-# AI Service — Gemini wrapper for Orbirag
+# AI Service — LLM wrapper for Orbirag Chat Backend
+# Groq first (fast, generous free tier), Gemini fallback
 # ============================================================
 import asyncio
 import os
+import json
 import httpx
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from google import genai
+
+try:
+    from groq import AsyncGroq
+    _GROQ_AVAILABLE = True
+except ImportError:
+    AsyncGroq = None
+    _GROQ_AVAILABLE = False
 
 
 # ============================================================
@@ -15,8 +24,10 @@ from google import genai
 # ============================================================
 def _load_env_file():
     env_path = Path(__file__).resolve().parent.parent / ".env"
+    print(f"[ai_service] Loading .env from: {env_path}")
     if not env_path.exists():
-        raise FileNotFoundError(f".env file not found at: {env_path}")
+        print("[ai_service] .env NOT FOUND")
+        return
     with open(env_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -25,39 +36,62 @@ def _load_env_file():
             if "=" in line:
                 key, value = line.split("=", 1)
                 os.environ[key.strip()] = value.strip()
+    print("[ai_service] .env loaded")
 
 
 _load_env_file()
 
 
 # ============================================================
-# 2. GEMINI CLIENT
+# 2. CLIENTS (Groq + Gemini)
 # ============================================================
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env")
+_groq_key = os.getenv("GROQ_API_KEY")
+_gemini_key = os.getenv("GEMINI_API_KEY")
 
-client = genai.Client(api_key=api_key)
+print(f"[ai_service] GROQ_API_KEY   = {'SET' if _groq_key else 'MISSING'}")
+print(f"[ai_service] GEMINI_API_KEY = {'SET' if _gemini_key else 'MISSING'}")
+
+_groq_client = None
+if _groq_key and _GROQ_AVAILABLE:
+    _groq_client = AsyncGroq(api_key=_groq_key)
+    print("[ai_service] Groq client ready")
+
+_gemini_client = None
+if _gemini_key:
+    _gemini_client = genai.Client(api_key=_gemini_key)
+    print("[ai_service] Gemini client ready")
+
+if not _groq_client and not _gemini_client:
+    raise ValueError(
+        "No LLM configured — set GROQ_API_KEY or GEMINI_API_KEY in .env"
+    )
 
 
 # ============================================================
-# 3. MODEL FALLBACK CHAIN
-# Try these in order when a model returns 503
+# 3. MODELS
 # ============================================================
-MODELS = [
-    "gemini-3.8-flash",             # primary — newest flash
-    "gemini-3.7-flash",             # fallback 1
-    "gemini-3.5-flash",             # fallback 2
-    "gemini-2.5-flash-lite",        # fallback 3 — lightest
-    "gemini-flash-lite-latest",     # fallback 4 — ultimate fallback
+GROQ_MODELS = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
+    "allam-2-7b",
+]
+
+GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-flash-lite-latest",
 ]
 
 
 # ============================================================
 # 4. SYSTEM PROMPTS
 # ============================================================
-ORI_SYSTEM = """You are Ori, an AI research assistant for students.
-Be friendly, concise, and helpful. Keep answers under 150 words."""
+ORI_SYSTEM = """You are Ori, a friendly AI research assistant for students.
+Be concise, warm, and cite sources when relevant. Never invent citations. Keep answers under 150 words."""
 
 PAPER_SYSTEM = """You are analyzing a research paper. Answer based ONLY on
 the provided context. Cite page numbers when possible. Keep answers
@@ -65,46 +99,86 @@ under 150 words."""
 
 
 # ============================================================
-# 5. RETRY + FALLBACK HELPER
+# 5. RETRY + FALLBACK HELPERS
 # ============================================================
-async def _generate_with_fallback(prompt: str) -> str:
-    """
-    Try each model in MODELS.
-    Within each model, retry twice on 503/UNAVAILABLE.
-    """
-    last_error = None
+async def _try_groq(prompt: str, json_mode: bool = False) -> Optional[str]:
+    if not _groq_client:
+        return None
 
-    for model_name in MODELS:
-        for attempt in range(2):   # 2 attempts per model
+    for model_name in GROQ_MODELS:
+        for attempt in range(2):
             try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                )
-                print(f"[AI] Success with {model_name}")
-                return response.text
+                kwargs = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.2 if json_mode else 0.7,
+                }
+                if json_mode:
+                    kwargs["response_format"] = {"type": "json_object"}
+
+                response = await _groq_client.chat.completions.create(**kwargs)
+                text = response.choices[0].message.content or ""
+                print(f"[AI] Groq success: {model_name}")
+                return text
 
             except Exception as e:
-                last_error = e
                 msg = str(e).lower()
+                if ("429" in msg or "rate" in msg or "503" in msg) and attempt < 1:
+                    print(f"[AI] Groq {model_name} busy, retry in 1s...")
+                    await asyncio.sleep(1)
+                    continue
 
-                # 503 / 429 → retry with the same model
-                if "503" in msg or "unavailable" in msg or "429" in msg:
-                    if attempt < 1:
-                        wait = 2 * (attempt + 1)
-                        print(f"[AI] {model_name} busy, retry in {wait}s...")
-                        await asyncio.sleep(wait)
-                        continue
-
-                # Other errors → move to next model
-                print(f"[AI] {model_name} failed: {type(e).__name__}")
+                print(f"[AI] Groq {model_name} failed: {type(e).__name__}")
                 break
 
-        # Try next model
-        print(f"[AI] Switching to next model...")
+    return None
 
-    # All models failed
-    raise last_error
+
+async def _try_gemini(prompt: str, json_mode: bool = False) -> Optional[str]:
+    if not _gemini_client:
+        return None
+
+    for model_name in GEMINI_MODELS:
+        for attempt in range(2):
+            try:
+                cfg = {"automatic_function_calling": {"disable": True}}
+                if json_mode:
+                    cfg["response_mime_type"] = "application/json"
+
+                response = _gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=cfg,
+                )
+                print(f"[AI] Gemini success: {model_name}")
+                return response.text or ""
+
+            except Exception as e:
+                msg = str(e).lower()
+                if ("503" in msg or "unavailable" in msg or "429" in msg) and attempt < 1:
+                    print(f"[AI] Gemini {model_name} busy, retry in 1s...")
+                    await asyncio.sleep(1)
+                    continue
+
+                print(f"[AI] Gemini {model_name} failed: {type(e).__name__}")
+                break
+
+    return None
+
+
+async def _generate_with_fallback(prompt: str, json_mode: bool = False) -> str:
+    # 1. Try Groq (fast, high quota)
+    result = await _try_groq(prompt, json_mode=json_mode)
+    if result is not None:
+        return result
+
+    # 2. Try Gemini
+    print("[AI] Groq exhausted, switching to Gemini...")
+    result = await _try_gemini(prompt, json_mode=json_mode)
+    if result is not None:
+        return result
+
+    raise RuntimeError("All LLM providers failed (Groq + Gemini)")
 
 
 # ============================================================
@@ -113,7 +187,7 @@ async def _generate_with_fallback(prompt: str) -> str:
 async def get_chat_response(message: str, history: list) -> str:
     try:
         parts = [ORI_SYSTEM, ""]
-        recent = history[-5:] if len(history) > 5 else history
+        recent = history[-5:] if len(history) > 5 else (history or [])
         for msg in recent:
             role = "User" if msg.get("role") == "user" else "Ori"
             parts.append(f"{role}: {msg.get('content', '')}")
@@ -147,7 +221,7 @@ async def get_paper_response(
         parts.append("---")
         parts.append("")
 
-        recent = history[-3:] if len(history) > 3 else history
+        recent = history[-3:] if len(history) > 3 else (history or [])
         for msg in recent:
             role = "User" if msg.get("role") == "user" else "Ori"
             parts.append(f"{role}: {msg.get('content', '')}")
@@ -157,13 +231,15 @@ async def get_paper_response(
         prompt = "\n".join(parts)
 
         print(f"[AI] paper prompt length: {len(prompt)} chars")
-
         return await _generate_with_fallback(prompt)
     except Exception as e:
         print(f"[AI] paper error: {type(e).__name__}: {e}")
         return "I'm having trouble responding right now. Please try again."
 
-#word counter
+
+# ============================================================
+# 8. FEATURE — Word Counter / Suggestions
+# ============================================================
 LANGUAGETOOL_URL = os.getenv("LANGUAGETOOL_URL", "https://api.languagetool.org/v2/check")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "languagetool")
 
@@ -229,5 +305,4 @@ async def _get_from_openai(text: str) -> List[dict]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return []
-    # (Implement OpenAI logic here if needed)
     return []

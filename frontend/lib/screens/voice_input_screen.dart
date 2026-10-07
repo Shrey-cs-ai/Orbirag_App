@@ -1,12 +1,13 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:record/record.dart';
 import '../utils/app_colors.dart';
-import '../services/ai_service.dart';
-import '../widgets/app_scaffold.dart';
+import '../utils/app_constants.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_brand_title.dart';
+import '../services/audio_recorder_service.dart';
+import '../services/voice_transcription_service.dart';
 
 class VoiceInputScreen extends StatefulWidget {
   const VoiceInputScreen({super.key});
@@ -15,336 +16,246 @@ class VoiceInputScreen extends StatefulWidget {
   State<VoiceInputScreen> createState() => _VoiceInputScreenState();
 }
 
-class _VoiceInputScreenState extends State<VoiceInputScreen>
-    with SingleTickerProviderStateMixin {
-  final AudioRecorder _recorder = AudioRecorder();
-  final TextEditingController _transcriptController = TextEditingController();
+class _VoiceInputScreenState extends State<VoiceInputScreen> {
+  final AudioRecorderService _recorder = AudioRecorderService();
+  final VoiceTranscriptionService _transcriber = VoiceTranscriptionService.instance;
 
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
+  int _selectedIndex = 2;
   bool _isRecording = false;
-  bool _isProcessing = false;
-  bool _hasTranscript = false;
-  String _statusMessage = 'Tap the mic to start recording';
-
-  // ✅ Collects bytes from the stream (works on Web AND Mobile)
-  final List<int> _audioBytes = [];
-  StreamSubscription<Uint8List>? _audioStreamSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 0.9, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    _requestPermissions();
-  }
+  bool _isTranscribing = false;
+  String _transcript = '';
+  int _seconds = 0;
+  Timer? _timer;
 
   @override
   void dispose() {
-    _audioStreamSubscription?.cancel();
-    _pulseController.dispose();
-    _transcriptController.dispose();
+    _timer?.cancel();
     _recorder.dispose();
     super.dispose();
   }
 
-  Future<void> _requestPermissions() async {
-    final granted = await _recorder.hasPermission();
-    if (!granted) {
-      setState(() => _statusMessage = 'Microphone permission denied');
-    }
-  }
-
+  // ============================================================
+  // Record / Stop
+  // ============================================================
   Future<void> _toggleRecording() async {
+    if (_isTranscribing) return;
     if (_isRecording) {
-      await _stopRecording();
+      await _stop();
     } else {
-      await _startRecording();
+      await _start();
     }
   }
 
-  Future<void> _startRecording() async {
-    try {
-      if (!await _recorder.hasPermission()) {
-        setState(() => _statusMessage = 'Microphone permission denied');
-        return;
-      }
-
-      _audioBytes.clear();
-
-      // ✅ Use the stream API — gives us bytes directly, works on Web + Mobile
-      final stream = await _recorder.startStream(
-        const RecordConfig(encoder: AudioEncoder.aacLc),
-      );
-
-      _audioStreamSubscription = stream.listen(
-        (data) => _audioBytes.addAll(data),
-        onError: (e) => debugPrint("Stream error: $e"),
-      );
-
-      setState(() {
-        _isRecording = true;
-        _hasTranscript = false;
-        _statusMessage = 'Recording...';
-        _transcriptController.clear();
-      });
-    } catch (e) {
-      setState(() => _statusMessage = 'Failed to start recording: $e');
+  Future<void> _start() async {
+    final granted = await _recorder.requestPermission();
+    if (!granted) {
+      _showMsg('Microphone permission denied. Check browser settings.');
+      return;
     }
-  }
 
-  Future<void> _stopRecording() async {
+    final path = await _recorder.startRecording();
+    if (path == null) {
+      _showMsg('Microphone permission denied or recording failed. Check browser settings.');
+      return;
+    }
+
     setState(() {
-      _isProcessing = true;
-      _statusMessage = 'Transcribing...';
+      _isRecording = true;
+      _transcript = '';
+      _seconds = 0;
     });
 
-    try {
-      await _recorder.stop();
-      await _audioStreamSubscription?.cancel();
-      _audioStreamSubscription = null;
-
-      if (_audioBytes.isEmpty) {
-        setState(() {
-          _isRecording = false;
-          _isProcessing = false;
-          _statusMessage = 'No audio captured. Try speaking a bit longer.';
-        });
-        return;
-      }
-
-      // ✅ Send the collected bytes to the backend
-      final transcript = await AiService.instance.transcribeAudio(
-        audioBytes: _audioBytes,
-        filename: 'voice_input.m4a',
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _isRecording = false;
-        _isProcessing = false;
-        _hasTranscript = transcript.trim().isNotEmpty;
-        _transcriptController.text = transcript.trim();
-        _statusMessage = transcript.trim().isNotEmpty
-            ? 'Transcription complete'
-            : 'No speech detected';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isRecording = false;
-        _isProcessing = false;
-        _statusMessage = 'Error: $e';
-      });
-    }
-  }
-
-  void _clear() {
-    _audioBytes.clear();
-    setState(() {
-      _transcriptController.clear();
-      _hasTranscript = false;
-      _statusMessage = 'Cleared';
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _seconds++);
     });
   }
 
-  void _useThis() {
-    Navigator.pop(context, _transcriptController.text);
+  Future<void> _stop() async {
+    _timer?.cancel();
+    setState(() => _isRecording = false);
+
+    final path = await _recorder.stopRecording();
+    if (path == null) {
+      _showMsg('Recording failed');
+      return;
+    }
+
+    setState(() => _isTranscribing = true);
+
+    final text = await _transcriber.transcribe(path);
+
+    if (!mounted) return;
+    setState(() {
+      _isTranscribing = false;
+      _transcript = text ?? 'Could not transcribe. Please try again.';
+    });
   }
 
+  void _copyTranscript() {
+    if (_transcript.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: _transcript));
+    _showMsg('Copied to clipboard');
+  }
+
+  void _showMsg(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  // ============================================================
+  // Build
+  // ============================================================
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      title: "Voice Input",
-      showBackButton: true,
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      drawer: const AppDrawer(),
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        centerTitle: true,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: AppColors.textPrimary),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+        title: const AppBrandTitle(),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            // Status Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+            const SizedBox(height: 20),
+
+            const Text(
+              'Voice to Text',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    _isRecording ? Icons.mic : Icons.mic_none,
-                    color: _isRecording ? AppColors.error : AppColors.primary,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _statusMessage,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: _isRecording
-                            ? AppColors.error
-                            : AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  if (_isProcessing)
-                    LoadingAnimationWidget.threeRotatingDots(
-                      color: AppColors.primary,
-                      size: 28,
-                    ),
-                ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Speak clearly into your microphone',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
 
-            // Transcript Box
-            Expanded(
+            // Status
+            Text(
+              _isRecording
+                  ? 'Recording… ${_seconds}s'
+                  : _isTranscribing
+                      ? 'Transcribing…'
+                      : 'Tap the mic to start',
+              style: const TextStyle(
+                fontSize: 15,
+                color: AppColors.textSecondary,
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Mic button
+            GestureDetector(
+              onTap: _toggleRecording,
               child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _isRecording ? AppColors.error : AppColors.primary,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (_isRecording
+                              ? AppColors.error
+                              : AppColors.primary)
+                          .withValues(alpha: 0.3),
+                      blurRadius: 30,
+                      spreadRadius: 6,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  _isRecording ? Icons.stop : Icons.mic,
+                  color: Colors.white,
+                  size: 60,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            if (_isTranscribing)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+
+            // Transcript card
+            if (_transcript.isNotEmpty)
+              Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Transcript",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.text_fields,
+                            size: 16, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Transcript',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Copy',
+                          icon: const Icon(Icons.copy, size: 18),
+                          onPressed: _copyTranscript,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _transcriptController,
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: "Your transcribed text will appear here...",
-                          hintStyle: TextStyle(color: AppColors.hintText),
-                        ),
+                    SelectableText(
+                      _transcript,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.5,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    if (_hasTranscript)
-                      Row(
-                        children: [
-                          const Text(
-                            "Speech detected",
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.success),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.copy, size: 18),
-                            onPressed: () {
-                              Clipboard.setData(
-                                ClipboardData(text: _transcriptController.text),
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Copied")),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
                   ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Mic Button
-            GestureDetector(
-              onTap: _isProcessing ? null : _toggleRecording,
-              child: AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (_, __) {
-                  return Transform.scale(
-                    scale: _isRecording ? _pulseAnimation.value : 1.0,
-                    child: Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                        color: _isRecording
-                            ? AppColors.error
-                            : AppColors.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: _isRecording
-                            ? [
-                                BoxShadow(
-                                  color:
-                                      AppColors.error.withValues(alpha: 0.35),
-                                  blurRadius: 18,
-                                  spreadRadius: 4,
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: Icon(
-                        _isRecording ? Icons.stop : Icons.mic,
-                        color: Colors.white,
-                        size: 34,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Clear & Use This
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _hasTranscript ? _clear : null,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text("Clear"),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _hasTranscript ? _useThis : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text("Use This"),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() => _selectedIndex = index);
+          final route =
+              AppConstants.bottomNavItems[index]['route'] as String;
+          Navigator.of(context).pushReplacementNamed(route);
+        },
       ),
     );
   }

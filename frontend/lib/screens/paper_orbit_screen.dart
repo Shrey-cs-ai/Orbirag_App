@@ -9,7 +9,8 @@ import '../widgets/app_brand_title.dart';
 import 'chat_with_pdf_screen.dart';
 
 class PaperOrbitScreen extends StatefulWidget {
-  const PaperOrbitScreen({super.key});
+  final String? paperTitle;
+  const PaperOrbitScreen({super.key, this.paperTitle});
 
   @override
   State<PaperOrbitScreen> createState() => _PaperOrbitScreenState();
@@ -18,7 +19,13 @@ class PaperOrbitScreen extends StatefulWidget {
 class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
   int _selectedIndex = 0;
   final PdfService _pdfService = PdfService();
-  final TextEditingController _textController = TextEditingController();
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.paperTitle ?? '');
+  }
 
   @override
   void dispose() {

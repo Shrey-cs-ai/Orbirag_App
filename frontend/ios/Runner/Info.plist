@@ -38,6 +38,8 @@
 		</dict>
 	</array>
 
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Orbirag needs the microphone to transcribe your voice.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

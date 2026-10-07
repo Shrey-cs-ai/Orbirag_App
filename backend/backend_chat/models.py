@@ -21,13 +21,21 @@ class PdfChatMessage(BaseModel):
     role: str      # "user" or "model"
     content: str
 class PdfChatRequest(BaseModel):
-    paper_id: str
-    question: str
+    paper_id: Optional[str] = None
+    doc_id: Optional[str] = None
+    question: Optional[str] = None
+    message: Optional[str] = None
+    top_k: Optional[int] = 3
     history: Optional[List[PdfChatMessage]] = []
+
 class PdfUploadResponse(BaseModel):
     paper_id: str
+    doc_id: str
     filename: str
     chunk_count: int
+    num_chunks: int
+    num_pages: int
+
 class PdfChatResponse(BaseModel):
     response: str
     sources: List[dict]   

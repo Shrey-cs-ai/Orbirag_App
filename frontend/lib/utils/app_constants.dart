@@ -17,8 +17,7 @@ class AppConstants {
   static String get chatBaseUrl => 'http://$_host:8000/api';
 
   // ---------- Research backend (port 8001) ----------
-  static String get researchBaseUrl => 'http://$_host:8001/api';
-
+   static String get researchBaseUrl => 'http://$_host:8001/api';
   // iOS simulator / web:    use 'http://localhost:PORT/api'
   // Real phone (same Wi-Fi): use 'http://<your-pc-ip>:PORT/api'
 

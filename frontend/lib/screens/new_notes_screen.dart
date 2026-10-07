@@ -31,8 +31,7 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController =
-        TextEditingController(text: widget.note?.title ?? "");
+    _titleController = TextEditingController(text: widget.note?.title ?? "");
     _contentController =
         TextEditingController(text: widget.note?.content ?? "");
     _serverId = widget.note?.id;
@@ -201,7 +200,7 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
             if (_hasChanges) {
               await _saveNote(showSnackbar: false, pop: false);
             }
-            if (!mounted) return;
+            if (!context.mounted) return;
             Navigator.pop(context, true);
           },
         ),

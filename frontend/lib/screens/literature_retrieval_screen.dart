@@ -686,7 +686,13 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () async {
                     final saved = await _searchService.savePaper(paper);
-                    _showMessage(saved ? 'Saved to library!' : 'Save failed');
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(saved ? '✅ Saved to library' : '❌ Save failed'),
+                        backgroundColor: saved ? AppColors.success : AppColors.error,
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.bookmark_border, size: 16),
                   label: const Text('Save', style: TextStyle(fontSize: 13)),

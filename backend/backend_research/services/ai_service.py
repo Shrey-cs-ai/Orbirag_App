@@ -86,17 +86,18 @@ Be concise, warm, and cite sources when relevant. Never invent citations."""
 # ============================================================
 # Groq
 # ============================================================
-async def _try_groq(prompt: str, json_mode: bool) -> Optional[str]:
+async def _try_groq(prompt: str, json_mode: bool, temperature: Optional[float] = None) -> Optional[str]:
     if not _groq_client:
         return None
 
     for model_name in GROQ_MODELS:
         for attempt in range(2):
             try:
+                t = temperature if temperature is not None else (0.2 if json_mode else 0.7)
                 kwargs = {
                     "model": model_name,
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.2 if json_mode else 0.7,
+                    "temperature": t,
                 }
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
@@ -122,7 +123,7 @@ async def _try_groq(prompt: str, json_mode: bool) -> Optional[str]:
 # ============================================================
 # Gemini
 # ============================================================
-async def _try_gemini(prompt: str, json_mode: bool) -> Optional[str]:
+async def _try_gemini(prompt: str, json_mode: bool, temperature: Optional[float] = None) -> Optional[str]:
     if not _gemini_client:
         return None
 
@@ -132,6 +133,8 @@ async def _try_gemini(prompt: str, json_mode: bool) -> Optional[str]:
                 cfg = {"automatic_function_calling": {"disable": True}}
                 if json_mode:
                     cfg["response_mime_type"] = "application/json"
+                if temperature is not None:
+                    cfg["temperature"] = temperature
 
                 response = _gemini_client.models.generate_content(
                     model=model_name,
@@ -157,15 +160,19 @@ async def _try_gemini(prompt: str, json_mode: bool) -> Optional[str]:
 # ============================================================
 # Combined fallback — Groq first, then Gemini
 # ============================================================
-async def _generate_with_fallback(prompt: str, json_mode: bool = False) -> str:
+async def _generate_with_fallback(
+    prompt: str,
+    json_mode: bool = False,
+    temperature: Optional[float] = None,
+) -> str:
     # 1. Try Groq (fast, huge free quota)
-    result = await _try_groq(prompt, json_mode)
+    result = await _try_groq(prompt, json_mode, temperature)
     if result is not None:
         return result
 
     # 2. Try Gemini (higher quality, lower quota)
     print("[AI] Groq exhausted, switching to Gemini...")
-    result = await _try_gemini(prompt, json_mode)
+    result = await _try_gemini(prompt, json_mode, temperature)
     if result is not None:
         return result
 

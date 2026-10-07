@@ -19,7 +19,7 @@ from models import (
 # ============================================================
 
 def get_user_by_firebase_uid(db: Session, firebase_uid: str) -> Optional[User]:
-    # Treat firebase_uid as the username field
+    # New User model uses `username` — treat firebase_uid as username.
     return db.query(User).filter(User.username == firebase_uid).first()
 
 

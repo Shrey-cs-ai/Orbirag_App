@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
-import '../utils/app_constants.dart';
 
 // ============================================================
 // Model
@@ -82,11 +81,15 @@ class ScopingService {
 
   Future<String?> synthesizeQuestion(ScopingData data) async {
     try {
+      final payload = {
+        ...data.toJson(),
+        'nonce': DateTime.now().millisecondsSinceEpoch,
+      };
       final r = await http
           .post(
             Uri.parse('$baseUrl/api/scoping/synthesize'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(data.toJson()),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 30));
 
@@ -112,7 +115,7 @@ class ScopingService {
           )
           .timeout(const Duration(seconds: 30));
 
-      return r.statusCode == 200;
+      return r.statusCode == 200 || r.statusCode == 201;
     } catch (e) {
       debugPrint('[Scoping] save exception: $e');
       return false;

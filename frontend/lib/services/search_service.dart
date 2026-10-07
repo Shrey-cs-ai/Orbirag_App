@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
+import 'papers_service.dart';
 
 class SearchService {
   static final SearchService instance = SearchService._internal();
@@ -97,29 +98,50 @@ class SearchService {
   // 3. Save Paper → bool
   // ============================================================
   Future<bool> savePaper(SearchResult paper) async {
+    final payload = {
+      'title': paper.title,
+      'authors': paper.authors,
+      'year': paper.year,
+      'source': paper.source,
+      'citations': paper.citations,
+      'ai_summary': paper.aiSummary,
+      'url': paper.url,
+      'abstract': paper.abstract,
+      'venue': paper.venue,
+    };
     try {
       debugPrint('[Search] POST $baseUrl/api/save-paper');
+
+      await PapersService().initialize();
+      await PapersService().addPaper(
+        Paper(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: paper.title,
+          url: paper.url.isNotEmpty ? paper.url : null,
+          authors: paper.authors,
+          category: paper.venue.isNotEmpty ? paper.venue : 'GENERAL',
+          year: paper.year.isNotEmpty ? paper.year : '2024',
+          status: 'unread',
+          summary: paper.aiSummary,
+          dateAdded: DateTime.now(),
+        ),
+      );
 
       final response = await http
           .post(
             Uri.parse('$baseUrl/api/save-paper'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'title': paper.title,
-              'authors': paper.authors,
-              'year': paper.year,
-              'source': paper.source,
-              'citations': paper.citations,
-              'ai_summary': paper.aiSummary,
-              'url': paper.url,
-              'abstract': paper.abstract,
-              'venue': paper.venue,
-            }),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 30));
 
       debugPrint('[Search] save-paper status: ${response.statusCode}');
-      return response.statusCode == 200;
+      if (response.statusCode == 422) {
+        debugPrint('[Search] 422 Unprocessable Entity! Payload sent: ${jsonEncode(payload)}');
+        debugPrint('[Search] Backend expected schema: SavePaperRequest(title, authors, year, source, citations, ai_summary, url, abstract, venue)');
+        debugPrint('[Search] Backend response: ${response.body}');
+      }
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint('[Search] savePaper exception: $e');
       return false;

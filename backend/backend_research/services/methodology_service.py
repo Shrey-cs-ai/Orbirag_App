@@ -16,17 +16,8 @@ from models import Methodology
 
 
 # ============================================================
-# Gemini
+# LLM helper
 # ============================================================
-def _gemini_model():
-    import google.generativeai as genai
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-3.8-flash")
-
-
 _EXTRACT_PROMPT = """You are an academic methods-section analyzer.
 
 Read the METHODS text below and extract structured fields. Return ONLY valid
@@ -60,16 +51,9 @@ TEXT:
 
 
 async def extract(text: str) -> dict:
-    model = _gemini_model()
-    response = model.generate_content(
-        _EXTRACT_PROMPT.format(text=text[:8000]),
-        generation_config={
-            "temperature": 0.2,
-            "response_mime_type": "application/json",
-        },
-    )
-    raw = response.text.strip()
-
+    from services.ai_service import _generate_with_fallback
+    raw = await _generate_with_fallback(_EXTRACT_PROMPT.format(text=text[:8000]), json_mode=True)
+    raw = (raw or "").strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE)
 

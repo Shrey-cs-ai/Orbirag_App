@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -46,7 +47,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
   final _urlCtrl = TextEditingController();
 
   // ---- PDF ----
-  File? _pickedPdf;
+  List<int>? _pickedPdfBytes;
   String? _pickedPdfName;
 
   // ---- Result ----
@@ -99,13 +100,17 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
 
       if (tabIndex == 0) {
         // PDF
-        if (_pickedPdf == null) {
+        if (_pickedPdfBytes == null) {
           _showSnack('Please select a PDF first');
           setState(() => _isGenerating = false);
           return;
         }
         source = 'pdf';
-        res = await _service.generateFromPdf(_pickedPdf!.path, _style);
+        res = await _service.generateFromPdf(
+          bytes: _pickedPdfBytes!,
+          filename: _pickedPdfName ?? 'paper.pdf',
+          style: _style,
+        );
       } else if (tabIndex == 1) {
         // URL
         final url = _urlCtrl.text.trim();
@@ -218,11 +223,21 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
+        withData: true,
       );
-      if (result == null || result.files.single.path == null) return;
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      List<int>? bytes = file.bytes;
+      if (bytes == null && !kIsWeb && file.path != null) {
+        bytes = await File(file.path!).readAsBytes();
+      }
+      if (bytes == null) {
+        _showSnack('Could not read PDF bytes');
+        return;
+      }
       setState(() {
-        _pickedPdf = File(result.files.single.path!);
-        _pickedPdfName = result.files.single.name;
+        _pickedPdfBytes = bytes;
+        _pickedPdfName = file.name;
       });
     } catch (e) {
       _showSnack('Pick failed: $e');

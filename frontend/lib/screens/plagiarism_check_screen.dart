@@ -74,6 +74,9 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       setState(() {
         _similarityScore = result.similarityScore;
         _matches = result.matches;
+        if (_matches.isNotEmpty) {
+          _selectedMatch = _matches.first;
+        }
         _isChecking = false;
       });
       _showMessage('${_matches.length} matches found');
@@ -89,11 +92,15 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       _showMessage('Please select a matched text first');
       return;
     }
+    setState(() => _isRewriting = true);
     try {
+      debugPrint('[Plagiarism] tapped match id=${_selectedMatch!.id}');
+      debugPrint('[Plagiarism] calling cite source=${_selectedMatch!.source}, year=${_selectedMatch!.year}');
       final citation = await _service.cite(
         _selectedMatch!.source,
         _selectedMatch!.year,
       );
+      debugPrint('[Plagiarism] result=$citation');
       final original = _documentController.text;
       final matchedText = _selectedMatch!.text;
       if (original.contains(matchedText)) {
@@ -101,10 +108,24 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
           _documentController.text =
               original.replaceFirst(matchedText, '$matchedText $citation');
           _aiSuggestion = null;
+          _isRewriting = false;
         });
         _showMessage('Citation added: $citation');
+      } else if (original.contains(matchedText.trim())) {
+        setState(() {
+          _documentController.text =
+              original.replaceFirst(matchedText.trim(), '${matchedText.trim()} $citation');
+          _aiSuggestion = null;
+          _isRewriting = false;
+        });
+        _showMessage('Citation added: $citation');
+      } else {
+        setState(() => _isRewriting = false);
+        _showMessage('Citation generated: $citation');
       }
     } catch (e) {
+      if (!mounted) return;
+      setState(() => _isRewriting = false);
       _showMessage('Cite failed: $e');
     }
   }
@@ -114,9 +135,15 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       _showMessage('Please select a matched text first');
       return;
     }
-    setState(() => _isRewriting = true);
+    setState(() {
+      _isRewriting = true;
+      _aiSuggestion = null;
+    });
     try {
+      debugPrint('[Plagiarism] tapped match id=${_selectedMatch!.id}');
+      debugPrint('[Plagiarism] calling paraphrase...');
       final result = await _service.paraphrase(_selectedMatch!.text);
+      debugPrint('[Plagiarism] result=$result');
       if (!mounted) return;
       setState(() {
         _aiSuggestion = result;
@@ -135,9 +162,15 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       _showMessage('Please select a matched text first');
       return;
     }
-    setState(() => _isRewriting = true);
+    setState(() {
+      _isRewriting = true;
+      _aiSuggestion = null;
+    });
     try {
+      debugPrint('[Plagiarism] tapped match id=${_selectedMatch!.id}');
+      debugPrint('[Plagiarism] calling humanize...');
       final result = await _service.humanize(_selectedMatch!.text);
+      debugPrint('[Plagiarism] result=$result');
       if (!mounted) return;
       setState(() {
         _aiSuggestion = result;
@@ -159,6 +192,21 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       setState(() {
         _documentController.text =
             original.replaceFirst(matchedText, _aiSuggestion!);
+        _aiSuggestion = null;
+        _selectedMatch = null;
+      });
+      _showMessage('Text replaced successfully');
+    } else if (original.contains(matchedText.trim())) {
+      setState(() {
+        _documentController.text =
+            original.replaceFirst(matchedText.trim(), _aiSuggestion!);
+        _aiSuggestion = null;
+        _selectedMatch = null;
+      });
+      _showMessage('Text replaced successfully');
+    } else {
+      setState(() {
+        _documentController.text = _aiSuggestion!;
         _aiSuggestion = null;
         _selectedMatch = null;
       });
@@ -458,10 +506,13 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       children: _matches.map((match) {
         final isSelected = _selectedMatch?.id == match.id;
         return GestureDetector(
-          onTap: () => setState(() {
-            _selectedMatch = match;
-            _aiSuggestion = null;
-          }),
+          onTap: () {
+            debugPrint('[Plagiarism] tapped match id=${match.id}');
+            setState(() {
+              _selectedMatch = match;
+              _aiSuggestion = null;
+            });
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(

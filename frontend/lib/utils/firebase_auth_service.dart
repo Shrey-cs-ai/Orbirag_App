@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -9,10 +10,17 @@ class FirebaseAuthService {
   static final FirebaseAuthService instance = FirebaseAuthService._internal();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId:
-        '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
-  );
+  GoogleSignIn? _googleSignInInstance;
+
+  GoogleSignIn get _googleSignIn {
+    _googleSignInInstance ??= GoogleSignIn(
+      clientId:
+          '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
+      serverClientId:
+          '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
+    );
+    return _googleSignInInstance!;
+  }
 
   // ==================== GITHUB OAUTH CONFIG ====================
   static const String _githubClientId = 'Ov23lixXmPs1IIqHmyWj';
@@ -112,12 +120,14 @@ class FirebaseAuthService {
         'redirect_uri': '$_callbackScheme://callback',
         'scope': 'read:user user:email',
       });
+      debugPrint('[GitHub Auth] starting auth url: $authUrl, callbackScheme: $_callbackScheme');
 
       // 2. Open GitHub login in a secure browser tab
       final result = await FlutterWebAuth2.authenticate(
         url: authUrl.toString(),
         callbackUrlScheme: _callbackScheme, // 'orbirag'
       );
+      debugPrint('[GitHub Auth] callback result: $result');
 
       // 3. Extract the authorization code
       final code = Uri.parse(result).queryParameters['code'];
@@ -149,8 +159,10 @@ class FirebaseAuthService {
 
       return null;
     } on FirebaseAuthException catch (e) {
+      debugPrint('[GitHub Auth] FirebaseAuthException: ${e.message} (${e.code})');
       return _mapError(e);
     } catch (e) {
+      debugPrint('[GitHub Auth] error: $e');
       return 'GitHub sign-in failed: $e';
     }
   }
@@ -167,7 +179,9 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    if (_googleSignInInstance != null) {
+      await _googleSignInInstance!.signOut();
+    }
     await _auth.signOut();
   }
 

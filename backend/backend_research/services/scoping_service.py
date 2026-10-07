@@ -16,9 +16,9 @@ from models import ScopingSession
 # ============================================================
 # Gemini — goes through the fallback chain
 # ============================================================
-async def _ask_gemini(prompt: str) -> dict:
+async def _ask_gemini(prompt: str, temperature: Optional[float] = None) -> dict:
     from services.ai_service import _generate_with_fallback
-    raw = await _generate_with_fallback(prompt, json_mode=True)
+    raw = await _generate_with_fallback(prompt, json_mode=True, temperature=temperature)
     raw = (raw or "").strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE)
@@ -50,7 +50,8 @@ Rules:
 
 _SYNTHESIZE_PROMPT = """You are a research methods assistant.
 
-Combine the following PICO elements into ONE clear research question.
+Combine the following PICO elements into ONE clear, well-phrased research question.
+Produce a fresh variation of the question using precise and engaging academic phrasing.
 Return ONLY valid JSON in this shape: {{"research_question": "..."}}
 
 Rules:
@@ -100,7 +101,7 @@ async def synthesize_question(payload: dict) -> str:
         comparison=payload.get("comparison", "") or "(none)",
         outcome=payload.get("outcome", ""),
     )
-    data = await _ask_gemini(prompt)
+    data = await _ask_gemini(prompt, temperature=0.8)
     return (data.get("research_question") or "").strip()
 
 

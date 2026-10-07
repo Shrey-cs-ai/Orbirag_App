@@ -7,29 +7,18 @@ import os
 import re
 import json
 import io
+import xml.etree.ElementTree as ET
 
 import httpx
 
 
 # ============================================================
-# Gemini helper
+# LLM helper (Groq primary + Gemini fallback)
 # ============================================================
-def _gemini_model():
-    import google.generativeai as genai
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-3.8-flash")
-
-
 async def _ask_gemini(prompt: str, json_mode: bool = False) -> str:
-    model = _gemini_model()
-    cfg = {"temperature": 0.2}
-    if json_mode:
-        cfg["response_mime_type"] = "application/json"
-    response = model.generate_content(prompt, generation_config=cfg)
-    text = response.text.strip()
+    from services.ai_service import _generate_with_fallback
+    text = await _generate_with_fallback(prompt, json_mode=json_mode)
+    text = (text or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE)
     return text
@@ -55,6 +44,57 @@ def extract_text_from_pdf(pdf_bytes: bytes, max_chars: int = 6000) -> str:
 
 
 # ============================================================
+# arXiv API metadata extraction
+# ============================================================
+async def fetch_arxiv_metadata(arxiv_id: str) -> dict:
+    """Fetch metadata directly from arXiv Export API for a given arXiv ID."""
+    url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
+    print(f"[Citation] Fetching arXiv API: {url}")
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            print(f"[Citation] arXiv API status: {r.status_code}, preview: {r.text[:200]!r}")
+            r.raise_for_status()
+            xml_content = r.text
+
+        root = ET.fromstring(xml_content)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        entry = root.find("atom:entry", ns)
+        if entry is None:
+            raise ValueError(f"No entry found in arXiv for ID {arxiv_id}")
+
+        title_elem = entry.find("atom:title", ns)
+        title = ""
+        if title_elem is not None and title_elem.text:
+            title = re.sub(r"\s+", " ", title_elem.text.strip().replace("\n", " "))
+
+        authors = []
+        for author_elem in entry.findall("atom:author", ns):
+            name_elem = author_elem.find("atom:name", ns)
+            if name_elem is not None and name_elem.text:
+                authors.append(name_elem.text.strip())
+        authors_str = ", ".join(authors)
+
+        published_elem = entry.find("atom:published", ns)
+        year = ""
+        if published_elem is not None and published_elem.text:
+            year = published_elem.text[:4]
+
+        return {
+            "title": title,
+            "authors": authors_str,
+            "year": year,
+            "journal": f"arXiv preprint arXiv:{arxiv_id}",
+            "publisher": "arXiv",
+            "doi": f"10.48550/arXiv.{arxiv_id}",
+            "url": f"https://arxiv.org/abs/{arxiv_id}",
+        }
+    except Exception as e:
+        print(f"[Citation] arXiv API fetch failed: {e}")
+        raise ValueError(f"Could not retrieve arXiv paper info: {e}")
+
+
+# ============================================================
 # URL text extraction
 # ============================================================
 async def extract_text_from_url(url: str, max_chars: int = 6000) -> str:
@@ -62,11 +102,12 @@ async def extract_text_from_url(url: str, max_chars: int = 6000) -> str:
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            print(f"[Citation] URL fetch status: {r.status_code}, preview: {r.text[:200]!r}")
             r.raise_for_status()
             html = r.text
     except Exception as e:
         print(f"[Citation] URL fetch failed: {e}")
-        return ""
+        raise ValueError("Could not fetch page content. Try the manual entry tab.")
 
     # Strip scripts/styles
     html = re.sub(r"<script.*?</script>", " ", html, flags=re.DOTALL | re.IGNORECASE)
@@ -75,6 +116,8 @@ async def extract_text_from_url(url: str, max_chars: int = 6000) -> str:
     text = re.sub(r"<[^>]+>", " ", html)
     # Collapse whitespace
     text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        raise ValueError("Could not fetch page content. Try the manual entry tab.")
     return text[:max_chars]
 
 
@@ -160,14 +203,19 @@ Rules:
 
 
 async def format_citation(metadata: dict, style: str) -> dict:
+    title = (metadata.get("title") or "").strip()
+    authors = (metadata.get("authors") or "").strip()
+    if not title and not authors:
+        raise ValueError("Could not extract citation metadata (title and authors are missing). Try the manual entry tab.")
+
     if style not in _STYLE_INSTRUCTIONS:
         style = "APA 7"
 
     prompt = _FORMAT_PROMPT.format(
         style=style,
         rule=_STYLE_INSTRUCTIONS[style],
-        title=metadata.get("title", ""),
-        authors=metadata.get("authors", ""),
+        title=title,
+        authors=authors,
         year=metadata.get("year", ""),
         journal=metadata.get("journal", ""),
         publisher=metadata.get("publisher", ""),
@@ -181,12 +229,12 @@ async def format_citation(metadata: dict, style: str) -> dict:
     except Exception as e:
         print(f"[Citation] format failed: {e}")
         # Fallback — plain concatenation
-        title = metadata.get("title") or "Untitled"
-        authors = metadata.get("authors") or "Unknown"
-        year = metadata.get("year") or "n.d."
+        t = title or "Untitled"
+        a = authors or "Unknown"
+        y = metadata.get("year") or "n.d."
         return {
-            "in_text": f"({authors.split(',')[0]}, {year})",
-            "reference_list": f"{authors} ({year}). {title}.",
+            "in_text": f"({a.split(',')[0]}, {y})",
+            "reference_list": f"{a} ({y}). {t}.",
         }
 
 
@@ -202,18 +250,25 @@ async def generate(
     """
     Build a citation from one of:
       - metadata (manual entry)   → skip extraction
-      - url                       → fetch + extract + format
+      - url                       → fetch + extract + format (special arXiv handling)
       - raw_text                  → extract + format
     """
     if not metadata:
-        # Fetch text if URL given
-        if url and not raw_text:
+        arxiv_match = re.search(r"arxiv\.org/(?:abs|pdf)/([0-9]+\.[0-9]+(?:v[0-9]+)?|[a-zA-Z\-]+/[0-9]+)", url or "", re.IGNORECASE)
+        if arxiv_match:
+            arxiv_id = arxiv_match.group(1)
+            metadata = await fetch_arxiv_metadata(arxiv_id)
+        elif url and not raw_text:
             raw_text = await extract_text_from_url(url)
-
-        # Extract metadata from text
-        metadata = await extract_metadata(raw_text)
-        if url and not metadata.get("url"):
-            metadata["url"] = url
+            metadata = await extract_metadata(raw_text)
+            if url and not metadata.get("url"):
+                metadata["url"] = url
+        elif raw_text:
+            metadata = await extract_metadata(raw_text)
+            if url and not metadata.get("url"):
+                metadata["url"] = url
+        else:
+            metadata = {}
 
     formatted = await format_citation(metadata, style)
     return {
@@ -222,5 +277,3 @@ async def generate(
         "in_text": formatted.get("in_text", ""),
         "reference_list": formatted.get("reference_list", ""),
     }
-
-

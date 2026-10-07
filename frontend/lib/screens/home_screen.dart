@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/firebase_auth_service.dart';
 import '../services/user_state_service.dart';
+import '../services/recommendation_service.dart';
+import '../services/search_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'paper_orbit_screen.dart';
@@ -14,6 +16,7 @@ import 'citation_generation_screen.dart';
 import 'plagiarism_check_screen.dart';
 import 'saved_papers_screen.dart';
 import 'my_notes_screen.dart';
+import 'recommendations_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,15 +29,26 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final int _currentIndex = 0;
   final UserStateService _userState = UserStateService();
+  final RecommendationService _recommendationService =
+      RecommendationService.instance;
 
   bool _isLoading = true;
   bool _isFirstTimeUser = true;
   String _firstName = 'Researcher';
 
+  bool _hasActiveResearch = false;
+  String _lastResearchTopic = '';
+  double _lastResearchProgress = 0.0;
+  String? _lastResearchTime;
+
+  List<SearchResult> _recommendations = [];
+  bool _loadingRecommendations = false;
+
   @override
   void initState() {
     super.initState();
     _loadUserState();
+    _loadRecommendations();
   }
 
   @override
@@ -47,6 +61,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadUserState() async {
     final hasStarted = await _userState.hasStartedResearch();
     final savedName = await _userState.getFirstName();
+    final lastTopic = await _userState.getLastResearchTopic();
+    final lastProgress = await _userState.getLastResearchProgress() ?? 0.35;
+    final lastTime = await _userState.getLastResearchTime();
 
     final user = FirebaseAuthService.instance.currentUser;
     final displayName = user?.displayName ?? savedName;
@@ -58,8 +75,31 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isFirstTimeUser = !hasStarted;
       _firstName = firstName;
+      _hasActiveResearch = lastTopic != null && lastTopic.trim().isNotEmpty;
+      _lastResearchTopic = lastTopic ?? '';
+      _lastResearchProgress = lastProgress;
+      _lastResearchTime = lastTime;
       _isLoading = false;
     });
+  }
+
+  // ==================== LOAD RECOMMENDATIONS ====================
+  Future<void> _loadRecommendations() async {
+    setState(() => _loadingRecommendations = true);
+    try {
+      final results =
+          await _recommendationService.getRecommendations(limit: 5);
+      if (mounted) {
+        setState(() {
+          _recommendations = results;
+          _loadingRecommendations = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingRecommendations = false);
+      }
+    }
   }
 
   // ==================== MARK RESEARCH STARTED ====================
@@ -125,23 +165,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ==================== PERFORM SEARCH ====================
   Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) return;
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
 
-    // Mark user as active
+    // Mark user as active & record last research topic
     await _userState.setHasStartedResearch(true);
+    await _userState.saveLastResearchTopic(trimmed);
+    await _userState.saveLastResearchProgress(0.35);
 
     if (!mounted) return;
 
     // Update state so returning user view shows
-    setState(() => _isFirstTimeUser = false);
+    setState(() {
+      _isFirstTimeUser = false;
+      _hasActiveResearch = true;
+      _lastResearchTopic = trimmed;
+      _lastResearchProgress = 0.35;
+      _lastResearchTime = DateTime.now().toIso8601String();
+    });
 
     // Navigate to literature retrieval
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => LiteratureRetrievalScreen(initialQuery: query),
+        builder: (_) => LiteratureRetrievalScreen(initialQuery: trimmed),
       ),
     );
+
+    // Refresh state when coming back
+    _loadUserState();
+    _loadRecommendations();
   }
 
   // ==================== BUILD ====================
@@ -524,77 +577,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Continue Research Card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.play_circle_outline,
-                      size: 18, color: AppColors.primary),
-                  const SizedBox(width: 6),
-                  const Text(
-                    "CONTINUE RESEARCH",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.more_horiz, size: 18),
-                    onPressed: () {},
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                "Topic: Ethical AI in Healthcare",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text(
-                    "Research Progress",
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const Spacer(),
-                  const Text(
-                    "65%",
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: const LinearProgressIndicator(
-                  value: 0.65,
-                  backgroundColor: AppColors.cardBg,
-                  color: AppColors.primary,
-                  minHeight: 6,
-                ),
-              ),
-            ],
-          ),
-        ),
+        // Continue Research or Start New Topic Card
+        if (_hasActiveResearch)
+          _buildActiveResearchCard()
+        else
+          _buildStartNewTopicCard(),
+
         const SizedBox(height: 28),
 
         // Recommended
@@ -611,7 +599,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RecommendationsScreen(
+                      initialRecommendations: _recommendations,
+                    ),
+                  ),
+                );
+              },
               child: const Text(
                 "View all",
                 style: TextStyle(fontSize: 13, color: AppColors.primary),
@@ -622,23 +619,30 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 8),
 
         SizedBox(
-          height: 140,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              _recommendedCard(
-                title: "AI in Ethics (2023)",
-                subtitle: "Matches your interest in Phil Tech",
-                tag: "Highly Relevant",
-              ),
-              const SizedBox(width: 12),
-              _recommendedCard(
-                title: "Machine Learning (2022)",
-                subtitle: "Essential for your research",
-                tag: "Save for later",
-              ),
-            ],
-          ),
+          height: 148,
+          child: _loadingRecommendations
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )
+              : _recommendations.isEmpty
+                  ? Center(
+                      child: Text(
+                        "Search or save papers to get recommendations",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _recommendations.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final paper = _recommendations[index];
+                        return _recommendedPaperCard(paper);
+                      },
+                    ),
         ),
         const SizedBox(height: 28),
 
@@ -771,52 +775,291 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _recommendedCard({
-    required String title,
-    required String subtitle,
-    required String tag,
-  }) {
+  String _formatTimeAgo(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return 'recently';
+    try {
+      final dateTime = DateTime.parse(isoString);
+      final diff = DateTime.now().difference(dateTime);
+      if (diff.inMinutes < 1) return 'just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${dateTime.month}/${dateTime.day}';
+    } catch (_) {
+      return 'recently';
+    }
+  }
+
+  Widget _buildActiveResearchCard() {
+    final progressPercent = (_lastResearchProgress * 100).round();
+    final timeAgo = _formatTimeAgo(_lastResearchTime);
+
     return Container(
-      width: 200,
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.cardBg,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text("Paper", style: TextStyle(fontSize: 10)),
+          Row(
+            children: [
+              const Icon(Icons.play_circle_outline,
+                  size: 18, color: AppColors.primary),
+              const SizedBox(width: 6),
+              const Text(
+                "CONTINUE RESEARCH",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                "Last searched: $timeAgo",
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
-            title,
+            "Topic: $_lastResearchTopic",
             style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 14),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textSecondary),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text(
+                "Research Progress",
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const Spacer(),
+              Text(
+                "$progressPercent%",
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
-          const Spacer(),
-          Text(
-            tag,
-            style: const TextStyle(fontSize: 11, color: AppColors.primary),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _lastResearchProgress.clamp(0.0, 1.0),
+              backgroundColor: AppColors.cardBg,
+              color: AppColors.primary,
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LiteratureRetrievalScreen(
+                      initialQuery: _lastResearchTopic,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.play_arrow, size: 16),
+              label: const Text("Resume Research"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStartNewTopicCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.lightbulb_outline,
+                  size: 18, color: AppColors.primary),
+              SizedBox(width: 6),
+              Text(
+                "START A NEW TOPIC",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Start a new topic",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Search for papers, then tap Save to build your library.",
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LiteratureRetrievalScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text("Search papers"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _recommendedPaperCard(SearchResult paper) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaperOrbitScreen(paperTitle: paper.title),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 220,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    paper.year.isNotEmpty ? paper.year : "Paper",
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (paper.citations > 0)
+                  Text(
+                    "${paper.citations} cit.",
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              paper.title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                height: 1.2,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              paper.authors,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Spacer(),
+            const Row(
+              children: [
+                Text(
+                  "Explore in Orbit",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_forward, size: 12, color: AppColors.primary),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
