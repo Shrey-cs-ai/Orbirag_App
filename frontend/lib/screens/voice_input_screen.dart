@@ -1,13 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import '../utils/app_colors.dart';
-import '../utils/app_constants.dart';
-import '../widgets/app_drawer.dart';
-import '../widgets/bottom_nav_bar.dart';
-import '../widgets/app_brand_title.dart';
+import '../widgets/app_scaffold.dart';
 import '../services/audio_recorder_service.dart';
-import '../services/voice_transcription_service.dart';
+import '../services/transcription_service.dart';
 
 class VoiceInputScreen extends StatefulWidget {
   const VoiceInputScreen({super.key});
@@ -16,27 +13,43 @@ class VoiceInputScreen extends StatefulWidget {
   State<VoiceInputScreen> createState() => _VoiceInputScreenState();
 }
 
-class _VoiceInputScreenState extends State<VoiceInputScreen> {
+class _VoiceInputScreenState extends State<VoiceInputScreen>
+    with SingleTickerProviderStateMixin {
   final AudioRecorderService _recorder = AudioRecorderService();
-  final VoiceTranscriptionService _transcriber = VoiceTranscriptionService.instance;
+  final TranscriptionService _transcriber = TranscriptionService.instance;
 
-  int _selectedIndex = 2;
   bool _isRecording = false;
   bool _isTranscribing = false;
   String _transcript = '';
+  double _confidence = 0;
   int _seconds = 0;
   Timer? _timer;
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+  }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _pulse.dispose();
     _recorder.dispose();
     super.dispose();
   }
 
-  // ============================================================
-  // Record / Stop
-  // ============================================================
+  String get _statusText {
+    if (_isRecording) return 'Recording… ${_seconds}s';
+    if (_isTranscribing) return 'Transcribing...';
+    if (_transcript.isNotEmpty) return 'Ready to use';
+    return 'Tap the mic to start';
+  }
+
   Future<void> _toggleRecording() async {
     if (_isTranscribing) return;
     if (_isRecording) {
@@ -55,15 +68,18 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
 
     final path = await _recorder.startRecording();
     if (path == null) {
-      _showMsg('Microphone permission denied or recording failed. Check browser settings.');
+      _showMsg(
+          'Microphone permission denied or recording failed. Check browser settings.');
       return;
     }
 
     setState(() {
       _isRecording = true;
       _transcript = '';
+      _confidence = 0;
       _seconds = 0;
     });
+    _pulse.repeat(reverse: true);
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _seconds++);
@@ -72,6 +88,8 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
 
   Future<void> _stop() async {
     _timer?.cancel();
+    _pulse.stop();
+    _pulse.reset();
     setState(() => _isRecording = false);
 
     final path = await _recorder.stopRecording();
@@ -82,159 +100,203 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
 
     setState(() => _isTranscribing = true);
 
-    final text = await _transcriber.transcribe(path);
+    try {
+      final result = await _transcriber.transcribe(path);
+      if (!mounted) return;
+      final text = (result['transcript'] ?? '').toString();
+      final confidence = (result['confidence'] is num)
+          ? (result['confidence'] as num).toDouble()
+          : 0.0;
+      setState(() {
+        _isTranscribing = false;
+        _transcript = text;
+        _confidence = confidence;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isTranscribing = false);
+      _showMsg('Transcription failed: $e');
+    }
+  }
 
-    if (!mounted) return;
+  void _clear() {
     setState(() {
-      _isTranscribing = false;
-      _transcript = text ?? 'Could not transcribe. Please try again.';
+      _transcript = '';
+      _confidence = 0;
+      _seconds = 0;
     });
   }
 
-  void _copyTranscript() {
-    if (_transcript.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: _transcript));
-    _showMsg('Copied to clipboard');
+  void _useThis() {
+    final text = _transcript.trim();
+    if (text.isEmpty) return;
+    Navigator.pop(context, text);
   }
 
   void _showMsg(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canUse = _transcript.trim().isNotEmpty && !_isRecording && !_isTranscribing;
+
+    return AppScaffold(
+      title: 'Voice Input',
+      showBackButton: true,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            children: [
+              _statusCard(),
+              const SizedBox(height: 16),
+              Expanded(child: _transcriptBox()),
+              if (_transcript.isNotEmpty && !_isTranscribing && !_isRecording)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _transcript.trim().isEmpty
+                          ? 'No speech detected'
+                          : _confidence > 0
+                              ? 'Speech detected'
+                              : 'Speech detected',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _transcript.trim().isEmpty
+                            ? AppColors.error
+                            : AppColors.success,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              _micButton(),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: (_isRecording || _isTranscribing)
+                          ? null
+                          : _clear,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.border),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Clear'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: canUse ? _useThis : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor:
+                            AppColors.primary.withValues(alpha: 0.35),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Use This'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  // ============================================================
-  // Build
-  // ============================================================
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      drawer: const AppDrawer(),
-      appBar: AppBar(
-        backgroundColor: AppColors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: AppColors.textPrimary),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-        title: const AppBrandTitle(),
+  Widget _statusCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.listeningCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-
-            const Text(
-              'Voice to Text',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+      child: Row(
+        children: [
+          Icon(
+            _isRecording
+                ? Icons.graphic_eq
+                : _isTranscribing
+                    ? Icons.hourglass_top
+                    : Icons.mic_none,
+            color: AppColors.micPurple,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _statusText,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Speak clearly into your microphone',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+          ),
+          if (_isTranscribing)
+            LoadingAnimationWidget.staggeredDotsWave(
+              color: AppColors.primary,
+              size: 28,
             ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 40),
-
-            // Status
-            Text(
-              _isRecording
-                  ? 'Recording… ${_seconds}s'
-                  : _isTranscribing
-                      ? 'Transcribing…'
-                      : 'Tap the mic to start',
-              style: const TextStyle(
-                fontSize: 15,
-                color: AppColors.textSecondary,
+  Widget _transcriptBox() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: _isTranscribing
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LoadingAnimationWidget.fourRotatingDots(
+                    color: AppColors.primary,
+                    size: 36,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Transcribing...',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
               ),
-            ),
-
-            const SizedBox(height: 30),
-
-            // Mic button
-            GestureDetector(
-              onTap: _toggleRecording,
-              child: Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isRecording ? AppColors.error : AppColors.primary,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isRecording
-                              ? AppColors.error
-                              : AppColors.primary)
-                          .withValues(alpha: 0.3),
-                      blurRadius: 30,
-                      spreadRadius: 6,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  _isRecording ? Icons.stop : Icons.mic,
-                  color: Colors.white,
-                  size: 60,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            if (_isTranscribing)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
-
-            // Transcript card
-            if (_transcript.isNotEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.text_fields,
-                            size: 16, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Transcript',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: 'Copy',
-                          icon: const Icon(Icons.copy, size: 18),
-                          onPressed: _copyTranscript,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SelectableText(
+            )
+          : SingleChildScrollView(
+              child: _transcript.isEmpty
+                  ? const Text(
+                      'Your transcript will appear here.',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textSecondary,
+                      ),
+                    )
+                  : SelectableText(
                       _transcript,
                       style: const TextStyle(
                         fontSize: 15,
@@ -242,20 +304,46 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                  ],
-                ),
+            ),
+    );
+  }
+
+  Widget _micButton() {
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, child) {
+        final t = _isRecording ? _pulse.value : 0.0;
+        return Container(
+          width: 92 + (t * 10),
+          height: 92 + (t * 10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _isRecording ? AppColors.error : AppColors.micPurple,
+            boxShadow: [
+              BoxShadow(
+                color: (_isRecording ? AppColors.error : AppColors.micPurple)
+                    .withValues(alpha: 0.28 + (t * 0.25)),
+                blurRadius: 22 + (t * 18),
+                spreadRadius: 4 + (t * 8),
               ),
-          ],
+            ],
+          ),
+          child: child,
+        );
+      },
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _toggleRecording,
+          child: Center(
+            child: Icon(
+              _isRecording ? Icons.stop : Icons.mic,
+              color: Colors.white,
+              size: 40,
+            ),
+          ),
         ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() => _selectedIndex = index);
-          final route =
-              AppConstants.bottomNavItems[index]['route'] as String;
-          Navigator.of(context).pushReplacementNamed(route);
-        },
       ),
     );
   }
