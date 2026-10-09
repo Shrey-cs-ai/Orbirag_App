@@ -26,6 +26,7 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
   int _currentStep = 0; // 0 = topic, 1-4 = PICO, 5 = synthesis
   ScopingData _data = ScopingData();
   bool _isLoading = false;
+  bool _isRegenerating = false;
 
   // Field controllers
   final Map<String, TextEditingController> _fieldControllers = {
@@ -116,17 +117,38 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     }
   }
 
-  Future<void> _synthesize() async {
-    setState(() => _isLoading = true);
+  Future<void> _synthesize({bool isRegenerate = false}) async {
+    if (isRegenerate) {
+      if (_isRegenerating) return; // block double taps
+      setState(() => _isRegenerating = true);
+    } else {
+      setState(() => _isLoading = true);
+    }
 
-    final question = await _service.synthesizeQuestion(_data);
+    final question = await _service.synthesizeQuestion(
+      _data,
+      regenerate: isRegenerate,
+    );
 
     if (!mounted) return;
+
     setState(() {
-      _data.researchQuestion = question ?? '';
-      _isLoading = false;
-      _currentStep = 5;
+      if (question != null && question.trim().isNotEmpty) {
+        _data.researchQuestion = question;
+      }
+      if (isRegenerate) {
+        _isRegenerating = false; // stay on step 5
+      } else {
+        _isLoading = false;
+        _currentStep = 5;
+      }
     });
+
+    if (question == null) {
+      _showMessage(isRegenerate
+          ? 'Could not regenerate. Try again.'
+          : 'Could not synthesize. Try again.');
+    }
   }
 
   void _startSearch() {
@@ -201,7 +223,8 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bolt_outlined, color: AppColors.textPrimary),
+            tooltip: 'Paper Orbit',
+            icon: const Icon(Icons.auto_awesome_outlined, color: AppColors.textPrimary),
             onPressed: () {
               Navigator.pushNamed(context, AppConstants.routePaperOrbit);
             },
@@ -594,22 +617,33 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
                   ),
                   const Spacer(),
                   GestureDetector(
-                    onTap: _synthesize,
-                    child: const Row(
-                      children: [
-                        Icon(Icons.refresh,
-                            size: 14, color: AppColors.purple),
-                        SizedBox(width: 4),
-                        Text(
-                          'Regenerate',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.purple,
-                            fontWeight: FontWeight.w600,
+                    onTap: _isRegenerating
+                        ? null
+                        : () => _synthesize(isRegenerate: true),
+                    child: _isRegenerating
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.purple,
+                            ),
+                          )
+                        : const Row(
+                            children: [
+                              Icon(Icons.refresh,
+                                  size: 14, color: AppColors.purple),
+                              SizedBox(width: 4),
+                              Text(
+                                'Regenerate',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.purple,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),

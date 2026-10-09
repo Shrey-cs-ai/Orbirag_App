@@ -9,10 +9,13 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from google import genai
+try:
+    from google import genai  # type: ignore[import-untyped]
+except ImportError as _exc:
+    raise ImportError("Install google-genai: pip install google-genai") from _exc
 
 try:
-    from groq import AsyncGroq
+    from groq import AsyncGroq  # type: ignore[import-untyped]
     _GROQ_AVAILABLE = True
 except ImportError:
     AsyncGroq = None

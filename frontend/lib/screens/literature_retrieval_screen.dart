@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/search_service.dart';
+import '../services/papers_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
 import 'profile_screen.dart';
+import 'paper_reader_screen.dart';
 
 class LiteratureRetrievalScreen extends StatefulWidget {
   final String? initialQuery;
@@ -171,7 +173,8 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bolt_outlined, color: AppColors.textPrimary),
+            tooltip: 'Paper Orbit',
+            icon: const Icon(Icons.auto_awesome_outlined, color: AppColors.textPrimary),
             onPressed: () {
               Navigator.pushNamed(context, AppConstants.routePaperOrbit);
             },
@@ -685,12 +688,12 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    final saved = await _searchService.savePaper(paper);
+                    final id = await _searchService.savePaper(paper);
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(saved ? '✅ Saved to library' : '❌ Save failed'),
-                        backgroundColor: saved ? AppColors.success : AppColors.error,
+                        content: Text(id != null ? '✅ Saved to library' : '❌ Save failed'),
+                        backgroundColor: id != null ? AppColors.success : AppColors.error,
                       ),
                     );
                   },
@@ -709,8 +712,32 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamed(context, AppConstants.routePaperOrbit);
+                  onPressed: () async {
+                    // Save first to get a db id, then open the reader
+                    final id = await _searchService.savePaper(paper);
+                    if (!mounted) return;
+                    if (id == null) {
+                      _showMessage('Save failed — cannot open reader');
+                      return;
+                    }
+                    final readerPaper = Paper(
+                      id: id,
+                      title: paper.title,
+                      authors: paper.authors,
+                      category: paper.venue.isNotEmpty ? paper.venue.toUpperCase() : 'GENERAL',
+                      year: paper.year.isNotEmpty ? paper.year : '—',
+                      status: 'unread',
+                      progress: 0.0,
+                      url: paper.url.isNotEmpty ? paper.url : null,
+                      abstract: paper.abstract.isNotEmpty ? paper.abstract : null,
+                      summary: paper.aiSummary.isNotEmpty ? paper.aiSummary : null,
+                    );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaperReaderScreen(paper: readerPaper),
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.menu_book, size: 16),
                   label: const Text('Analyze', style: TextStyle(fontSize: 13)),

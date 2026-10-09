@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 
 class AiService {
@@ -167,6 +167,47 @@ class AiService {
       }
     } catch (e) {
       throw Exception('Transcription error: $e');
+    }
+  }
+
+  // ============================================================
+  // 5. Ingest Pasted Text → doc_id (RAG — backend port 8001)
+  // ============================================================
+  String get _ragBaseUrl {
+    if (kIsWeb) return 'http://localhost:8001';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8001';
+    }
+    return 'http://localhost:8001';
+  }
+
+  Future<Map<String, dynamic>?> ingestText({
+    required String text,
+    String title = 'Pasted Text',
+  }) async {
+    try {
+      debugPrint('[AI] POST $_ragBaseUrl/api/ai/ingest-text');
+      final r = await http
+          .post(
+            Uri.parse('$_ragBaseUrl/api/ai/ingest-text'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'text': text,
+              'title': title,
+              'user_id': 'anonymous',
+            }),
+          )
+          .timeout(const Duration(seconds: 120));
+
+      debugPrint('[AI] ingest-text status: ${r.statusCode}');
+      if (r.statusCode != 200) {
+        debugPrint('[AI] ingest-text error: ${r.body}');
+        return null;
+      }
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[AI] ingestText exception: $e');
+      return null;
     }
   }
 }

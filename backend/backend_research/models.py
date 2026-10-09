@@ -44,7 +44,7 @@ class Paper(Base):
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint("status IN ('unread','reading','analyzed')", name="papers_status_check"),
+        CheckConstraint("status IN ('unread','reading','analyzed','read')", name="papers_status_check"),
     )
 
 

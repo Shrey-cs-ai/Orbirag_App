@@ -78,12 +78,18 @@ def toggle_favorite_paper(db: Session, paper_id: str, user_id: str) -> Optional[
     return row
 
 
-def update_paper_status(db: Session, paper_id: str, user_id: str,
-                        status: str, progress: float = None) -> Optional[Paper]:
+def update_paper_status(
+    db: Session,
+    paper_id: str,
+    user_id: str,
+    status: Optional[str] = None,
+    progress: Optional[float] = None,
+) -> Optional[Paper]:
     row = db.query(Paper).filter(Paper.id == paper_id, Paper.user_id == user_id).first()
     if not row:
         return None
-    row.status = status
+    if status is not None:
+        row.status = status
     if progress is not None:
         row.progress = progress
     db.commit()

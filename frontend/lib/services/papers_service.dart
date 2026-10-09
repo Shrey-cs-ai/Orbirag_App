@@ -1,63 +1,74 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // For debugPrint
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
+import 'package:http/http.dart' as http;
 
+// ============================================================
+// Model
+// ============================================================
 class Paper {
   final String id;
   final String title;
-  final String? url;
   final String authors;
-  final String category;
+  final String category; // maps to journal/source from backend
   final String year;
-  final String status; // 'analyzed', 'reading', 'unread'
-  final double? progress; // 0.0 to 1.0
+  final String status; // unread | reading | analyzed | read
+  final double progress;
+  final String? url;
+  final String? abstract;
   final String? summary;
-  final DateTime dateAdded;
-  bool isFavorite; // ← Changed from final to bool (mutable)
+  final bool isFavorite;
 
   Paper({
     required this.id,
     required this.title,
-    this.url,
     required this.authors,
     required this.category,
     required this.year,
     required this.status,
-    this.progress,
+    this.progress = 0.0,
+    this.url,
+    this.abstract,
     this.summary,
-    required this.dateAdded,
-    this.isFavorite = false, // ← Now can be modified
+    this.isFavorite = false,
   });
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'url': url,
-    'authors': authors,
-    'category': category,
-    'year': year,
-    'status': status,
-    'progress': progress,
-    'summary': summary,
-    'dateAdded': dateAdded.toIso8601String(),
-    'isFavorite': isFavorite,
-  };
+  Paper copyWith({
+    String? status,
+    double? progress,
+    bool? isFavorite,
+  }) =>
+      Paper(
+        id: id,
+        title: title,
+        authors: authors,
+        category: category,
+        year: year,
+        status: status ?? this.status,
+        progress: progress ?? this.progress,
+        url: url,
+        abstract: abstract,
+        summary: summary,
+        isFavorite: isFavorite ?? this.isFavorite,
+      );
 
-  factory Paper.fromJson(Map<String, dynamic> json) => Paper(
-    id: json['id'],
-    title: json['title'],
-    url: json['url'],
-    authors: json['authors'],
-    category: json['category'],
-    year: json['year'],
-    status: json['status'],
-    progress: json['progress']?.toDouble(),
-    summary: json['summary'],
-    dateAdded: DateTime.parse(json['dateAdded']),
-    isFavorite: json['isFavorite'] ?? false,
-  );
+  factory Paper.fromJson(Map<String, dynamic> j) => Paper(
+        id: (j['id'] ?? '').toString(),
+        title: (j['title'] ?? 'Untitled').toString(),
+        authors: (j['authors'] ?? '').toString(),
+        category: ((j['journal'] ?? j['source'] ?? 'General')).toString(),
+        year: (j['year'] ?? '').toString(),
+        status: (j['status'] ?? 'unread').toString(),
+        progress: ((j['progress'] ?? 0.0) as num).toDouble(),
+        url: j['url']?.toString(),
+        abstract: j['abstract']?.toString(),
+        isFavorite: j['is_favorite'] == true,
+      );
 }
 
+// ============================================================
+// Service
+// ============================================================
 class PapersService {
   static final PapersService _instance = PapersService._internal();
   factory PapersService() => _instance;
@@ -66,115 +77,130 @@ class PapersService {
   List<Paper> _papers = [];
   bool _isInitialized = false;
 
-  List<Paper> get papers => _papers;
+  List<Paper> get papers => List.unmodifiable(_papers);
 
+  String get baseUrl {
+    if (kIsWeb) return 'http://localhost:8001';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8001';
+    }
+    return 'http://localhost:8001';
+  }
+
+  // ── Load from backend ───────────────────────────────────
   Future<void> initialize() async {
-    if (_isInitialized) return;
-    await _loadPapers();
+    // Always refresh — data lives on the server
+    await _fetchPapers();
     _isInitialized = true;
   }
 
-  Future<void> _loadPapers() async {
+  Future<void> _fetchPapers() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final papersJson = prefs.getString('saved_papers');
-      if (papersJson != null) {
-        final List<dynamic> decoded = jsonDecode(papersJson);
-        _papers = decoded.map((e) => Paper.fromJson(e as Map<String, dynamic>)).toList();
+      final r = await http
+          .get(Uri.parse('$baseUrl/api/papers?user_id=anonymous'))
+          .timeout(const Duration(seconds: 15));
+      if (r.statusCode == 200) {
+        final data = jsonDecode(r.body) as Map<String, dynamic>;
+        final list = (data['items'] ?? []) as List;
+        _papers = list
+            .map((e) => Paper.fromJson(e as Map<String, dynamic>))
+            .toList();
         _sortPapers();
       } else {
-        // Add sample papers
-        _papers = [
-          Paper(
-            id: '1',
-            title: 'The Impact of AI on Qualitative Research',
-            authors: 'Smith, J., et al. Exploring the methodological shifts and ethical considerations in AI-assisted qualitative analysis.',
-            category: 'QUALITATIVE METHODS',
-            year: '2024',
-            status: 'analyzed',
-            summary: 'This paper explores the integration of AI tools in qualitative research methodologies.',
-            dateAdded: DateTime.now().subtract(const Duration(days: 2)),
-            isFavorite: false,
-          ),
-          Paper(
-            id: '2',
-            title: 'Foundations of Modern Pedagogy',
-            authors: 'Johnson, M. A comprehensive review of evolving pedagogical approaches in higher education.',
-            category: 'EDUCATION',
-            year: '2023',
-            status: 'reading',
-            progress: 0.65,
-            dateAdded: DateTime.now().subtract(const Duration(days: 5)),
-            isFavorite: false,
-          ),
-          Paper(
-            id: '3',
-            title: 'Neural Networks for Beginners',
-            authors: 'Lee, K., Patel, R. An accessible introduction to the underlying principles of neural networks.',
-            category: 'COMPUTER SCIENCE',
-            year: '2022',
-            status: 'unread',
-            dateAdded: DateTime.now().subtract(const Duration(days: 10)),
-            isFavorite: false,
-          ),
-        ];
-        await _savePapers();
+        debugPrint('[Papers] fetch error ${r.statusCode}: ${r.body}');
       }
     } catch (e) {
-      debugPrint('Error loading papers: $e');
-    }
-  }
-
-  Future<void> _savePapers() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final papersJson = jsonEncode(_papers.map((e) => e.toJson()).toList());
-      await prefs.setString('saved_papers', papersJson);
-    } catch (e) {
-      debugPrint('Error saving papers: $e');
+      debugPrint('[Papers] fetch exception: $e');
     }
   }
 
   void _sortPapers() {
     _papers.sort((a, b) {
-      // Pinned/favorite notes first
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
-      // Then by date added (newest first)
-      return b.dateAdded.compareTo(a.dateAdded);
+      return 0;
     });
   }
 
+  // ── Reload (call after any mutation) ───────────────────
+  Future<void> reload() async {
+    await _fetchPapers();
+  }
+
+  // ── Add (called by saved_papers_screen Add Paper dialog) ──
   Future<void> addPaper(Paper paper) async {
-    _papers.insert(0, paper);
-    _sortPapers();
-    await _savePapers();
-  }
-
-  Future<void> updatePaper(Paper paper) async {
-    final index = _papers.indexWhere((p) => p.id == paper.id);
-    if (index != -1) {
-      _papers[index] = paper;
-      _sortPapers();
-      await _savePapers();
+    // For manually-added papers we call the save-paper endpoint
+    try {
+      final payload = {
+        'title': paper.title,
+        'authors': paper.authors,
+        'year': paper.year,
+        'venue': paper.category,
+        'source': 'Manual',
+        'citations': 0,
+        'ai_summary': paper.summary ?? '',
+        'url': paper.url ?? '',
+        'abstract': paper.abstract ?? '',
+      };
+      await http
+          .post(
+            Uri.parse('$baseUrl/api/save-paper'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[Papers] addPaper exception: $e');
     }
+    await reload();
   }
 
+  // ── Delete ─────────────────────────────────────────────
   Future<void> deletePaper(String id) async {
+    try {
+      await http
+          .delete(Uri.parse('$baseUrl/api/papers/$id'))
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[Papers] deletePaper exception: $e');
+    }
     _papers.removeWhere((p) => p.id == id);
-    await _savePapers();
   }
 
+  // ── Toggle favourite (local only — no backend endpoint yet) ─
   Future<void> toggleFavorite(String id) async {
-    final index = _papers.indexWhere((p) => p.id == id);
-    if (index != -1) {
-      // Now we can modify isFavorite because it's not final
-      _papers[index].isFavorite = !_papers[index].isFavorite;
+    final idx = _papers.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      _papers[idx] = _papers[idx].copyWith(isFavorite: !_papers[idx].isFavorite);
       _sortPapers();
-      await _savePapers();
     }
   }
 
+  // ── Update progress ────────────────────────────────────
+  Future<void> updateProgress({
+    required String id,
+    required String status,
+    required double progress,
+  }) async {
+    try {
+      await http
+          .patch(
+            Uri.parse('$baseUrl/api/papers/$id'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'status': status, 'progress': progress}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[Papers] updateProgress exception: $e');
+    }
+    // Update in-memory copy
+    final idx = _papers.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      _papers[idx] = _papers[idx].copyWith(status: status, progress: progress);
+    }
+  }
+
+  // ── Filter helpers ─────────────────────────────────────
   List<Paper> getPapersByStatus(String status) {
     if (status == 'All') return _papers;
     return _papers.where((p) => p.status == status.toLowerCase()).toList();
@@ -182,11 +208,13 @@ class PapersService {
 
   List<Paper> searchPapers(String query) {
     if (query.isEmpty) return _papers;
-    return _papers.where((paper) =>
-      paper.title.toLowerCase().contains(query.toLowerCase()) ||
-      paper.authors.toLowerCase().contains(query.toLowerCase()) ||
-      paper.category.toLowerCase().contains(query.toLowerCase())
-    ).toList();
+    final q = query.toLowerCase();
+    return _papers
+        .where((p) =>
+            p.title.toLowerCase().contains(q) ||
+            p.authors.toLowerCase().contains(q) ||
+            p.category.toLowerCase().contains(q))
+        .toList();
   }
 
   Map<String, int> getStatusCounts() {

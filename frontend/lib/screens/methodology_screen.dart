@@ -160,7 +160,8 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
               onPressed: _clearAll,
             ),
           IconButton(
-            icon: const Icon(Icons.bolt_outlined, color: AppColors.textPrimary),
+            tooltip: 'Paper Orbit',
+            icon: const Icon(Icons.auto_awesome_outlined, color: AppColors.textPrimary),
             onPressed: () {
               Navigator.pushNamed(context, AppConstants.routePaperOrbit);
             },

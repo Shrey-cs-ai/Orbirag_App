@@ -7,6 +7,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
 import 'chat_with_pdf_screen.dart';
+import 'paste_text_screen.dart';
 
 class PaperOrbitScreen extends StatefulWidget {
   final String? paperTitle;
@@ -74,24 +75,42 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             ),
             const SizedBox(height: 28),
 
-            // Upload Cards
-            Row(
+            // Upload Cards — three equal cards in a row (wrapping)
+            Wrap(
+              spacing: 14,
+              runSpacing: 14,
               children: [
-                Expanded(
+                SizedBox(
+                  width: (MediaQuery.of(context).size.width - 54) / 3,
                   child: _buildUploadCard(
                     icon: Icons.description_outlined,
-                    title: "Upload PDF",
+                    title: 'Upload PDF',
                     onTap: _uploadPDF,
                   ),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
+                SizedBox(
+                  width: (MediaQuery.of(context).size.width - 54) / 3,
                   child: _buildUploadCard(
                     icon: Icons.camera_alt_outlined,
-                    title: "Take Photo",
+                    title: 'Take Photo',
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Photo support coming soon')),
+                      );
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: (MediaQuery.of(context).size.width - 54) / 3,
+                  child: _buildUploadCard(
+                    icon: Icons.edit_note,
+                    title: 'Paste Text',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PasteTextScreen(),
+                        ),
                       );
                     },
                   ),

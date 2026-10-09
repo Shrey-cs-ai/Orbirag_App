@@ -73,6 +73,40 @@ def index_pdf(pdf_bytes: bytes, filename: str, user_id: str) -> Dict:
     }
 
 
+def index_text(text: str, title: str, user_id: str) -> Dict:
+    """
+    Chunk raw text, embed it, and store it in the vector store.
+    Same pipeline as index_pdf but without PDF parsing.
+    """
+    text = text.strip()
+    if not text:
+        raise ValueError("Empty text")
+
+    chunk_rows = []
+    for i, piece in enumerate(_chunk_text(text)):
+        chunk_rows.append({
+            "text": piece,
+            "page_number": 1,
+            "chunk_index": i,
+        })
+
+    if not chunk_rows:
+        raise ValueError("Could not chunk text")
+
+    doc_id = vector_store.add_document(
+        user_id=user_id,
+        filename=title,
+        num_pages=1,
+        chunks=chunk_rows,
+    )
+
+    return {
+        "doc_id": doc_id,
+        "num_pages": 1,
+        "num_chunks": len(chunk_rows),
+    }
+
+
 async def ask_document(doc_id: str, question: str, top_k: int = 5) -> Dict:
     """
     Retrieve relevant chunks + ask Gemini.

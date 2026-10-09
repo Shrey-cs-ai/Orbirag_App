@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
-import 'papers_service.dart';
+
 
 class SearchService {
   static final SearchService instance = SearchService._internal();
@@ -95,9 +95,9 @@ class SearchService {
   }
 
   // ============================================================
-  // 3. Save Paper → bool
+  // 3. Save Paper → String? (returns the new paper's id, or null on failure)
   // ============================================================
-  Future<bool> savePaper(SearchResult paper) async {
+  Future<String?> savePaper(SearchResult paper) async {
     final payload = {
       'title': paper.title,
       'authors': paper.authors,
@@ -112,21 +112,6 @@ class SearchService {
     try {
       debugPrint('[Search] POST $baseUrl/api/save-paper');
 
-      await PapersService().initialize();
-      await PapersService().addPaper(
-        Paper(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: paper.title,
-          url: paper.url.isNotEmpty ? paper.url : null,
-          authors: paper.authors,
-          category: paper.venue.isNotEmpty ? paper.venue : 'GENERAL',
-          year: paper.year.isNotEmpty ? paper.year : '2024',
-          status: 'unread',
-          summary: paper.aiSummary,
-          dateAdded: DateTime.now(),
-        ),
-      );
-
       final response = await http
           .post(
             Uri.parse('$baseUrl/api/save-paper'),
@@ -136,15 +121,15 @@ class SearchService {
           .timeout(const Duration(seconds: 30));
 
       debugPrint('[Search] save-paper status: ${response.statusCode}');
-      if (response.statusCode == 422) {
-        debugPrint('[Search] 422 Unprocessable Entity! Payload sent: ${jsonEncode(payload)}');
-        debugPrint('[Search] Backend expected schema: SavePaperRequest(title, authors, year, source, citations, ai_summary, url, abstract, venue)');
-        debugPrint('[Search] Backend response: ${response.body}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['id']?.toString();
       }
-      return response.statusCode == 200 || response.statusCode == 201;
+      debugPrint('[Search] save-paper error body: ${response.body}');
+      return null;
     } catch (e) {
       debugPrint('[Search] savePaper exception: $e');
-      return false;
+      return null;
     }
   }
 }

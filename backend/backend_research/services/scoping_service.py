@@ -66,6 +66,27 @@ COMPARISON: {comparison}
 OUTCOME: {outcome}
 """
 
+_REGENERATE_PROMPT = """You are a research methods assistant.
+
+The user has previously seen this research question:
+
+PREVIOUS: {previous}
+
+Using the SAME PICO elements below, write a DIFFERENT variation of the research
+question. Change the angle or emphasis. For example:
+- Emphasize a different outcome, population, or time frame
+- Reframe as an exploratory, comparative, or causal question
+- Use a different sentence structure
+
+Do NOT repeat the previous phrasing. Return ONLY valid JSON:
+{{"research_question": "..."}}
+
+POPULATION: {population}
+INTERVENTION: {intervention}
+COMPARISON: {comparison}
+OUTCOME: {outcome}
+"""
+
 
 # ============================================================
 # Public: parse topic → PICO
@@ -87,7 +108,7 @@ async def parse_topic(topic: str) -> dict:
 # ============================================================
 # Public: synthesize research question
 # ============================================================
-async def synthesize_question(payload: dict) -> str:
+async def synthesize_question(payload: dict, regenerate: bool = False) -> str:
     if not payload.get("population"):
         raise ValueError("population is required")
     if not payload.get("intervention"):
@@ -95,14 +116,34 @@ async def synthesize_question(payload: dict) -> str:
     if not payload.get("outcome"):
         raise ValueError("outcome is required")
 
-    prompt = _SYNTHESIZE_PROMPT.format(
-        population=payload.get("population", ""),
-        intervention=payload.get("intervention", ""),
-        comparison=payload.get("comparison", "") or "(none)",
-        outcome=payload.get("outcome", ""),
-    )
-    data = await _ask_gemini(prompt, temperature=0.8)
-    return (data.get("research_question") or "").strip()
+    if regenerate:
+        prompt = _REGENERATE_PROMPT.format(
+            previous=payload.get("research_question", "(none)"),
+            population=payload.get("population", ""),
+            intervention=payload.get("intervention", ""),
+            comparison=payload.get("comparison", "") or "(none)",
+            outcome=payload.get("outcome", ""),
+        )
+        temperature = 0.9
+    else:
+        prompt = _SYNTHESIZE_PROMPT.format(
+            population=payload.get("population", ""),
+            intervention=payload.get("intervention", ""),
+            comparison=payload.get("comparison", "") or "(none)",
+            outcome=payload.get("outcome", ""),
+        )
+        temperature = 0.3
+
+    data = await _ask_gemini(prompt, temperature=temperature)
+    new_q = (data.get("research_question") or "").strip()
+
+    # If the LLM returned the exact same question, retry once with higher temp
+    if regenerate and new_q == (payload.get("research_question") or "").strip():
+        print("[Scoping] Regenerate returned same question, retrying...")
+        data = await _ask_gemini(prompt, temperature=1.0)
+        new_q = (data.get("research_question") or "").strip()
+
+    return new_q
 
 
 # ============================================================

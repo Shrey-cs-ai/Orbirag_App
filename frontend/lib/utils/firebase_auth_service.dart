@@ -1,9 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:http/http.dart' as http;
 
 class FirebaseAuthService {
   FirebaseAuthService._internal();
@@ -12,20 +9,20 @@ class FirebaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   GoogleSignIn? _googleSignInInstance;
 
+  /// On mobile we need serverClientId for Firebase credential exchange.
+  /// On web the google-signin meta tag in index.html handles it, and
+  /// passing serverClientId causes an assertion crash.
   GoogleSignIn get _googleSignIn {
     _googleSignInInstance ??= GoogleSignIn(
-      clientId:
-          '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
-      serverClientId:
-          '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
+      clientId: kIsWeb
+          ? '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com'
+          : null,
+      serverClientId: kIsWeb
+          ? null
+          : '407358214556-tguin26nr7bpaa0jmuaq0hrca8kg1gnh.apps.googleusercontent.com',
     );
     return _googleSignInInstance!;
   }
-
-  // ==================== GITHUB OAUTH CONFIG ====================
-  static const String _githubClientId = 'Ov23lixXmPs1IIqHmyWj';
-  static const String _githubClientSecret = 'c75bf703998c4c60a12d210a14741dd04ccc108a'; 
-  static const String _callbackScheme = 'orbirag';
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -86,78 +83,82 @@ class FirebaseAuthService {
     }
   }
 
-  // ==================== SOCIAL AUTH ====================
+  // ==================== GOOGLE SIGN-IN ====================
 
-  /// Google Sign-In
+  /// Google Sign-In — platform-aware.
+  ///
+  /// **Web**: Uses `signInWithPopup(GoogleAuthProvider())`.
+  ///   The OAuth client ID comes from the `<meta name="google-signin-client_id">`
+  ///   tag in `web/index.html`.
+  ///
+  /// **Mobile**: Uses the `google_sign_in` package to get an ID/access token,
+  ///   then exchanges the credential with Firebase.
   Future<String?> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return 'Google sign-in cancelled';
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-        accessToken: googleAuth.accessToken,
-      );
-
-      await _auth.signInWithCredential(credential);
-      return null;
+      if (kIsWeb) {
+        return await _signInWithGoogleWeb();
+      } else {
+        return await _signInWithGoogleMobile();
+      }
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
     } catch (e) {
+      debugPrint('[Google Auth] error: $e');
       return 'Google sign-in failed: $e';
     }
   }
 
-  /// GitHub Sign-In using flutter_web_auth_2 (custom scheme approach)
+  /// Web flow — popup-based, no google_sign_in package needed.
+  Future<String?> _signInWithGoogleWeb() async {
+    final provider = GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+
+    final result = await _auth.signInWithPopup(provider);
+    if (result.user == null) {
+      return 'Google sign-in cancelled';
+    }
+    debugPrint('[Google Auth] Web popup success: ${result.user?.email}');
+    return null;
+  }
+
+  /// Mobile flow — uses google_sign_in package.
+  Future<String?> _signInWithGoogleMobile() async {
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return 'Google sign-in cancelled';
+
+    final GoogleSignInAuthentication googleAuth =
+        await googleUser.authentication;
+
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+      accessToken: googleAuth.accessToken,
+    );
+
+    await _auth.signInWithCredential(credential);
+    debugPrint('[Google Auth] Mobile success: ${googleUser.email}');
+    return null;
+  }
+
+  // ==================== GITHUB SIGN-IN ====================
+
+  /// GitHub Sign-In — platform-aware.
+  ///
+  /// **Web**: Uses `signInWithPopup(GithubAuthProvider())`.
+  ///   Firebase handles the entire OAuth flow via its auth handler page.
+  ///   The GitHub OAuth App callback URL must be:
+  ///     `https://orbirag-2816b.firebaseapp.com/__/auth/handler`
+  ///
+  /// **Mobile**: Uses `signInWithProvider(GithubAuthProvider())`.
+  ///   Firebase SDK opens a Chrome Custom Tab / SFSafariViewController to
+  ///   handle the OAuth flow — no manual token exchange needed.
   Future<String?> signInWithGitHub() async {
     try {
-      // 1. Build the GitHub OAuth URL
-      final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
-        'client_id': _githubClientId,
-        'redirect_uri': '$_callbackScheme://callback',
-        'scope': 'read:user user:email',
-      });
-      debugPrint('[GitHub Auth] starting auth url: $authUrl, callbackScheme: $_callbackScheme');
-
-      // 2. Open GitHub login in a secure browser tab
-      final result = await FlutterWebAuth2.authenticate(
-        url: authUrl.toString(),
-        callbackUrlScheme: _callbackScheme, // 'orbirag'
-      );
-      debugPrint('[GitHub Auth] callback result: $result');
-
-      // 3. Extract the authorization code
-      final code = Uri.parse(result).queryParameters['code'];
-      if (code == null) {
-        return 'GitHub authorization was cancelled';
+      if (kIsWeb) {
+        return await _signInWithGitHubWeb();
+      } else {
+        return await _signInWithGitHubMobile();
       }
-
-      // 4. Exchange code for access token
-      final tokenResponse = await http.post(
-        Uri.parse('https://github.com/login/oauth/access_token'),
-        headers: {'Accept': 'application/json'},
-        body: {
-          'client_id': _githubClientId,
-          'client_secret': _githubClientSecret,
-          'code': code,
-          'redirect_uri': '$_callbackScheme://callback',
-        },
-      );
-
-      final tokenData = jsonDecode(tokenResponse.body);
-      final accessToken = tokenData['access_token'];
-      if (accessToken == null) {
-        return 'Failed to get GitHub access token: ${tokenData['error_description'] ?? 'unknown'}';
-      }
-
-      // 5. Sign in to Firebase with the GitHub credential
-      final credential = GithubAuthProvider.credential(accessToken);
-      await _auth.signInWithCredential(credential);
-
-      return null;
     } on FirebaseAuthException catch (e) {
       debugPrint('[GitHub Auth] FirebaseAuthException: ${e.message} (${e.code})');
       return _mapError(e);
@@ -165,6 +166,34 @@ class FirebaseAuthService {
       debugPrint('[GitHub Auth] error: $e');
       return 'GitHub sign-in failed: $e';
     }
+  }
+
+  /// Web flow — popup-based.
+  Future<String?> _signInWithGitHubWeb() async {
+    final provider = GithubAuthProvider();
+    provider.addScope('read:user');
+    provider.addScope('user:email');
+
+    final result = await _auth.signInWithPopup(provider);
+    if (result.user == null) {
+      return 'GitHub sign-in cancelled';
+    }
+    debugPrint('[GitHub Auth] Web popup success: ${result.user?.email}');
+    return null;
+  }
+
+  /// Mobile flow — Firebase SDK handles Chrome Custom Tab / deep link.
+  Future<String?> _signInWithGitHubMobile() async {
+    final provider = GithubAuthProvider();
+    provider.addScope('read:user');
+    provider.addScope('user:email');
+
+    final result = await _auth.signInWithProvider(provider);
+    if (result.user == null) {
+      return 'GitHub sign-in cancelled';
+    }
+    debugPrint('[GitHub Auth] Mobile provider success: ${result.user?.email}');
+    return null;
   }
 
   // ==================== PROFILE MANAGEMENT ====================
@@ -179,8 +208,13 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() async {
-    if (_googleSignInInstance != null) {
-      await _googleSignInInstance!.signOut();
+    // Sign out from Google on mobile (no-op if not signed in via Google).
+    try {
+      if (!kIsWeb && _googleSignInInstance != null) {
+        await _googleSignInInstance!.signOut();
+      }
+    } catch (_) {
+      // Ignore errors from google_sign_in signOut
     }
     await _auth.signOut();
   }
@@ -212,6 +246,12 @@ class FirebaseAuthService {
         return 'An account already exists with a different sign-in method.';
       case 'credential-already-in-use':
         return 'This credential is already linked to another account.';
+      case 'popup-closed-by-user':
+        return 'Sign-in popup was closed. Please try again.';
+      case 'cancelled-popup-request':
+        return 'Another sign-in popup is already open.';
+      case 'popup-blocked':
+        return 'Sign-in popup was blocked by the browser. Please allow popups.';
       default:
         return e.message ?? 'Authentication failed. Please try again.';
     }

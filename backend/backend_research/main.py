@@ -7,6 +7,8 @@ Orbirag FastAPI backend — Phase 1 + Phase 2 (RAG).
 # ============================================================
 import os
 import asyncio  
+from pydantic import BaseModel, Field
+from typing import Optional
 from pathlib import Path
 from models import User
 from services.search_service import search_semantic_scholar
@@ -108,7 +110,7 @@ from schemas import (
 )
 from services.ai_service import get_chat_response
 from services.deepgram_service import transcribe_audio
-from services.rag_service import index_pdf, ask_document
+from services.rag_service import index_pdf, ask_document, index_text
 
 
 # ============================================================
@@ -215,6 +217,47 @@ async def upload_pdf(
         raise HTTPException(500, f"Failed to index PDF: {e}")
 
 
+
+# ============================================================
+# Paper Orbit (RAG) — Paste / Type Text
+# ============================================================
+
+class TextIngestRequest(BaseModel):
+    text: str
+    title: Optional[str] = "Pasted Text"
+    user_id: Optional[str] = "anonymous"
+
+
+@app.post(
+    "/api/ai/ingest-text",
+    response_model=UploadPdfResponse,
+    tags=["Paper Orbit"],
+)
+async def ingest_text_route(req: TextIngestRequest):
+    """
+    Index raw pasted/typed text into the vector store so it can be
+    queried later by /api/ai/chat-with-pdf.
+    """
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Text is empty")
+    if len(text) > 100_000:
+        raise HTTPException(413, "Text too large (max 100,000 chars)")
+
+    try:
+        result = index_text(text, req.title or "Pasted Text", req.user_id or "anonymous")
+        return UploadPdfResponse(
+            doc_id=result["doc_id"],
+            filename=req.title or "Pasted Text",
+            num_chunks=result["num_chunks"],
+            num_pages=1,
+            message="Text indexed successfully",
+        )
+    except Exception as e:
+        print(f"[RAG] ingest-text error: {type(e).__name__}: {e}")
+        raise HTTPException(500, f"Failed to index text: {e}")
+
+
 @app.post("/api/ai/chat-with-pdf", response_model=RagChatResponse)
 async def chat_with_pdf(request: RagChatRequest):
     if not vector_store.document_exists(request.doc_id):
@@ -307,28 +350,28 @@ async def search_route(req: SearchRequest):
 # ============================================================
 @app.post("/api/save-paper", tags=["Literature"])
 async def save_paper_route(req: SavePaperRequest):
-    """Save a paper to the user's library (Postgres)."""
+    """Save a paper to the user's library (Postgres). Returns {success, id}."""
     try:
         from database import SessionLocal
         from db_queries import save_paper, upsert_user
         db = SessionLocal()
         try:
             upsert_user(db, firebase_uid="anonymous", display_name="Anonymous")
-            save_paper(
+            row = save_paper(
                 db,
-                user_id="anonymous",   # TODO: wire up Firebase UID later
+                user_id="anonymous",
                 data={
                     "title": req.title,
                     "authors": req.authors or "",
                     "year": str(req.year or ""),
                     "source": req.source or "Semantic Scholar",
                     "citations": req.citations or 0,
-                    "journal": req.venue or "",   # map venue → journal column
+                    "journal": req.venue or "",
                     "abstract": req.abstract or "",
                     "url": req.url or "",
                 },
             )
-            return {"success": True}
+            return {"success": True, "id": str(row.id)}
         finally:
             db.close()
     except Exception as e:
@@ -336,6 +379,64 @@ async def save_paper_route(req: SavePaperRequest):
         traceback.print_exc()
         print(f"[Literature] save-paper error: {e}")
         raise HTTPException(500, f"Save failed: {e}")
+
+
+# ============================================================
+# Papers Library — list / delete / update progress
+# ============================================================
+from pydantic import BaseModel as _BaseModel
+
+class _ProgressUpdate(_BaseModel):
+    status: Optional[str] = None   # unread | reading | analyzed | read
+    progress: Optional[float] = None  # 0.0 – 1.0
+
+
+@app.get("/api/papers", tags=["Literature"])
+def list_papers_route(user_id: str = "anonymous", db: Session = Depends(get_db)):
+    """List saved papers for a user."""
+    from db_queries import list_papers
+    rows = list_papers(db, user_id=user_id)
+    return {"items": [
+        {
+            "id": str(r.id),
+            "title": r.title or "",
+            "authors": r.authors or "",
+            "year": r.year or "",
+            "journal": r.journal or "",
+            "abstract": r.abstract or "",
+            "url": r.url or "",
+            "source": r.source or "Semantic Scholar",
+            "status": r.status or "unread",
+            "progress": float(r.progress or 0.0),
+            "is_favorite": bool(r.is_favorite),
+        }
+        for r in rows
+    ]}
+
+
+@app.delete("/api/papers/{paper_id}", tags=["Literature"])
+def delete_paper_route(paper_id: UUID, db: Session = Depends(get_db)):
+    """Delete a saved paper."""
+    from db_queries import delete_paper
+    if not delete_paper(db, paper_id=str(paper_id), user_id="anonymous"):
+        raise HTTPException(404, "Paper not found")
+    return {"success": True}
+
+
+@app.patch("/api/papers/{paper_id}", tags=["Literature"])
+def update_paper_route(paper_id: UUID, payload: _ProgressUpdate, db: Session = Depends(get_db)):
+    """Update reading status and/or progress for a saved paper."""
+    from db_queries import update_paper_status
+    row = update_paper_status(
+        db,
+        paper_id=str(paper_id),
+        user_id="anonymous",
+        status=payload.status,
+        progress=payload.progress,
+    )
+    if not row:
+        raise HTTPException(404, "Paper not found")
+    return {"success": True}
 
 
 # ============================================================
@@ -388,7 +489,7 @@ async def recommendations_route(
 # ============================================================
 # Citations
 # ============================================================
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
@@ -890,7 +991,10 @@ async def scoping_parse(req: ScopingParseRequest):
 @app.post("/api/scoping/synthesize", tags=["Scoping"])
 async def scoping_synthesize(req: ScopingSynthesizeRequest):
     try:
-        question = await scoping_service.synthesize_question(req.model_dump())
+        question = await scoping_service.synthesize_question(
+            req.model_dump(),
+            regenerate=req.regenerate,
+        )
         return {**req.model_dump(), "research_question": question}
     except ValueError as e:
         raise HTTPException(422, str(e))

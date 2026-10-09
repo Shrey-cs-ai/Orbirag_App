@@ -365,7 +365,8 @@ class ScopingParseRequest(BaseModel):
 
 
 class ScopingSynthesizeRequest(ScopingPayload):
-    pass
+    regenerate: bool = False
+    nonce: Optional[int] = None
 
 
 class ScopingSaveRequest(ScopingPayload):

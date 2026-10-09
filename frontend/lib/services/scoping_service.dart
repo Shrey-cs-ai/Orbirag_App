@@ -79,10 +79,11 @@ class ScopingService {
     }
   }
 
-  Future<String?> synthesizeQuestion(ScopingData data) async {
+  Future<String?> synthesizeQuestion(ScopingData data, {bool regenerate = false}) async {
     try {
       final payload = {
         ...data.toJson(),
+        'regenerate': regenerate,
         'nonce': DateTime.now().millisecondsSinceEpoch,
       };
       final r = await http

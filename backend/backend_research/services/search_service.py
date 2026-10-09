@@ -5,6 +5,7 @@ Loads .env itself so it works regardless of import order.
 
 import os
 from pathlib import Path
+from datetime import datetime
 from typing import List, Dict, Optional
 
 import httpx
@@ -60,6 +61,12 @@ async def search_semantic_scholar(
     Search Semantic Scholar. Returns a normalized list of papers.
     year_range like '2015-2025' or None.
     """
+    # Normalise human-readable date range values from the dropdown
+    if year_range == "Last 5 years":
+        year_range = f"{datetime.now().year - 5}-{datetime.now().year}"
+    elif year_range in ("All time", "", None):
+        year_range = None
+
     params = {
         "query": query,
         "limit": limit,
@@ -68,9 +75,17 @@ async def search_semantic_scholar(
     if year_range:
         params["year"] = year_range
 
-    # Discipline narrows results by appending to the query text
-    if discipline and discipline.lower() != "all":
-        params["query"] = f"{query} {discipline}"
+    # Use Semantic Scholar's proper fieldsOfStudy filter (not query keyword)
+    _DISCIPLINE_MAP = {
+        "medicine": "Medicine",
+        "cs": "Computer Science",
+        "engineering": "Engineering",
+        "education": "Education",
+    }
+    if discipline and discipline.lower() not in ("all", ""):
+        s2_field = _DISCIPLINE_MAP.get(discipline.lower())
+        if s2_field:
+            params["fieldsOfStudy"] = s2_field
 
     print(f"[S2 DEBUG] sending GET {S2_BASE}")
     print(f"[S2 DEBUG] params  = {params}")
