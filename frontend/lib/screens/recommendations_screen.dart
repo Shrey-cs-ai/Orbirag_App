@@ -292,8 +292,7 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          PaperOrbitScreen(paperTitle: paper.title),
+                      builder: (_) => PaperOrbitScreen(paperTitle: paper.title),
                     ),
                   );
                 },

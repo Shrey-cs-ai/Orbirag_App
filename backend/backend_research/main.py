@@ -43,6 +43,7 @@ from schemas import (
     # ... existing ...
     UserCreate, UserOut, UserListResponse,
     LoginRequest, LoginResponse, PasswordResetRequest,
+    AdminPasswordResetRequest, AvatarUpdateRequest,
 )
 from services import user_service
 from services.deps import get_current_user, require_admin
@@ -716,6 +717,18 @@ def me(current: User = Depends(get_current_user)):
     return current
 
 
+@app.patch("/api/auth/avatar", response_model=UserOut, tags=["Auth"])
+def update_my_avatar(
+    payload: AvatarUpdateRequest,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = user_service.set_avatar(db, current.id, payload.avatar_base64)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+
 # ============================================================
 # Admin — users
 # ============================================================
@@ -782,11 +795,23 @@ def admin_set_role(
 @app.patch("/api/admin/users/{user_id}/password", response_model=UserOut, tags=["Admin"])
 def admin_reset_password(
     user_id: UUID,
-    payload: PasswordResetRequest,
+    payload: AdminPasswordResetRequest,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     user = user_service.reset_password(db, user_id, payload.new_password)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user
+
+
+@app.get("/api/admin/users/{user_id}", response_model=UserOut, tags=["Admin"])
+def admin_get_user(
+    user_id: UUID,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = user_service.get_by_id(db, user_id)
     if not user:
         raise HTTPException(404, "User not found")
     return user

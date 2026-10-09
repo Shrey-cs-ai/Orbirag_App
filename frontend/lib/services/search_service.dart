@@ -95,22 +95,41 @@ class SearchService {
   }
 
   // ============================================================
-  // 3. Save Paper → String? (returns the new paper's id, or null on failure)
+  // 3. Save Paper → bool (true on success, false on failure)
   // ============================================================
-  Future<String?> savePaper(SearchResult paper) async {
-    final payload = {
-      'title': paper.title,
-      'authors': paper.authors,
-      'year': paper.year,
-      'source': paper.source,
-      'citations': paper.citations,
-      'ai_summary': paper.aiSummary,
-      'url': paper.url,
-      'abstract': paper.abstract,
-      'venue': paper.venue,
-    };
+  Future<bool> savePaper(SearchResult paper) async {
+    final payload = _paperPayload(paper);
     try {
       debugPrint('[Search] POST $baseUrl/api/save-paper');
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/save-paper'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('[Search] save-paper status: ${response.statusCode}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      }
+      debugPrint('[Search] save-paper error body: ${response.body}');
+      return false;
+    } catch (e) {
+      debugPrint('[Search] savePaper exception: $e');
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 3b. Save Paper With Id → String? (returns the new paper's id)
+  //     Used when the caller needs the DB id (e.g. open reader after save).
+  // ============================================================
+  Future<String?> savePaperWithId(SearchResult paper) async {
+    final payload = _paperPayload(paper);
+    try {
+      debugPrint('[Search] POST $baseUrl/api/save-paper (with-id)');
 
       final response = await http
           .post(
@@ -128,11 +147,24 @@ class SearchService {
       debugPrint('[Search] save-paper error body: ${response.body}');
       return null;
     } catch (e) {
-      debugPrint('[Search] savePaper exception: $e');
+      debugPrint('[Search] savePaperWithId exception: $e');
       return null;
     }
   }
+
+  Map<String, dynamic> _paperPayload(SearchResult paper) => {
+        'title': paper.title,
+        'authors': paper.authors,
+        'year': paper.year,
+        'source': paper.source,
+        'citations': paper.citations,
+        'ai_summary': paper.aiSummary,
+        'url': paper.url,
+        'abstract': paper.abstract,
+        'venue': paper.venue,
+      };
 }
+
 
 // ============================================================
 // MODELS

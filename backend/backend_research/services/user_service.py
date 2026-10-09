@@ -11,8 +11,12 @@ def get_by_username(db: Session, username: str) -> Optional[User]:
     return db.query(User).filter(User.username == username).first()
 
 
-def get_by_id(db: Session, user_id: UUID) -> Optional[User]:
-    return db.query(User).filter(User.id == user_id).first()
+def get_by_id(db: Session, user_id) -> Optional[User]:
+    try:
+        uid = UUID(str(user_id))
+    except (ValueError, AttributeError):
+        return None
+    return db.query(User).filter(User.id == uid).first()
 
 
 def list_users(db: Session, search: Optional[str] = None) -> List[User]:
@@ -77,9 +81,12 @@ def delete_user(db: Session, user_id: UUID) -> bool:
     db.commit()
     return True
 
-def get_by_id(db: Session, user_id) -> Optional[User]:
-    try:
-        uid = UUID(str(user_id))
-    except (ValueError, AttributeError):
+
+def set_avatar(db: Session, user_id, avatar_base64: Optional[str]) -> Optional[User]:
+    user = get_by_id(db, user_id)
+    if not user:
         return None
-    return db.query(User).filter(User.id == uid).first()
+    user.avatar_base64 = avatar_base64
+    db.commit()
+    db.refresh(user)
+    return user

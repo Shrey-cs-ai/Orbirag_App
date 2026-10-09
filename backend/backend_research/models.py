@@ -226,6 +226,7 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
+    avatar_base64 = Column(Text, nullable=True)   # base64-encoded image, max ~500KB
 
 
 #plagiarismCheck model

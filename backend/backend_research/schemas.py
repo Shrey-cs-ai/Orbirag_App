@@ -239,6 +239,7 @@ class UserOut(BaseModel):
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime]
+    avatar_base64: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -262,6 +263,14 @@ class LoginResponse(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class AdminPasswordResetRequest(BaseModel):
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class AvatarUpdateRequest(BaseModel):
+    avatar_base64: Optional[str] = None
 
 class PlagiarismMatch(BaseModel):
     id: int

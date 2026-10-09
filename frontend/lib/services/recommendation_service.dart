@@ -7,6 +7,7 @@ import 'search_service.dart';
 class RecommendationService {
   static final RecommendationService instance =
       RecommendationService._internal();
+  factory RecommendationService() => instance;
   RecommendationService._internal();
 
   String get baseUrl {

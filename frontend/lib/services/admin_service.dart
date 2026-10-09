@@ -56,6 +56,15 @@ class AdminService {
     if (r.statusCode != 200) throw Exception('Password reset failed');
   }
 
+  Future<AuthUser> getUser(String id) async {
+    final r = await http.get(
+      Uri.parse('$_baseUrl/admin/users/$id'),
+      headers: _auth.authHeaders,
+    );
+    if (r.statusCode != 200) throw Exception('User not found');
+    return AuthUser.fromJson(jsonDecode(r.body));
+  }
+
   Future<void> deleteUser(String id) async {
     final r = await http.delete(
       Uri.parse('$_baseUrl/admin/users/$id'),

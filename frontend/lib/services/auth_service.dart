@@ -7,6 +7,7 @@ class AuthUser {
   final String id;
   final String username;
   final String? email;
+  final String? avatarBase64;
   final String role;
   final bool isActive;
   final DateTime createdAt;
@@ -16,6 +17,7 @@ class AuthUser {
     required this.id,
     required this.username,
     this.email,
+    this.avatarBase64,
     required this.role,
     required this.isActive,
     required this.createdAt,
@@ -28,6 +30,7 @@ class AuthUser {
         id: json['id'].toString(),
         username: json['username'] ?? '',
         email: json['email'],
+        avatarBase64: json['avatar_base64'],
         role: json['role'] ?? 'user',
         isActive: json['is_active'] ?? true,
         createdAt: DateTime.parse(json['created_at']).toLocal(),

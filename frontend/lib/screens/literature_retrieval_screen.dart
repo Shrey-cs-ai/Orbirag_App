@@ -688,12 +688,12 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    final id = await _searchService.savePaper(paper);
+                    final saved = await _searchService.savePaper(paper);
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(id != null ? '✅ Saved to library' : '❌ Save failed'),
-                        backgroundColor: id != null ? AppColors.success : AppColors.error,
+                        content: Text(saved ? '✅ Saved to library' : '❌ Save failed'),
+                        backgroundColor: saved ? AppColors.success : AppColors.error,
                       ),
                     );
                   },
@@ -714,7 +714,7 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () async {
                     // Save first to get a db id, then open the reader
-                    final id = await _searchService.savePaper(paper);
+                    final id = await _searchService.savePaperWithId(paper);
                     if (!mounted) return;
                     if (id == null) {
                       _showMessage('Save failed — cannot open reader');

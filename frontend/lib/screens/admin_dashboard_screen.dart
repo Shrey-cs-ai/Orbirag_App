@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../services/admin_service.dart';
@@ -19,6 +20,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   List<AuthUser> _users = [];
   bool _loading = true;
   String? _error;
+  String _roleFilter = 'all';
 
   @override
   void initState() {
@@ -38,7 +40,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _error = null;
     });
     try {
-      final users = await _admin.listUsers(search: _search.text.trim());
+      var users = await _admin.listUsers(search: _search.text.trim());
+      if (_roleFilter == 'admin') {
+        users = users.where((u) => u.isAdmin).toList();
+      } else if (_roleFilter == 'user') {
+        users = users.where((u) => !u.isAdmin).toList();
+      }
       setState(() {
         _users = users;
         _loading = false;
@@ -59,6 +66,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  void _setRoleFilter(String role) {
+    setState(() => _roleFilter = role);
+    _load();
+  }
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showUserDetails(AuthUser user) {
     showModalBottomSheet(
       context: context,
@@ -71,10 +107,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(user.username,
-                style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold)),
+            Center(
+              child: CircleAvatar(
+                radius: 40,
+                backgroundColor: user.isAdmin
+                    ? AppColors.purple.withValues(alpha: 0.2)
+                    : AppColors.primary.withValues(alpha: 0.2),
+                backgroundImage: user.avatarBase64 != null &&
+                        user.avatarBase64!.isNotEmpty
+                    ? MemoryImage(base64Decode(user.avatarBase64!))
+                    : null,
+                child: (user.avatarBase64 == null ||
+                        user.avatarBase64!.isEmpty)
+                    ? Icon(
+                        user.isAdmin ? Icons.shield : Icons.person,
+                        size: 40,
+                        color: user.isAdmin
+                            ? AppColors.purple
+                            : AppColors.primary,
+                      )
+                    : null,
+              ),
+            ),
             const SizedBox(height: 12),
+            Center(
+              child: Text(
+                user.username,
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 16),
             _row('Email', user.email ?? '—'),
             _row('Role', user.role),
             _row('Status', user.isActive ? 'Active' : 'Banned'),
@@ -96,16 +159,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () async {
-                      await _admin.resetPassword(user.id, 'temp123456');
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Password reset to: temp123456 — share with user'),
-                          backgroundColor: AppColors.success,
+                      final controller = TextEditingController();
+                      final newPassword = await showDialog<String>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Reset password'),
+                          content: TextField(
+                            controller: controller,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                              labelText: 'New password',
+                              hintText: 'Min 6 characters',
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                final pwd = controller.text.trim();
+                                if (pwd.length < 6) return;
+                                Navigator.pop(context, pwd);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Reset'),
+                            ),
+                          ],
                         ),
                       );
+
+                      if (newPassword == null || newPassword.isEmpty) {
+                        return;
+                      }
+
+                      try {
+                        await _admin.resetPassword(user.id, newPassword);
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Password reset for ${user.username}'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Reset failed: $e'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.key),
                     label: const Text('Reset password'),
@@ -167,19 +278,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _search,
-              onChanged: (_) => _load(),
-              decoration: InputDecoration(
-                hintText: 'Search users...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: AppColors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    _filterChip('All', _roleFilter == 'all',
+                        () => _setRoleFilter('all')),
+                    const SizedBox(width: 8),
+                    _filterChip('Admins', _roleFilter == 'admin',
+                        () => _setRoleFilter('admin')),
+                    const SizedBox(width: 8),
+                    _filterChip('Users', _roleFilter == 'user',
+                        () => _setRoleFilter('user')),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _search,
+                  onChanged: (_) => _load(),
+                  decoration: InputDecoration(
+                    hintText: 'Search users...',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: AppColors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -218,13 +346,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Row(
             children: [
               CircleAvatar(
+                radius: 24,
                 backgroundColor: user.isAdmin
                     ? AppColors.purple.withValues(alpha: 0.2)
                     : AppColors.primary.withValues(alpha: 0.2),
-                child: Icon(
-                  user.isAdmin ? Icons.shield : Icons.person,
-                  color: user.isAdmin ? AppColors.purple : AppColors.primary,
-                ),
+                backgroundImage: user.avatarBase64 != null &&
+                        user.avatarBase64!.isNotEmpty
+                    ? MemoryImage(base64Decode(user.avatarBase64!))
+                    : null,
+                child: (user.avatarBase64 == null ||
+                        user.avatarBase64!.isEmpty)
+                    ? Icon(
+                        user.isAdmin ? Icons.shield : Icons.person,
+                        color: user.isAdmin
+                            ? AppColors.purple
+                            : AppColors.primary,
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -293,15 +431,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   final ok = await showDialog<bool>(
                     context: context,
                     builder: (_) => AlertDialog(
-                      title: const Text('Delete user?'),
+                      title: const Text('Delete Profile'),
                       content: Text(
-                          'Permanently delete "${user.username}"?'),
+                          'Permanently delete "${user.username}"? This also removes their avatar and cannot be undone.'),
                       actions: [
                         TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel')),
+                          onPressed: () =>
+                              Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
                         ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
+                          onPressed: () =>
+                              Navigator.pop(context, true),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.error,
                             foregroundColor: Colors.white,
@@ -312,8 +453,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                   );
                   if (ok == true) {
-                    await _admin.deleteUser(user.id);
-                    _load();
+                    try {
+                      await _admin.deleteUser(user.id);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Deleted ${user.username}'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                      _load();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Delete failed: $e'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   }
                 },
               ),

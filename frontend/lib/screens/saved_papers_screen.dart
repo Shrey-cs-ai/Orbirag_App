@@ -187,6 +187,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
               onPressed: () async {
                 if (!_addFormKey.currentState!.validate()) return;
                 setSt(() => _isAddingPaper = true);
+                final messenger = ScaffoldMessenger.of(context);
                 final paper = Paper(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   title: _titleCtrl.text.trim(),
@@ -201,7 +202,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 setSt(() => _isAddingPaper = false);
                 Navigator.pop(ctx);
                 await _loadPapers();
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Paper added!'),
                     backgroundColor: AppColors.success,
