@@ -75,47 +75,34 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             ),
             const SizedBox(height: 28),
 
-            // Upload Cards — three equal cards in a row (wrapping)
-            Wrap(
-              spacing: 14,
-              runSpacing: 14,
-              children: [
-                SizedBox(
-                  width: (MediaQuery.of(context).size.width - 54) / 3,
-                  child: _buildUploadCard(
-                    icon: Icons.description_outlined,
-                    title: 'Upload PDF',
-                    onTap: _uploadPDF,
+            // Upload Cards — three full-width cards stacked vertically
+            _buildUploadCard(
+              icon: Icons.description_outlined,
+              title: 'Upload PDF',
+              onTap: _uploadPDF,
+            ),
+            const SizedBox(height: 14),
+            _buildUploadCard(
+              icon: Icons.camera_alt_outlined,
+              title: 'Take Photo',
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Photo support coming soon')),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
+            _buildUploadCard(
+              icon: Icons.edit_note,
+              title: 'Paste Text',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PasteTextScreen(),
                   ),
-                ),
-                SizedBox(
-                  width: (MediaQuery.of(context).size.width - 54) / 3,
-                  child: _buildUploadCard(
-                    icon: Icons.camera_alt_outlined,
-                    title: 'Take Photo',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Photo support coming soon')),
-                      );
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: (MediaQuery.of(context).size.width - 54) / 3,
-                  child: _buildUploadCard(
-                    icon: Icons.edit_note,
-                    title: 'Paste Text',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PasteTextScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+                );
+              },
             ),
 
             const SizedBox(height: 32),
@@ -156,7 +143,8 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
                       textInputAction: TextInputAction.newline,
                       decoration: InputDecoration(
                         hintText: 'Write or paste your paper text here...',
-                        hintStyle: const TextStyle(color: AppColors.hintText, fontSize: 13),
+                        hintStyle: const TextStyle(
+                            color: AppColors.hintText, fontSize: 13),
                         filled: true,
                         fillColor: AppColors.inputFill,
                         border: OutlineInputBorder(
@@ -169,7 +157,8 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                          borderSide: const BorderSide(
+                              color: AppColors.primary, width: 1.5),
                         ),
                       ),
                     ),
@@ -209,7 +198,9 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
                         _pdfService.clearSources();
                       });
                     },
-                    child: const Text('Clear All', style: TextStyle(color: AppColors.error, fontSize: 12)),
+                    child: const Text('Clear All',
+                        style: TextStyle(
+                            color: AppColors.error, fontSize: 12)),
                   ),
               ],
             ),
@@ -223,11 +214,19 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.upload_file_outlined, size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
+                      Icon(
+                        Icons.upload_file_outlined,
+                        size: 64,
+                        color: AppColors.textSecondary.withValues(alpha: 0.3),
+                      ),
                       const SizedBox(height: 12),
-                      const Text('No sources added yet', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                      const Text('No sources added yet',
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 14)),
                       const SizedBox(height: 4),
-                      const Text('Upload a PDF to get started', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      const Text('Upload a PDF to get started',
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -237,7 +236,8 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: sources.length,
-                itemBuilder: (context, index) => _buildSourceItem(sources[index], index),
+                itemBuilder: (context, index) =>
+                    _buildSourceItem(sources[index], index),
               ),
 
             const SizedBox(height: 12),
@@ -245,12 +245,14 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             // Info Text
             Row(
               children: [
-                const Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
+                const Icon(Icons.info_outline,
+                    size: 16, color: AppColors.textSecondary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     "You can add multiple sources and ask questions across all of them",
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -261,15 +263,20 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _pdfService.hasChatReadySource ? _startChatting : null,
+                onPressed:
+                    _pdfService.hasChatReadySource ? _startChatting : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: AppColors.border,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text("Start Chatting", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                child: const Text(
+                  "Start Chatting",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -280,18 +287,27 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() => _selectedIndex = index);
-          final route = AppConstants.bottomNavItems[index]['route'] as String;
+          final route =
+              AppConstants.bottomNavItems[index]['route'] as String;
           Navigator.of(context).pushReplacementNamed(route);
         },
       ),
     );
   }
 
-  Widget _buildUploadCard({required IconData icon, required String title, required VoidCallback onTap}) {
+  // ------------------------------------------------------------
+  // Full-width upload card
+  // ------------------------------------------------------------
+  Widget _buildUploadCard({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 28),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(16),
@@ -301,19 +317,32 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 56,
-              height: 56,
-              decoration: const BoxDecoration(color: AppColors.cardBg, shape: BoxShape.circle),
-              child: Icon(icon, size: 28, color: AppColors.primary),
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: AppColors.cardBg,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 32, color: AppColors.primary),
             ),
-            const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
+  // ------------------------------------------------------------
+  // Source list item
+  // ------------------------------------------------------------
   Widget _buildSourceItem(Map<String, dynamic> source, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -328,9 +357,14 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: AppColors.cardBg, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: AppColors.cardBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Icon(
-              source['type'] == 'text' ? Icons.article_outlined : Icons.picture_as_pdf,
+              source['type'] == 'text'
+                  ? Icons.article_outlined
+                  : Icons.picture_as_pdf,
               color: AppColors.primary,
               size: 22,
             ),
@@ -340,14 +374,25 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(source['name'] ?? 'Untitled', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  source['name'] ?? 'Untitled',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 2),
-                Text('${source['pages']} • ${source['size'] ?? ''}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(
+                  '${source['pages']} • ${source['size'] ?? ''}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+            icon: const Icon(Icons.close,
+                size: 18, color: AppColors.textSecondary),
             onPressed: () => setState(() => _pdfService.removeSource(index)),
           ),
         ],
@@ -355,12 +400,15 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     );
   }
 
+  // ------------------------------------------------------------
+  // Upload PDF
+  // ------------------------------------------------------------
   Future<void> _uploadPDF() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        withData: true, // ✅ IMPORTANT: This gives us the bytes on Web!
+        withData: true, // ✅ Important for web — gives us the bytes
       );
       if (!mounted) return;
       if (result == null || result.files.isEmpty) return;
@@ -370,7 +418,9 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
       );
 
       if (fileData.bytes != null) {
@@ -384,20 +434,31 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
       setState(() {});
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PDF ready for chat!'), backgroundColor: AppColors.success),
+        const SnackBar(
+          content: Text('PDF ready for chat!'),
+          backgroundColor: AppColors.success,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context); // close loading
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e'), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text('Upload failed: $e'),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
 
+  // ------------------------------------------------------------
+  // Add text source
+  // ------------------------------------------------------------
   Future<void> _addTextSource() async {
     if (_textController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Write or paste some text first.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Write or paste some text first.')),
+      );
       return;
     }
 
@@ -407,16 +468,25 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     setState(() => _textController.clear());
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Text added successfully!'), backgroundColor: AppColors.success),
+      const SnackBar(
+        content: Text('Text added successfully!'),
+        backgroundColor: AppColors.success,
+      ),
     );
   }
 
+  // ------------------------------------------------------------
+  // Start chatting
+  // ------------------------------------------------------------
   void _startChatting() {
     final pdfSource = _pdfService.firstPdfSource;
 
     if (pdfSource == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload a PDF first.'), backgroundColor: AppColors.error),
+        const SnackBar(
+          content: Text('Please upload a PDF first.'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
