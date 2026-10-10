@@ -8,8 +8,10 @@ import re
 import json
 import io
 import xml.etree.ElementTree as ET
+from typing import Optional
 
 import httpx
+from fastapi import HTTPException
 
 
 # ============================================================
@@ -44,54 +46,234 @@ def extract_text_from_pdf(pdf_bytes: bytes, max_chars: int = 6000) -> str:
 
 
 # ============================================================
-# arXiv API metadata extraction
+# URL & Academic API helpers
 # ============================================================
-async def fetch_arxiv_metadata(arxiv_id: str) -> dict:
-    """Fetch metadata directly from arXiv Export API for a given arXiv ID."""
-    url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
-    print(f"[Citation] Fetching arXiv API: {url}")
+def _extract_doi_from_url(url: str) -> Optional[str]:
+    """Extract a DOI from a URL like https://doi.org/10.1145/xxx or
+    https://dl.acm.org/doi/10.1145/xxx"""
+    m = re.search(r'10\.\d{4,9}/[-._;()/:A-Z0-9]+', url, re.IGNORECASE)
+    if m:
+        return m.group(0).rstrip(".,;/")
+    return None
+
+
+def _extract_arxiv_id(url: str) -> Optional[str]:
+    """Extract arXiv ID from arxiv.org URLs."""
+    # Match arxiv.org/abs/1706.03762 or arxiv.org/pdf/1706.03762.pdf
+    m = re.search(r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})', url, re.IGNORECASE)
+    if not m:
+        m = re.search(r'arxiv\.org/(?:abs|pdf)/([0-9]+\.[0-9]+(?:v[0-9]+)?|[a-zA-Z\-]+/[0-9]+)', url, re.IGNORECASE)
+    return m.group(1) if m else None
+
+
+async def _fetch_crossref_metadata(doi: str) -> dict:
+    """Query Crossref for DOI metadata. Returns normalized dict."""
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            print(f"[Citation] arXiv API status: {r.status_code}, preview: {r.text[:200]!r}")
-            r.raise_for_status()
-            xml_content = r.text
+            r = await client.get(
+                f"https://api.crossref.org/works/{doi}",
+                headers={"User-Agent": "Orbirag/1.0 (mailto:admin@orbirag.local)"},
+            )
+            if r.status_code != 200:
+                return {}
+            data = r.json().get("message", {})
 
-        root = ET.fromstring(xml_content)
-        ns = {"atom": "http://www.w3.org/2005/Atom"}
-        entry = root.find("atom:entry", ns)
-        if entry is None:
-            raise ValueError(f"No entry found in arXiv for ID {arxiv_id}")
+            # Authors
+            authors_list = data.get("author", [])
+            authors_parts = []
+            for a in authors_list[:6]:
+                family = a.get("family", "").strip()
+                given = a.get("given", "").strip()
+                if family and given:
+                    authors_parts.append(f"{family}, {given[0]}.")
+                elif family:
+                    authors_parts.append(family)
+                elif given:
+                    authors_parts.append(given)
+            authors = ", ".join(authors_parts)
 
-        title_elem = entry.find("atom:title", ns)
-        title = ""
-        if title_elem is not None and title_elem.text:
-            title = re.sub(r"\s+", " ", title_elem.text.strip().replace("\n", " "))
+            # Year
+            year = ""
+            date_parts = (
+                data.get("published-print", {}).get("date-parts")
+                or data.get("published-online", {}).get("date-parts")
+                or data.get("issued", {}).get("date-parts")
+            )
+            if date_parts and date_parts[0]:
+                year = str(date_parts[0][0])
 
-        authors = []
-        for author_elem in entry.findall("atom:author", ns):
-            name_elem = author_elem.find("atom:name", ns)
-            if name_elem is not None and name_elem.text:
-                authors.append(name_elem.text.strip())
-        authors_str = ", ".join(authors)
+            title_list = data.get("title") or [""]
+            container_list = data.get("container-title") or [""]
 
-        published_elem = entry.find("atom:published", ns)
-        year = ""
-        if published_elem is not None and published_elem.text:
-            year = published_elem.text[:4]
-
-        return {
-            "title": title,
-            "authors": authors_str,
-            "year": year,
-            "journal": f"arXiv preprint arXiv:{arxiv_id}",
-            "publisher": "arXiv",
-            "doi": f"10.48550/arXiv.{arxiv_id}",
-            "url": f"https://arxiv.org/abs/{arxiv_id}",
-        }
+            return {
+                "title": title_list[0] if title_list else "",
+                "authors": authors,
+                "year": year,
+                "journal": container_list[0] if container_list else "",
+                "publisher": data.get("publisher", ""),
+                "doi": doi,
+                "url": f"https://doi.org/{doi}",
+            }
     except Exception as e:
-        print(f"[Citation] arXiv API fetch failed: {e}")
-        raise ValueError(f"Could not retrieve arXiv paper info: {e}")
+        print(f"[Citation] Crossref error for {doi}: {e}")
+        return {}
+
+
+async def _fetch_arxiv_metadata(arxiv_id: str) -> dict:
+    """Query arXiv Export API for metadata."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(
+                f"https://export.arxiv.org/api/query?id_list={arxiv_id}",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            )
+            if r.status_code != 200:
+                return {}
+            root = ET.fromstring(r.text)
+            ns = {'atom': 'http://www.w3.org/2005/Atom'}
+            entry = root.find('atom:entry', ns)
+            if entry is None:
+                return {}
+
+            title = (entry.findtext('atom:title', '', ns) or '').strip()
+            title = re.sub(r'\s+', ' ', title)
+
+            authors_parts = []
+            for author in entry.findall('atom:author', ns)[:6]:
+                name = (author.findtext('atom:name', '', ns) or '').strip()
+                parts = name.split()
+                if len(parts) >= 2:
+                    authors_parts.append(f"{parts[-1]}, {parts[0][0]}.")
+                elif name:
+                    authors_parts.append(name)
+            authors = ", ".join(authors_parts)
+
+            published = entry.findtext('atom:published', '', ns)
+            year = published[:4] if published else ""
+
+            return {
+                "title": title,
+                "authors": authors,
+                "year": year,
+                "journal": "arXiv preprint",
+                "publisher": "arXiv",
+                "doi": f"10.48550/arXiv.{arxiv_id}",
+                "url": f"https://arxiv.org/abs/{arxiv_id}",
+            }
+    except Exception as e:
+        print(f"[Citation] arXiv error for {arxiv_id}: {e}")
+        return {}
+
+# Alias for backwards compatibility
+fetch_arxiv_metadata = _fetch_arxiv_metadata
+
+
+async def _fetch_html(url: str) -> str:
+    """Fetch HTML with realistic browser headers."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                    "image/webp,*/*;q=0.8"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        ) as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                print(f"[Citation] fetch {url} -> {r.status_code}")
+                return ""
+            return r.text
+    except Exception as e:
+        print(f"[Citation] fetch error {url}: {e}")
+        return ""
+
+
+def _extract_metadata_from_html(html: str, url: str) -> dict:
+    """Parse Dublin Core / OpenGraph / Highwire meta tags from HTML.
+    These are used by ACM, Springer, IEEE, Elsevier, PubMed, etc."""
+    def meta(name: str) -> str:
+        # Match both name= and property= variants, order flexible
+        for attr in ('name', 'property'):
+            m = re.search(
+                rf'<meta[^>]+{attr}=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)["\']',
+                html, re.IGNORECASE
+            )
+            if not m:
+                m = re.search(
+                    rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+{attr}=["\']{re.escape(name)}["\']',
+                    html, re.IGNORECASE
+                )
+            if m:
+                return m.group(1).strip()
+        return ""
+
+    # Title — try Highwire then OpenGraph then Dublin Core
+    title = (
+        meta("citation_title")
+        or meta("og:title")
+        or meta("DC.Title")
+        or meta("dc.title")
+    )
+
+    # Authors — citation_author appears multiple times
+    author_matches = re.findall(
+        r'<meta[^>]+name=["\']citation_author["\'][^>]+content=["\']([^"\']+)["\']',
+        html, re.IGNORECASE
+    )
+    if not author_matches:
+        author_matches = re.findall(
+            r'<meta[^>]+property=["\']article:author["\'][^>]+content=["\']([^"\']+)["\']',
+            html, re.IGNORECASE
+        )
+    authors = ", ".join(author_matches[:6])
+
+    # Year
+    date = meta("citation_publication_date") or meta("citation_date") or meta("DC.Date")
+    year = date[:4] if date else ""
+
+    # Journal / venue
+    journal = (
+        meta("citation_journal_title")
+        or meta("citation_conference_title")
+        or meta("citation_inbook_title")
+        or meta("og:site_name")
+    )
+
+    # Publisher
+    publisher = meta("citation_publisher") or meta("DC.Publisher")
+
+    # DOI
+    doi = meta("citation_doi") or meta("DC.Identifier")
+    if doi.startswith("doi:"):
+        doi = doi[4:]
+
+    # If a bare URL was passed to a DOI resolver, pull the DOI from the URL
+    if not doi:
+        extracted = _extract_doi_from_url(url)
+        if extracted:
+            doi = extracted
+
+    # Title cleanup
+    title = re.sub(r'\s+', ' ', title).strip()
+
+    return {
+        "title": title,
+        "authors": authors,
+        "year": year,
+        "journal": journal,
+        "publisher": publisher,
+        "doi": doi,
+        "url": url,
+    }
 
 
 # ============================================================
@@ -99,25 +281,20 @@ async def fetch_arxiv_metadata(arxiv_id: str) -> dict:
 # ============================================================
 async def extract_text_from_url(url: str, max_chars: int = 6000) -> str:
     """Fetch a URL and strip the HTML to plain text."""
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            print(f"[Citation] URL fetch status: {r.status_code}, preview: {r.text[:200]!r}")
-            r.raise_for_status()
-            html = r.text
-    except Exception as e:
-        print(f"[Citation] URL fetch failed: {e}")
-        raise ValueError("Could not fetch page content. Try the manual entry tab.")
-
-    # Strip scripts/styles
+    html = await _fetch_html(url)
+    if not html:
+        return ""
+    # Strip scripts and styles first
     html = re.sub(r"<script.*?</script>", " ", html, flags=re.DOTALL | re.IGNORECASE)
     html = re.sub(r"<style.*?</style>", " ", html, flags=re.DOTALL | re.IGNORECASE)
-    # Strip tags
-    text = re.sub(r"<[^>]+>", " ", html)
-    # Collapse whitespace
+    # Keep meta tags content — extract them into readable text
+    meta_text = " ".join(
+        m for m in re.findall(r'<meta[^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    )
+    # Strip remaining tags
+    body = re.sub(r"<[^>]+>", " ", html)
+    text = (meta_text + " " + body)
     text = re.sub(r"\s+", " ", text).strip()
-    if not text:
-        raise ValueError("Could not fetch page content. Try the manual entry tab.")
     return text[:max_chars]
 
 
@@ -206,7 +383,10 @@ async def format_citation(metadata: dict, style: str) -> dict:
     title = (metadata.get("title") or "").strip()
     authors = (metadata.get("authors") or "").strip()
     if not title and not authors:
-        raise ValueError("Could not extract citation metadata (title and authors are missing). Try the manual entry tab.")
+        return {
+            "in_text": "",
+            "reference_list": "",
+        }
 
     if style not in _STYLE_INSTRUCTIONS:
         style = "APA 7"
@@ -250,30 +430,95 @@ async def generate(
     """
     Build a citation from one of:
       - metadata (manual entry)   → skip extraction
-      - url                       → fetch + extract + format (special arXiv handling)
+      - url                       → smart URL pipeline (DOI/Crossref, arXiv, HTML meta, LLM fallback)
       - raw_text                  → extract + format
     """
-    if not metadata:
-        arxiv_match = re.search(r"arxiv\.org/(?:abs|pdf)/([0-9]+\.[0-9]+(?:v[0-9]+)?|[a-zA-Z\-]+/[0-9]+)", url or "", re.IGNORECASE)
-        if arxiv_match:
-            arxiv_id = arxiv_match.group(1)
-            metadata = await fetch_arxiv_metadata(arxiv_id)
-        elif url and not raw_text:
-            raw_text = await extract_text_from_url(url)
-            metadata = await extract_metadata(raw_text)
-            if url and not metadata.get("url"):
-                metadata["url"] = url
-        elif raw_text:
-            metadata = await extract_metadata(raw_text)
-            if url and not metadata.get("url"):
-                metadata["url"] = url
-        else:
-            metadata = {}
+    if metadata:
+        formatted = await format_citation(metadata, style)
+        return {
+            "metadata": metadata,
+            "style": style,
+            "in_text": formatted.get("in_text", ""),
+            "reference_list": formatted.get("reference_list", ""),
+        }
 
-    formatted = await format_citation(metadata, style)
-    return {
-        "metadata": metadata,
-        "style": style,
-        "in_text": formatted.get("in_text", ""),
-        "reference_list": formatted.get("reference_list", ""),
-    }
+    if raw_text:
+        extracted = await extract_metadata(raw_text)
+        if url and not extracted.get("url"):
+            extracted["url"] = url
+        formatted = await format_citation(extracted, style)
+        return {
+            "metadata": extracted,
+            "style": style,
+            "in_text": formatted.get("in_text", ""),
+            "reference_list": formatted.get("reference_list", ""),
+        }
+
+    if url and not raw_text:
+        # 1. DOI URL → query Crossref (most reliable)
+        doi = _extract_doi_from_url(url)
+        if doi:
+            crossref_meta = await _fetch_crossref_metadata(doi)
+            if crossref_meta and crossref_meta.get("title"):
+                formatted = await format_citation(crossref_meta, style)
+                return {
+                    "metadata": crossref_meta,
+                    "style": style,
+                    "in_text": formatted.get("in_text", ""),
+                    "reference_list": formatted.get("reference_list", ""),
+                }
+
+        # 2. arXiv URL → query arXiv Export API (already works)
+        arxiv_id = _extract_arxiv_id(url)
+        if arxiv_id:
+            arxiv_meta = await _fetch_arxiv_metadata(arxiv_id)
+            if arxiv_meta and arxiv_meta.get("title"):
+                formatted = await format_citation(arxiv_meta, style)
+                return {
+                    "metadata": arxiv_meta,
+                    "style": style,
+                    "in_text": formatted.get("in_text", ""),
+                    "reference_list": formatted.get("reference_list", ""),
+                }
+
+        # 3. Fall back to HTML scraping with proper headers
+        html = await _fetch_html(url)
+        if html:
+            html_meta = _extract_metadata_from_html(html, url)
+            if html_meta and html_meta.get("title"):
+                formatted = await format_citation(html_meta, style)
+                return {
+                    "metadata": html_meta,
+                    "style": style,
+                    "in_text": formatted.get("in_text", ""),
+                    "reference_list": formatted.get("reference_list", ""),
+                }
+
+        # 4. Last resort: pass whatever text we got to the LLM
+        text = await extract_text_from_url(url)
+        if text.strip():
+            llm_meta = await extract_metadata(text)
+            if url and not llm_meta.get("url"):
+                llm_meta["url"] = url
+            if llm_meta.get("title") or llm_meta.get("authors"):
+                formatted = await format_citation(llm_meta, style)
+                if formatted.get("in_text") or formatted.get("reference_list"):
+                    return {
+                        "metadata": llm_meta,
+                        "style": style,
+                        "in_text": formatted.get("in_text", ""),
+                        "reference_list": formatted.get("reference_list", ""),
+                    }
+
+        # 5. Nothing worked → return an informative error
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Could not extract metadata from this URL. "
+                "The page may block automated access. "
+                "Please use the 'Enter Manually' tab with the paper's title, "
+                "authors, year, and journal."
+            ),
+        )
+
+    raise HTTPException(status_code=400, detail="No source provided")

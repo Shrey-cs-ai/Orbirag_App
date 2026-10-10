@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/search_service.dart';
@@ -119,6 +120,31 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
+  }
+
+  Future<void> _openPaper(SearchResult paper) async {
+    // Prefer the paper's own URL; fall back to a Semantic Scholar search
+    final rawUrl = paper.url.trim().isNotEmpty
+        ? paper.url
+        : 'https://www.semanticscholar.org/search?q=${Uri.encodeComponent(paper.title)}';
+
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      _showMessage('Invalid paper URL');
+      return;
+    }
+
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        _showMessage('Could not open the paper');
+      }
+    } catch (e) {
+      _showMessage('Could not open: $e');
+    }
   }
 
   // ==================== NAVIGATION ====================
@@ -588,7 +614,10 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
   }
 
   Widget _buildPaperCard(SearchResult paper) {
-    return Container(
+    return InkWell(
+      onTap: () => _openPaper(paper),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -753,8 +782,28 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'Open paper',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.open_in_new, size: 14, color: AppColors.primary),
+              ],
+            ),
+          ),
         ],
       ),
+    ),
     );
   }
 }
