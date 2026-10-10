@@ -4,6 +4,7 @@ import '../utils/app_colors.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../services/plagiarism_service.dart';
+import '../services/library_service.dart';
 import 'paper_orbit_screen.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
@@ -28,6 +29,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   PlagiarismMatch? _selectedMatch;
   String? _aiSuggestion;
   String _suggestionType = '';
+  String? _lastTargetText;
   bool _isChecking = false;
   bool _isRewriting = false;
 
@@ -53,6 +55,25 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
 
   // ===================== ACTIONS =====================
 
+  String _targetText() {
+    final sel = _documentController.selection;
+    final text = _documentController.text;
+    if (sel.isValid && sel.start != sel.end) {
+      // There is an active selection
+      final start =
+          (sel.start < sel.end ? sel.start : sel.end).clamp(0, text.length);
+      final end =
+          (sel.start < sel.end ? sel.end : sel.start).clamp(0, text.length);
+      final selected = text.substring(start, end);
+      if (selected.trim().isNotEmpty) {
+        return selected;
+      }
+    }
+    // No selection — use the whole document (capped at 500 chars)
+    final full = text.trim();
+    return full.length > 500 ? full.substring(0, 500) : full;
+  }
+
   Future<void> _runCheck() async {
     final text = _documentController.text.trim();
     if (text.isEmpty) {
@@ -64,6 +85,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       _isChecking = true;
       _aiSuggestion = null;
       _selectedMatch = null;
+      _lastTargetText = null;
       _matches = [];
       _similarityScore = '';
     });
@@ -88,41 +110,46 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   }
 
   Future<void> _onCite() async {
-    if (_selectedMatch == null) {
-      _showMessage('Please select a matched text first');
+    if (_isRewriting) return;
+    final target = _selectedMatch?.text ?? _targetText();
+    if (target.trim().isEmpty) {
+      _showMessage('Please enter or select text first');
       return;
     }
     setState(() => _isRewriting = true);
     try {
-      debugPrint('[Plagiarism] tapped match id=${_selectedMatch!.id}');
-      debugPrint('[Plagiarism] calling cite source=${_selectedMatch!.source}, year=${_selectedMatch!.year}');
-      final citation = await _service.cite(
-        _selectedMatch!.source,
-        _selectedMatch!.year,
-      );
+      final source = _selectedMatch?.source ?? 'Unknown source';
+      final year = _selectedMatch?.year ?? '2023';
+      debugPrint('[Plagiarism] calling cite source=$source, year=$year');
+      final citation = await _service.cite(source, year);
       debugPrint('[Plagiarism] result=$citation');
+      if (!mounted) return;
       final original = _documentController.text;
-      final matchedText = _selectedMatch!.text;
-      if (original.contains(matchedText)) {
+      if (_selectedMatch != null && original.contains(target)) {
+        // Replace inline (existing behavior)
         setState(() {
           _documentController.text =
-              original.replaceFirst(matchedText, '$matchedText $citation');
+              original.replaceFirst(target, '$target $citation');
           _aiSuggestion = null;
           _isRewriting = false;
         });
-        _showMessage('Citation added: $citation');
-      } else if (original.contains(matchedText.trim())) {
+      } else if (_selectedMatch != null && original.contains(target.trim())) {
         setState(() {
-          _documentController.text =
-              original.replaceFirst(matchedText.trim(), '${matchedText.trim()} $citation');
+          _documentController.text = original.replaceFirst(
+              target.trim(), '${target.trim()} $citation');
           _aiSuggestion = null;
           _isRewriting = false;
         });
-        _showMessage('Citation added: $citation');
       } else {
-        setState(() => _isRewriting = false);
-        _showMessage('Citation generated: $citation');
+        // Append to the end
+        setState(() {
+          _documentController.text =
+              original.isEmpty ? citation : '$original\n\n$citation';
+          _aiSuggestion = null;
+          _isRewriting = false;
+        });
       }
+      _showMessage('Citation added: $citation');
     } catch (e) {
       if (!mounted) return;
       setState(() => _isRewriting = false);
@@ -131,18 +158,20 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   }
 
   Future<void> _onParaphrase() async {
-    if (_selectedMatch == null) {
-      _showMessage('Please select a matched text first');
+    if (_isRewriting) return;
+    final target = _selectedMatch?.text ?? _targetText();
+    if (target.trim().isEmpty) {
+      _showMessage('Please enter or select text first');
       return;
     }
     setState(() {
       _isRewriting = true;
       _aiSuggestion = null;
+      _lastTargetText = target;
     });
     try {
-      debugPrint('[Plagiarism] tapped match id=${_selectedMatch!.id}');
-      debugPrint('[Plagiarism] calling paraphrase...');
-      final result = await _service.paraphrase(_selectedMatch!.text);
+      debugPrint('[Plagiarism] calling paraphrase on target: $target');
+      final result = await _service.paraphrase(target);
       debugPrint('[Plagiarism] result=$result');
       if (!mounted) return;
       setState(() {
@@ -158,18 +187,20 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   }
 
   Future<void> _onHumanize() async {
-    if (_selectedMatch == null) {
-      _showMessage('Please select a matched text first');
+    if (_isRewriting) return;
+    final target = _selectedMatch?.text ?? _targetText();
+    if (target.trim().isEmpty) {
+      _showMessage('Please enter or select text first');
       return;
     }
     setState(() {
       _isRewriting = true;
       _aiSuggestion = null;
+      _lastTargetText = target;
     });
     try {
-      debugPrint('[Plagiarism] tapped match id=${_selectedMatch!.id}');
-      debugPrint('[Plagiarism] calling humanize...');
-      final result = await _service.humanize(_selectedMatch!.text);
+      debugPrint('[Plagiarism] calling humanize on target: $target');
+      final result = await _service.humanize(target);
       debugPrint('[Plagiarism] result=$result');
       if (!mounted) return;
       setState(() {
@@ -185,23 +216,27 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   }
 
   void _replaceWithSuggestion() {
-    if (_selectedMatch == null || _aiSuggestion == null) return;
+    if (_aiSuggestion == null) return;
     final original = _documentController.text;
-    final matchedText = _selectedMatch!.text;
-    if (original.contains(matchedText)) {
+    final target = _selectedMatch?.text ?? _lastTargetText;
+    if (target != null && target.isNotEmpty && original.contains(target)) {
       setState(() {
         _documentController.text =
-            original.replaceFirst(matchedText, _aiSuggestion!);
+            original.replaceFirst(target, _aiSuggestion!);
         _aiSuggestion = null;
         _selectedMatch = null;
+        _lastTargetText = null;
       });
       _showMessage('Text replaced successfully');
-    } else if (original.contains(matchedText.trim())) {
+    } else if (target != null &&
+        target.isNotEmpty &&
+        original.contains(target.trim())) {
       setState(() {
         _documentController.text =
-            original.replaceFirst(matchedText.trim(), _aiSuggestion!);
+            original.replaceFirst(target.trim(), _aiSuggestion!);
         _aiSuggestion = null;
         _selectedMatch = null;
+        _lastTargetText = null;
       });
       _showMessage('Text replaced successfully');
     } else {
@@ -209,19 +244,46 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
         _documentController.text = _aiSuggestion!;
         _aiSuggestion = null;
         _selectedMatch = null;
+        _lastTargetText = null;
       });
       _showMessage('Text replaced successfully');
     }
   }
 
-  void _keepOriginal() => setState(() => _aiSuggestion = null);
+  void _keepOriginal() => setState(() {
+        _aiSuggestion = null;
+        _lastTargetText = null;
+      });
 
   void _copyDocument() {
     Clipboard.setData(ClipboardData(text: _documentController.text));
     _showMessage('Copied to clipboard');
   }
 
-  void _saveAsDraft() => _showMessage('Draft saved successfully');
+  Future<void> _saveAsDraft() async {
+    final text = _documentController.text.trim();
+    if (text.isEmpty) {
+      _showMessage('Nothing to save — enter some text first');
+      return;
+    }
+
+    final title = text.length > 60 ? '${text.substring(0, 60)}...' : text;
+
+    try {
+      await LibraryService().addItem(LibraryItem(
+        id: '',
+        title: title,
+        description: text.length > 200 ? '${text.substring(0, 200)}...' : text,
+        type: 'draft',
+        createdAt: DateTime.now(),
+      ));
+      if (!mounted) return;
+      _showMessage('✅ Saved to library');
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('Save failed: $e');
+    }
+  }
 
   void _showMessage(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -278,10 +340,8 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
               style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 20),
-
             _buildDocumentPreview(),
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -306,15 +366,15 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                 ),
               ),
             ),
-
             if (_similarityScore.isNotEmpty) ...[
               const SizedBox(height: 20),
               _buildScoreCard(),
               const SizedBox(height: 16),
               _buildInfoBox(),
+              const SizedBox(height: 12),
+              _buildActionBar(),
               const SizedBox(height: 24),
             ],
-
             if (_matches.isNotEmpty)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -324,8 +384,8 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.cardBg,
                       borderRadius: BorderRadius.circular(12),
@@ -337,22 +397,17 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                   ),
                 ],
               ),
-
             if (_matches.isNotEmpty) const SizedBox(height: 12),
             if (_matches.isNotEmpty) _buildMatchesList(),
-
             if (_selectedMatch != null) ...[
               const SizedBox(height: 20),
               _buildSelectedMatchCard(),
             ],
-
             if (_aiSuggestion != null) ...[
               const SizedBox(height: 16),
               _buildSuggestionCard(),
             ],
-
             const SizedBox(height: 24),
-
             Row(
               children: [
                 Expanded(
@@ -376,7 +431,6 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
             Center(
               child: TextButton(
@@ -396,7 +450,6 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
             const Center(
               child: Text(
@@ -434,8 +487,8 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                   style: TextStyle(fontWeight: FontWeight.w600)),
               Text(
                 _similarityScore,
-                style: const TextStyle(
-                    fontSize: 28, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -509,7 +562,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
           onTap: () {
             debugPrint('[Plagiarism] tapped match id=${match.id}');
             setState(() {
-              _selectedMatch = match;
+              _selectedMatch = isSelected ? null : match;
               _aiSuggestion = null;
             });
           },
@@ -535,6 +588,48 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildActionBar() {
+    return Container(
+      margin: const EdgeInsets.only(top: 16, bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _actionButton(
+                'Cite',
+                Icons.format_quote,
+                _onCite,
+              ),
+              const SizedBox(width: 8),
+              _actionButton(
+                'Paraphrase',
+                Icons.auto_fix_high,
+                _onParaphrase,
+                isHighlighted: true,
+              ),
+              const SizedBox(width: 8),
+              _actionButton(
+                'Humanize',
+                Icons.person_outline,
+                _onHumanize,
+              ),
+            ],
+          ),
+          if (_isRewriting) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
+        ],
+      ),
     );
   }
 
@@ -566,8 +661,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEE2E2),
                   borderRadius: BorderRadius.circular(8),
@@ -629,8 +723,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome,
-                  size: 16, color: AppColors.purple),
+              const Icon(Icons.auto_awesome, size: 16, color: AppColors.purple),
               const SizedBox(width: 6),
               Text(
                 _suggestionType == 'paraphrase' ? 'PARAPHRASED' : 'HUMANIZED',
@@ -673,16 +766,38 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     );
   }
 
-  Widget _actionButton(String label, IconData icon, VoidCallback onTap) {
+  Widget _actionButton(
+    String label,
+    IconData icon,
+    VoidCallback onTap, {
+    bool isHighlighted = false,
+  }) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+    );
     return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-        ),
-      ),
+      child: isHighlighted
+          ? ElevatedButton.icon(
+              onPressed: onTap,
+              icon: Icon(icon, size: 16),
+              label: Text(label, style: const TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                elevation: 0,
+                shape: shape,
+              ),
+            )
+          : OutlinedButton.icon(
+              onPressed: onTap,
+              icon: Icon(icon, size: 16),
+              label: Text(label, style: const TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: shape,
+              ),
+            ),
     );
   }
 }
