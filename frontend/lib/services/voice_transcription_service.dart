@@ -10,9 +10,7 @@ class VoiceTranscriptionService {
   factory VoiceTranscriptionService() => instance;
   VoiceTranscriptionService._internal();
 
-  // ------------------------------------------------------------
   // Platform-aware backend URL
-  // ------------------------------------------------------------
   String get _baseUrl {
     if (kIsWeb) return 'http://localhost:8000';
     if (defaultTargetPlatform == TargetPlatform.android) {

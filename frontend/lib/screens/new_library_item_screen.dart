@@ -188,7 +188,6 @@ class _NewLibraryItemScreenState extends State<NewLibraryItemScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Title
               const Text(
                 'TITLE',
                 style: TextStyle(

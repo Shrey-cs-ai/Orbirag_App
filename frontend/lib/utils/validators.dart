@@ -9,9 +9,6 @@ class Validators {
   static final RegExp _specialRegex =
       RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-]');
 
-  // ============================================================
-  // Email
-  // ============================================================
   static String? email(String? value) {
     if (value == null || value.trim().isEmpty) return 'Email is required';
     if (!_emailRegex.hasMatch(value.trim())) {
@@ -20,9 +17,7 @@ class Validators {
     return null;
   }
 
-  // ============================================================
   // Strong Password
-  // ============================================================
   static String? password(String? value, {int minLength = 8}) {
     if (value == null || value.isEmpty) return 'Password is required';
     if (value.length < minLength) {
@@ -43,9 +38,7 @@ class Validators {
     return null;
   }
 
-  // ============================================================
   // Password Strength Score (0 = weak, 4 = strong)
-  // ============================================================
   static int passwordStrength(String value) {
     int score = 0;
     if (value.length >= 8) score++;
@@ -69,18 +62,13 @@ class Validators {
     }
   }
 
-  // ============================================================
   // Confirm Password
-  // ============================================================
   static String? confirmPassword(String? value, String original) {
     if (value == null || value.isEmpty) return 'Please confirm your password';
     if (value != original) return 'Passwords do not match';
     return null;
   }
 
-  // ============================================================
-  // Name
-  // ============================================================
   static String? name(String? value) {
     if (value == null || value.trim().isEmpty) return 'Name is required';
     if (value.trim().length < 2) return 'Enter a valid name';

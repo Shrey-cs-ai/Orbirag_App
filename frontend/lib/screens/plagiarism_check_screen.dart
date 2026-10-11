@@ -23,7 +23,6 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   final TextEditingController _documentController = TextEditingController();
   final PlagiarismService _service = PlagiarismService();
 
-  // Backend state
   List<PlagiarismMatch> _matches = [];
   String _similarityScore = '';
   PlagiarismMatch? _selectedMatch;
@@ -53,7 +52,6 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     );
   }
 
-  // ===================== ACTIONS =====================
 
   String _targetText() {
     final sel = _documentController.selection;
@@ -278,7 +276,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
         createdAt: DateTime.now(),
       ));
       if (!mounted) return;
-      _showMessage('✅ Saved to library');
+      _showMessage('✅ Saved to Library');
     } catch (e) {
       if (!mounted) return;
       _showMessage('Save failed: $e');
@@ -289,7 +287,6 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ===================== UI =====================
 
   @override
   Widget build(BuildContext context) {

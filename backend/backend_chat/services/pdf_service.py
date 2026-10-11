@@ -6,15 +6,11 @@ from typing import Dict, List
 from pypdf import PdfReader
 
 
-# ============================================================
 # In-memory storage
-# ============================================================
 _papers: Dict[str, dict] = {}
 
 
-# ============================================================
 # Extract text from PDF
-# ============================================================
 def extract_text_from_pdf(pdf_bytes: bytes) -> List[dict]:
     """Extract text from each page of the PDF."""
     reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -29,9 +25,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> List[dict]:
     return pages
 
 
-# ============================================================
 # Chunk long text into smaller pieces
-# ============================================================
 def chunk_text(
     pages: List[dict],
     chunk_size: int = 800,
@@ -61,9 +55,7 @@ def chunk_text(
     return chunks
 
 
-# ============================================================
 # Store and retrieve papers (in-memory)
-# ============================================================
 def save_paper(filename: str, chunks: List[dict]) -> str:
     """Store a paper and return its ID."""
     paper_id = str(uuid.uuid4())
@@ -83,9 +75,7 @@ def get_all_papers() -> Dict[str, dict]:
     return _papers
 
 
-# ============================================================
 # Find relevant chunks for a question
-# ============================================================
 def find_relevant_chunks(
     question: str,
     chunks: List[dict],

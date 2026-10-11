@@ -8,9 +8,7 @@ class SearchService {
   static final SearchService instance = SearchService._internal();
   SearchService._internal();
 
-  // ============================================================
   // ✅ Research backend runs on port 8001
-  // ============================================================
   String get baseUrl {
     if (kIsWeb) return 'http://localhost:8001';
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -19,9 +17,7 @@ class SearchService {
     return 'http://localhost:8001';
   }
 
-  // ============================================================
   // 1. Build Query → keywords + synonyms + boolean_query
-  // ============================================================
   Future<SearchQuery?> buildSearchQuery(String topic) async {
     try {
       debugPrint('[Search] POST $baseUrl/api/ai/build-search');
@@ -52,9 +48,7 @@ class SearchService {
     }
   }
 
-  // ============================================================
   // 2. Search Papers → List<SearchResult>
-  // ============================================================
   Future<List<SearchResult>> searchPapers({
     required String query,
     String? dateRange,
@@ -94,9 +88,7 @@ class SearchService {
     }
   }
 
-  // ============================================================
   // 3. Save Paper → bool (true on success, false on failure)
-  // ============================================================
   Future<bool> savePaper(SearchResult paper) async {
     final payload = _paperPayload(paper);
     try {
@@ -122,10 +114,8 @@ class SearchService {
     }
   }
 
-  // ============================================================
   // 3b. Save Paper With Id → String? (returns the new paper's id)
   //     Used when the caller needs the DB id (e.g. open reader after save).
-  // ============================================================
   Future<String?> savePaperWithId(SearchResult paper) async {
     final payload = _paperPayload(paper);
     try {
@@ -166,9 +156,6 @@ class SearchService {
 }
 
 
-// ============================================================
-// MODELS
-// ============================================================
 class SearchQuery {
   final List<String> keywords;
   final List<String> synonyms;
@@ -211,7 +198,7 @@ class SearchResult {
       year: json['year']?.toString() ?? '',
       source: (json['source'] ?? 'Semantic Scholar') as String,
       citations: (json['citations'] ?? 0) as int,
-      // ⚠️ Backend uses snake_case — match it
+      // Backend uses snake_case — match it
       aiSummary: (json['ai_summary'] ?? '') as String,
       url: (json['url'] ?? '') as String,
       abstract: (json['abstract'] ?? '') as String,

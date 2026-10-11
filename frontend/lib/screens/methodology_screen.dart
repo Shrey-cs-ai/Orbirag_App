@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/methodology_service.dart';
+import '../services/library_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/methodology_form.dart';
@@ -34,7 +35,6 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
     super.dispose();
   }
 
-  // ==================== ACTIONS ====================
 
   Future<void> _extract() async {
     final text = _textController.text.trim();
@@ -75,7 +75,7 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
   Future<void> _saveMethodology(MethodologyData data) async {
     setState(() => _isSaving = true);
 
-    final success = await _service.saveMethodology(
+    final ok = await _service.saveMethodology(
       data,
       paperTitle: widget.paperTitle,
       rawText: _textController.text.trim(),
@@ -84,7 +84,34 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
     if (!mounted) return;
     setState(() => _isSaving = false);
 
-    _showMessage(success ? '✅ Methodology saved' : '❌ Save failed');
+    if (!ok) {
+      _showMessage('❌ Methodology save failed');
+      return;
+    }
+
+    // Also surface it in the Library screen
+    try {
+      final summary = [
+        if (data.design.isNotEmpty) 'Design: ${data.design}',
+        if (data.sampleSize.isNotEmpty) 'Sample: ${data.sampleSize}',
+        if (data.analysisMethod.isNotEmpty) 'Analysis: ${data.analysisMethod}',
+      ].join(' · ');
+
+      await LibraryService().addItem(LibraryItem(
+        id: '',
+        title: widget.paperTitle?.isNotEmpty == true
+            ? 'Methodology — ${widget.paperTitle}'
+            : 'Methodology — ${data.studyType}',
+        description: summary.isEmpty ? 'Methodology extracted via AI' : summary,
+        type: 'insight',
+        createdAt: DateTime.now(),
+      ));
+    } catch (e) {
+      // Non-fatal — still show success for the methodology table
+      debugPrint('[Methodology] library mirror failed: $e');
+    }
+
+    _showMessage('✅ Methodology saved');
   }
 
   void _clearAll() {
@@ -128,7 +155,6 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
     }
   }
 
-  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
@@ -173,7 +199,6 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // HEADER
             const Text(
               'Methodology Extraction',
               style: TextStyle(

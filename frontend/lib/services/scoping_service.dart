@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 
-// ============================================================
-// Model
-// ============================================================
 class ScopingData {
   String topic;
   String population;
@@ -42,9 +39,6 @@ class ScopingData {
       };
 }
 
-// ============================================================
-// Service
-// ============================================================
 class ScopingService {
   static final ScopingService instance = ScopingService._internal();
   factory ScopingService() => instance;

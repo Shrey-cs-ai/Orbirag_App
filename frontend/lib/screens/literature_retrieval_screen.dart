@@ -26,7 +26,6 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
   final SearchService _searchService = SearchService.instance;
   final TextEditingController _topicController = TextEditingController();
 
-  // State
   SearchQuery? _builtQuery;
   List<SearchResult> _results = [];
   bool _isBuildingQuery = false;
@@ -50,7 +49,7 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     super.dispose();
   }
 
-  // ==================== AI: BUILD QUERY ====================
+  // ---- AI: BUILD QUERY ----
   Future<void> _buildQuery() async {
     final topic = _topicController.text.trim();
     if (topic.isEmpty) {
@@ -73,7 +72,7 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     }
   }
 
-  // ==================== AI: SEARCH + SUMMARIZE ====================
+  // ---- AI: SEARCH + SUMMARIZE ----
   Future<void> _runSearch() async {
     if (_builtQuery == null) {
       _showMessage('Please build a query first');
@@ -147,7 +146,6 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     }
   }
 
-  // ==================== NAVIGATION ====================
   void _onBottomNavTap(int index) {
     if (index == 2) return;
 
@@ -174,7 +172,6 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     }
   }
 
-  // ==================== BUILD ====================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -212,7 +209,6 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // HEADER
             const Text(
               'Literature Retrieval',
               style: TextStyle(
@@ -283,7 +279,6 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
     );
   }
 
-  // ==================== WIDGETS ====================
 
   Widget _buildTopicInput() {
     return Container(
@@ -721,7 +716,7 @@ class _LiteratureRetrievalScreenState extends State<LiteratureRetrievalScreen> {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(saved ? '✅ Saved to library' : '❌ Save failed'),
+                        content: Text(saved ? '✅ Saved to Saved Papers' : '❌ Save failed'),
                         backgroundColor: saved ? AppColors.success : AppColors.error,
                       ),
                     );

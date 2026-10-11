@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/app_constants.dart';
 
-// ============================================================
-// Model
-// ============================================================
 class Note {
   final String id;
   String title;
@@ -45,9 +42,6 @@ class Note {
       };
 }
 
-// ============================================================
-// Service
-// ============================================================
 class NotesService {
   static final NotesService _instance = NotesService._internal();
   factory NotesService() => _instance;
@@ -58,7 +52,6 @@ class NotesService {
 
   List<Note> get notes => _notes;
 
-  // ---------- Read ----------
   Future<void> initialize() async {
     await refresh();
   }
@@ -93,7 +86,6 @@ class NotesService {
         .toList();
   }
 
-  // ---------- Create ----------
   Future<Note> addNote(Note note) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/notes/items'),
@@ -111,7 +103,7 @@ class NotesService {
     return created;
   }
 
-  // ---------- Update (used by auto-save) ----------
+  // Update (used by auto-save)
   Future<Note> updateNote(Note note) async {
     final response = await http.patch(
       Uri.parse('$_baseUrl/notes/items/${note.id}'),
@@ -135,7 +127,6 @@ class NotesService {
     return updated;
   }
 
-  // ---------- Pin ----------
   Future<void> togglePinNote(String id) async {
     final response = await http.patch(
       Uri.parse('$_baseUrl/notes/items/$id/pin'),
@@ -146,7 +137,6 @@ class NotesService {
     await refresh();
   }
 
-  // ---------- Delete ----------
   Future<void> deleteNote(String id) async {
     final response = await http.delete(
       Uri.parse('$_baseUrl/notes/items/$id'),
@@ -157,7 +147,6 @@ class NotesService {
     _notes.removeWhere((n) => n.id == id);
   }
 
-  // ---------- Helpers ----------
   void _sort() {
     _notes.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;

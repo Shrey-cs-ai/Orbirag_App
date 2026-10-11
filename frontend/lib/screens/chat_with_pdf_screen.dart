@@ -66,9 +66,7 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
     return '$hour:$minute $ampm';
   }
 
-  // ============================================================
-  // SEND
-  // ============================================================
+  // ---- SEND ----
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isTyping) return;
@@ -162,9 +160,6 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
     }
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(

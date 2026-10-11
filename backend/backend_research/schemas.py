@@ -9,9 +9,7 @@ from datetime import datetime
 import uuid
 
 
-# ============================================================
 # Chat (Ori)
-# ============================================================
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "model"]
@@ -27,9 +25,7 @@ class ChatResponse(BaseModel):
     response: str
 
 
-# ============================================================
 # Voice (Deepgram)
-# ============================================================
 
 class TranscribeResponse(BaseModel):
     transcript: str
@@ -38,9 +34,7 @@ class TranscribeResponse(BaseModel):
     words: int = 0
 
 
-# ============================================================
 # Paper Orbit (RAG)
-# ============================================================
 
 class UploadPdfResponse(BaseModel):
     doc_id: str
@@ -67,9 +61,7 @@ class RagChatResponse(BaseModel):
     sources: List[RagSource] = []
 
 
-# ============================================================
 # Saved Papers (for SavedPapersScreen)
-# ============================================================
 
 class SavePaperRequest(BaseModel):
     title: str
@@ -92,9 +84,7 @@ class SavedPaper(BaseModel):
     created_at: str
 
 
-# ============================================================
 # Citation Generator
-# ============================================================
 
 class CitationMetadata(BaseModel):
     title: str = ""
@@ -126,9 +116,7 @@ class CitationGenerateResponse(BaseModel):
     in_text: str
     reference_list: str
 
-# ============================================================
 # Literature Retrieval
-# ============================================================
 
 class BuildQueryRequest(BaseModel):
     topic: str = Field(..., min_length=2, max_length=2000)
@@ -357,9 +345,7 @@ class MethodologyOut(BaseModel):
     class Config:
         from_attributes = True
         
-# ============================================================
 # Guided Topic Scoping
-# ============================================================
 class ScopingPayload(BaseModel):
     topic: str = ""
     population: str = ""
@@ -399,7 +385,5 @@ class ScopingSessionOut(BaseModel):
 class ScopingListResponse(BaseModel):
     items: List[ScopingSessionOut]
     count: int
-# ============================================================
 # Legacy aliases (in case older code imports these)
-# ============================================================
 UploadPdfResponseLegacy = UploadPdfResponse

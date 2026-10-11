@@ -15,9 +15,7 @@ from sqlalchemy import desc
 from models import Methodology
 
 
-# ============================================================
 # LLM helper
-# ============================================================
 _EXTRACT_PROMPT = """You are an academic methods-section analyzer.
 
 Read the METHODS text below and extract structured fields. Return ONLY valid

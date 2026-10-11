@@ -14,9 +14,7 @@ from models import (
 )
 
 
-# ============================================================
 # USERS
-# ============================================================
 
 def get_user_by_firebase_uid(db: Session, firebase_uid: str) -> Optional[User]:
     # New User model uses `username` — treat firebase_uid as username.
@@ -40,9 +38,7 @@ def upsert_user(db: Session, firebase_uid: str, email: str = None,
     return user
 
 
-# ============================================================
 # PAPERS (saved library)
-# ============================================================
 
 def list_papers(db: Session, user_id: str, status: Optional[str] = None) -> List[Paper]:
     q = db.query(Paper).filter(Paper.user_id == user_id)
@@ -97,9 +93,7 @@ def update_paper_status(
     return row
 
 
-# ============================================================
 # CITATIONS
-# ============================================================
 
 def save_citation(db: Session, user_id: str, data: dict) -> Citation:
     c = Citation(user_id=user_id, **data)
@@ -126,10 +120,6 @@ def delete_citation(db: Session, citation_id: str, user_id: str) -> bool:
     db.commit()
     return True
 
-
-# ============================================================
-# CHAT
-# ============================================================
 
 def create_conversation(db: Session, user_id: str,
                         title: str = "New Conversation",
@@ -217,9 +207,7 @@ def search_messages(db: Session, user_id: str, query: str, limit: int = 20) -> L
               .all())
 
 
-# ============================================================
 # SCOPING
-# ============================================================
 
 def create_scoping(db: Session, user_id: str, raw_topic: str) -> ScopingSession:
     s = ScopingSession(user_id=user_id, raw_topic=raw_topic)
@@ -280,9 +268,7 @@ def delete_scoping(db: Session, session_id: str, user_id: str) -> bool:
     return True
 
 
-# ============================================================
 # LITERATURE SEARCH (searches + search_results tables)
-# ============================================================
 
 def create_search(
     db: Session,

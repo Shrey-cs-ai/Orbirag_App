@@ -295,9 +295,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     );
   }
 
-  // ------------------------------------------------------------
-  // Full-width upload card
-  // ------------------------------------------------------------
+  // ---- Full-width upload card ----
   Widget _buildUploadCard({
     required IconData icon,
     required String title,
@@ -340,9 +338,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     );
   }
 
-  // ------------------------------------------------------------
-  // Source list item
-  // ------------------------------------------------------------
+  // ---- Source list item ----
   Widget _buildSourceItem(Map<String, dynamic> source, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -400,15 +396,13 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     );
   }
 
-  // ------------------------------------------------------------
-  // Upload PDF
-  // ------------------------------------------------------------
+  // ---- Upload PDF ----
   Future<void> _uploadPDF() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        withData: true, // ✅ Important for web — gives us the bytes
+        withData: true, // Important for web — gives us the bytes
       );
       if (!mounted) return;
       if (result == null || result.files.isEmpty) return;
@@ -451,9 +445,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     }
   }
 
-  // ------------------------------------------------------------
-  // Add text source
-  // ------------------------------------------------------------
+  // ---- Add text source ----
   Future<void> _addTextSource() async {
     if (_textController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -475,9 +467,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
     );
   }
 
-  // ------------------------------------------------------------
-  // Start chatting
-  // ------------------------------------------------------------
+  // ---- Start chatting ----
   void _startChatting() {
     final pdfSource = _pdfService.firstPdfSource;
 

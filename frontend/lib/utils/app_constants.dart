@@ -6,31 +6,28 @@ import 'app_colors.dart';
 class AppConstants {
   AppConstants._();
 
-  // ---------- Dynamic Host ----------
+  // Dynamic Host
   static String get _host {
     if (kIsWeb) return 'localhost';
     if (defaultTargetPlatform == TargetPlatform.android) return '10.0.2.2';
     return 'localhost';
   }
 
-  // ---------- Chat backend (port 8000) ----------
+  // Chat backend (port 8000)
   static String get chatBaseUrl => 'http://$_host:8000/api';
 
-  // ---------- Research backend (port 8001) ----------
+  // Research backend (port 8001)
    static String get researchBaseUrl => 'http://$_host:8001/api';
   // iOS simulator / web:    use 'http://localhost:PORT/api'
   // Real phone (same Wi-Fi): use 'http://<your-pc-ip>:PORT/api'
 
-  // Your other existing constants (routes, nav items, etc.) stay here
+  // Your other existing constants
 
 
-  // ==================== APP INFO ====================
   static const String appName = 'Orbirag';
   static const String appTagline = 'AI-Powered Research Assistant';
   static const String oriName = 'Ori';
 
-  // ==================== ROUTES ====================
-  // Auth Routes
   static const String routeSplash = '/';
   static const String routeOnboarding = '/onboarding';
   static const String routeOpening = '/opening';
@@ -39,7 +36,6 @@ class AppConstants {
   static const String routeSignup = '/signup';
   static const String routeForgotPassword = '/forgot-password';
 
-  // Main App Routes
   static const String routeHome = '/home';
   static const String routeProfile = '/profile';
   static const String routeOriChat = '/ori-chat';
@@ -48,7 +44,6 @@ class AppConstants {
   static const String routeChatWithPdf = '/chat-with-pdf';
   static const String routeVoiceInput = '/voice-input';
 
-  // Feature Routes
   static const String routeMyNotes = '/my-notes';
   static const String routeNewNote = '/new-note';
   static const String routeSavedPapers = '/saved-papers';
@@ -59,7 +54,6 @@ class AppConstants {
   static const String routeAdminLogin = '/admin-login';
   static const String routeAdminDashboard = '/admin-dashboard';
 
-  // ==================== BOTTOM NAVIGATION ====================
   static const List<Map<String, dynamic>> bottomNavItems = [
     {'icon': Icons.home_outlined, 'label': 'Home', 'route': routeHome},
     {'icon': Icons.chat_bubble_outline, 'label': 'Ori', 'route': routeOriChat},
@@ -67,7 +61,6 @@ class AppConstants {
     {'icon': Icons.person_outline, 'label': 'Profile', 'route': routeProfile},
   ];
 
-  // ==================== ONBOARDING ROLES ====================
   static const List<Map<String, dynamic>> roles = [
     {'label': 'PhD', 'icon': Icons.school_outlined},
     {'label': 'Masters/MBA', 'icon': Icons.workspace_premium_outlined},
@@ -76,7 +69,7 @@ class AppConstants {
     {'label': 'Industry Professional', 'icon': Icons.business_center_outlined},
   ];
 
-  // ==================== ORI CHAT SUGGESTIONS ====================
+  // ORI CHAT SUGGESTIONS
   static const List<String> suggestionChips = [
     'What is a research gap?',
     'How do I start a lit review?',
@@ -86,11 +79,10 @@ class AppConstants {
     'Write abstract',
   ];
 
-  // ==================== PAPER STATUS FILTERS ====================
+  // PAPER STATUS FILTERS
   static const List<String> paperFilters = ['All', 'Analyzed', 'Reading', 'Unread'];
   static const List<String> paperStatuses = ['unread', 'reading', 'analyzed'];
 
-  // ==================== CITATION STYLES ====================
   static const List<String> citationStyles = [
     'APA 7',
     'MLA 9',
@@ -99,14 +91,12 @@ class AppConstants {
     'Harvard',
   ];
 
-  // ==================== CITATION TABS ====================
   static const List<String> citationTabs = [
     'Upload Paper',
     'Paste URL',
     'Enter Manually',
   ];
 
-  // ==================== DUMMY DATA ====================
   static const String samplePaperTitle =
       'Artificial Intelligence in Medical Diagnosis: A Review';
   static const String samplePaperFile = 'AI_Medical_Diagnosis.pdf';
@@ -115,7 +105,6 @@ class AppConstants {
       'cognitive behavioral therapy. Early interventions have shown a '
       'significant decrease in long-term symptom persistence.';
 
-  // ==================== STORAGE KEYS ====================
   static const String keyHasSeenOnboarding = 'has_seen_onboarding';
   static const String keyUserRole = 'user_role';
   static const String keyRememberMe = 'remember_me';
@@ -125,11 +114,9 @@ class AppConstants {
 static const String routeLibrary = '/library';
 }
 
-// ==================== TEXT STYLES ====================
 class AppTextStyles {
   AppTextStyles._();
 
-  // ==================== HEADINGS ====================
   static const TextStyle heading = TextStyle(
     fontSize: 24,
     fontWeight: FontWeight.w700,
@@ -149,7 +136,6 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  // ==================== SUBHEADINGS ====================
   static const TextStyle subheading = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w400,
@@ -162,7 +148,6 @@ class AppTextStyles {
     color: AppColors.textSecondary,
   );
 
-  // ==================== BODY TEXT ====================
   static const TextStyle body = TextStyle(
     fontSize: 15,
     fontWeight: FontWeight.w400,
@@ -177,7 +162,6 @@ class AppTextStyles {
     height: 1.4,
   );
 
-  // ==================== INPUTS ====================
   static const TextStyle inputLabel = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.w600,
@@ -196,7 +180,6 @@ class AppTextStyles {
     color: AppColors.hintText,
   );
 
-  // ==================== BUTTONS ====================
   static const TextStyle button = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
@@ -210,7 +193,6 @@ class AppTextStyles {
     color: Colors.white,
   );
 
-  // ==================== LINKS ====================
   static const TextStyle link = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.w600,
@@ -218,7 +200,6 @@ class AppTextStyles {
     decoration: TextDecoration.underline,
   );
 
-  // ==================== CHAT ====================
   static const TextStyle chatMessage = TextStyle(
     fontSize: 15,
     height: 1.4,
@@ -236,7 +217,6 @@ class AppTextStyles {
     color: AppColors.textSecondary,
   );
 
-  // ==================== STATS / NUMBERS ====================
   static const TextStyle statNumber = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.bold,
@@ -248,7 +228,6 @@ class AppTextStyles {
     color: AppColors.textSecondary,
   );
 
-  // ==================== PAPER CARDS ====================
   static const TextStyle paperTitle = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.bold,
@@ -267,7 +246,6 @@ class AppTextStyles {
     height: 1.3,
   );
 
-  // ==================== NOTE CARDS ====================
   static const TextStyle noteTitle = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
@@ -285,7 +263,6 @@ class AppTextStyles {
     color: AppColors.hintText,
   );
 
-  // ==================== CITATION ====================
   static const TextStyle citationTitle = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w600,
@@ -298,7 +275,6 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  // ==================== WORD COUNTER ====================
   static const TextStyle wordCounterHeader = TextStyle(
     fontSize: 26,
     fontWeight: FontWeight.bold,
@@ -315,7 +291,6 @@ class AppTextStyles {
     fontWeight: FontWeight.bold,
   );
 
-  // ==================== VOICE INPUT ====================
   static const TextStyle voiceStatus = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w500,
@@ -328,7 +303,6 @@ class AppTextStyles {
     height: 1.3,
   );
 
-  // ==================== ONBOARDING ====================
   static const TextStyle onboardingTitle = TextStyle(
     fontSize: 26,
     fontWeight: FontWeight.bold,

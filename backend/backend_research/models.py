@@ -20,9 +20,7 @@ def _uuid():
     return str(uuid.uuid4())
 
 
-# ============================================================
 # PAPERS (saved library)
-# ============================================================
 
 class Paper(Base):
     __tablename__ = "papers"
@@ -48,9 +46,7 @@ class Paper(Base):
     )
 
 
-# ============================================================
 # CITATIONS
-# ============================================================
 
 class Citation(Base):
     __tablename__ = "citations"
@@ -67,10 +63,6 @@ class Citation(Base):
     reference_list = Column(Text)
     created_at     = Column(DateTime, default=datetime.utcnow)
 
-
-# ============================================================
-# CHAT
-# ============================================================
 
 class ChatConversation(Base):
     __tablename__ = "chat_conversations"
@@ -110,9 +102,7 @@ class ChatMessage(Base):
     )
 
 
-# ============================================================
 # SCOPING
-# ============================================================
 
 class ScopingSession(Base):
     __tablename__ = "scoping_sessions"
@@ -137,9 +127,7 @@ class ScopingSession(Base):
     )
 
 
-# ============================================================
 # LITERATURE SEARCH
-# ============================================================
 
 class Search(Base):
     __tablename__ = "searches"

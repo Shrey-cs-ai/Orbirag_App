@@ -22,9 +22,7 @@ except ImportError:
     _GROQ_AVAILABLE = False
 
 
-# ============================================================
 # Load .env
-# ============================================================
 def _load_env():
     env_path = Path(__file__).resolve().parent.parent / ".env"
     print(f"[ai_service] Loading .env from: {env_path}")
@@ -43,9 +41,7 @@ def _load_env():
 _load_env()
 
 
-# ============================================================
 # Providers
-# ============================================================
 _groq_key = os.getenv("GROQ_API_KEY")
 _gemini_key = os.getenv("GEMINI_API_KEY")
 
@@ -86,9 +82,7 @@ SYSTEM_INSTRUCTION = """You are Ori, a friendly AI research assistant for studen
 Be concise, warm, and cite sources when relevant. Never invent citations."""
 
 
-# ============================================================
 # Groq
-# ============================================================
 async def _try_groq(prompt: str, json_mode: bool, temperature: Optional[float] = None) -> Optional[str]:
     if not _groq_client:
         return None
@@ -123,9 +117,7 @@ async def _try_groq(prompt: str, json_mode: bool, temperature: Optional[float] =
     return None
 
 
-# ============================================================
 # Gemini
-# ============================================================
 async def _try_gemini(prompt: str, json_mode: bool, temperature: Optional[float] = None) -> Optional[str]:
     if not _gemini_client:
         return None
@@ -160,9 +152,7 @@ async def _try_gemini(prompt: str, json_mode: bool, temperature: Optional[float]
     return None
 
 
-# ============================================================
 # Combined fallback — Groq first, then Gemini
-# ============================================================
 async def _generate_with_fallback(
     prompt: str,
     json_mode: bool = False,
@@ -182,9 +172,7 @@ async def _generate_with_fallback(
     raise RuntimeError("All LLM providers failed (Groq + Gemini)")
 
 
-# ============================================================
 # Feature 1: Ori chatbot
-# ============================================================
 async def get_chat_response(message: str, history: list) -> str:
     try:
         parts = [SYSTEM_INSTRUCTION, ""]
@@ -201,9 +189,7 @@ async def get_chat_response(message: str, history: list) -> str:
         return "I'm having trouble responding right now. Please try again."
 
 
-# ============================================================
 # Feature 2: JSON generation
-# ============================================================
 async def generate_json(prompt: str) -> Optional[dict]:
     try:
         text = await _generate_with_fallback(prompt, json_mode=True)
@@ -218,9 +204,7 @@ async def generate_json(prompt: str) -> Optional[dict]:
         return None
 
 
-# ============================================================
 # Feature 3: RAG context (Paper Orbit)
-# ============================================================
 async def chat_with_context(question: str, context: str) -> str:
     prompt = f"""You are Ori. Answer the user's question USING ONLY the context below.
 If the answer isn't in the context, say so honestly.
@@ -238,9 +222,7 @@ Answer:"""
         return "I'm having trouble reading the document right now."
 
 
-# ============================================================
 # Feature 4: Build Boolean search query
-# ============================================================
 BUILD_QUERY_PROMPT = """You are a research librarian. Given a topic,
 extract search keywords and a Boolean query for academic databases.
 
@@ -264,9 +246,7 @@ async def build_search_query(topic: str) -> Optional[dict]:
     return await generate_json(BUILD_QUERY_PROMPT.format(topic=topic))
 
 
-# ============================================================
 # Feature 5: Summarize a paper
-# ============================================================
 SUMMARIZE_PROMPT = """Summarize this academic paper in ONE sentence (max 25 words).
 Focus on what it found or contributed — not on what it promises to do.
 

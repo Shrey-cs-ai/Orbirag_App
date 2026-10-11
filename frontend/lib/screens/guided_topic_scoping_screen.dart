@@ -72,7 +72,6 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     super.dispose();
   }
 
-  // ==================== ACTIONS ====================
 
   Future<void> _parseTopic() async {
     final topic = _topicController.text.trim();
@@ -197,7 +196,6 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     }
   }
 
-  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +252,7 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     );
   }
 
-  // ==================== STEP BUILDER ====================
+  // ---- STEP BUILDER ----
 
   Widget _buildCurrentStep() {
     switch (_currentStep) {
@@ -272,13 +270,12 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     }
   }
 
-  // ==================== STEP 1: TOPIC ====================
+  // ---- STEP 1: TOPIC ----
 
   Widget _buildTopicStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
         const Text(
           "What's on your mind?",
           style: TextStyle(
@@ -381,7 +378,7 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     );
   }
 
-  // ==================== STEP 2-5: PICO FIELDS ====================
+  // ---- STEP 2-5: PICO FIELDS ----
 
   Widget _buildProgressBar() {
     return Row(
@@ -421,7 +418,6 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
         ),
         const SizedBox(height: 8),
 
-        // Title
         Text(
           field['hint']!,
           style: const TextStyle(
@@ -521,13 +517,12 @@ class _GuidedTopicScopingScreenState extends State<GuidedTopicScopingScreen> {
     );
   }
 
-  // ==================== STEP 6: SYNTHESIS ====================
+  // ---- STEP 6: SYNTHESIS ----
 
   Widget _buildSynthesisStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
         Row(
           children: [
             Container(

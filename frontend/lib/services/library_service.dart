@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/app_constants.dart';
 
-// ============================================================
-// Model
-// ============================================================
 class LibraryItem {
   final String id;
   final String title;
@@ -39,9 +36,6 @@ class LibraryItem {
       };
 }
 
-// ============================================================
-// Service
-// ============================================================
 class LibraryService {
   static final LibraryService _instance = LibraryService._internal();
   factory LibraryService() => _instance;
@@ -52,7 +46,6 @@ class LibraryService {
 
   List<LibraryItem> get items => _items;
 
-  // ---------- Read ----------
   Future<void> initialize() async {
     await refresh();
   }
@@ -88,7 +81,6 @@ class LibraryService {
         .toList();
   }
 
-  // ---------- Create ----------
   Future<LibraryItem> addItem(LibraryItem item) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/library/items'),
@@ -105,7 +97,6 @@ class LibraryService {
     return created;
   }
 
-  // ---------- Pin ----------
   Future<void> togglePin(String id) async {
     final response = await http.patch(
       Uri.parse('$_baseUrl/library/items/$id/pin'),
@@ -116,7 +107,6 @@ class LibraryService {
     await refresh();
   }
 
-  // ---------- Delete ----------
   Future<void> deleteItem(String id) async {
     final response = await http.delete(
       Uri.parse('$_baseUrl/library/items/$id'),
@@ -127,7 +117,6 @@ class LibraryService {
     _items.removeWhere((i) => i.id == id);
   }
 
-  // ---------- Helpers ----------
   String getTimeAgo(DateTime date) {
     final diff = DateTime.now().difference(date);
     if (diff.inMinutes < 1) return 'Just now';

@@ -9,6 +9,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
 import '../services/citation_service.dart';
+import '../services/library_service.dart';
 
 class CitationGeneratorScreen extends StatefulWidget {
   const CitationGeneratorScreen({super.key});
@@ -54,6 +55,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
   String? _inText;
   String? _referenceList;
   String? _lastSource; // "manual" | "url" | "pdf"
+  String? _extractedTitle;
 
   bool _isGenerating = false;
   bool _isSaving = false;
@@ -80,9 +82,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     super.dispose();
   }
 
-  // ============================================================
-  // GENERATE
-  // ============================================================
+  // ---- GENERATE ----
   Future<void> _generate() async {
     FocusScope.of(context).unfocus();
 
@@ -152,12 +152,15 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       // Extract BEFORE setState so Dart sees non-nullable values inside the closure
       final inText = (res['in_text'] ?? '').toString();
       final refList = (res['reference_list'] ?? '').toString();
+      final meta = (res['metadata'] ?? {}) as Map<String, dynamic>;
+      final extTitle = (meta['title'] ?? '').toString();
       final src = source;
 
       setState(() {
         _inText = inText;
         _referenceList = refList;
         _lastSource = src;
+        _extractedTitle = extTitle;
         _isGenerating = false;
       });
 
@@ -168,9 +171,6 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     }
   }
 
-  // ============================================================
-  // SAVE
-  // ============================================================
   Future<void> _save() async {
     if (_referenceList == null || _inText == null) {
       _showSnack('Nothing to save — generate a citation first');
@@ -178,9 +178,18 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     }
     setState(() => _isSaving = true);
 
+    final title = _titleCtrl.text.trim().isNotEmpty
+        ? _titleCtrl.text.trim()
+        : (_extractedTitle != null && _extractedTitle!.isNotEmpty
+            ? _extractedTitle!
+            : (_pickedPdfName ??
+                (_urlCtrl.text.trim().isNotEmpty
+                    ? _urlCtrl.text.trim()
+                    : 'Citation — $_style')));
+
     // Build the citation object from current form/state
     final meta = {
-      'title': _titleCtrl.text.trim(),
+      'title': title,
       'authors': _authorsCtrl.text.trim(),
       'year': _yearCtrl.text.trim(),
       'journal': _journalCtrl.text.trim(),
@@ -196,11 +205,26 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       sourceType: _lastSource ?? 'manual',
     );
 
-    final ok = await _service.saveCitation(citation);
+    // Keep existing backend citation save
+    await _service.saveCitation(citation);
+
+    // Also surface it in the Library screen
+    try {
+      await LibraryService().addItem(LibraryItem(
+        id: '',
+        title: title.isNotEmpty ? title : 'Citation — $_style',
+        description: _referenceList ?? '',
+        type: 'citation',
+        createdAt: DateTime.now(),
+      ));
+    } catch (e) {
+      debugPrint('[Citation] library mirror failed: $e');
+    }
+
     if (!mounted) return;
 
     setState(() => _isSaving = false);
-    _showSnack(ok ? 'Saved to your library' : 'Save failed');
+    _showSnack('✅ Saved to Library');
   }
 
   void _copyReference() {
@@ -215,9 +239,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     );
   }
 
-  // ============================================================
-  // PDF PICKER
-  // ============================================================
+  // ---- PDF PICKER ----
   Future<void> _pickPdf() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -244,9 +266,6 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     }
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -266,7 +285,6 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       ),
       body: Column(
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Column(
@@ -327,7 +345,6 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
             ),
           ),
 
-          // Tabs
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Container(
@@ -432,9 +449,6 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     );
   }
 
-  // ============================================================
-  // TABS
-  // ============================================================
   Widget _buildPdfTab() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -543,9 +557,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     );
   }
 
-  // ============================================================
-  // RESULT CARD
-  // ============================================================
+  // ---- RESULT CARD ----
   Widget _buildResultCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -692,9 +704,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
     );
   }
 
-  // ============================================================
-  // Small helpers
-  // ============================================================
+  // ---- Small helpers ----
   Widget _buildFieldCard({required List<Widget> children}) {
     return Container(
       padding: const EdgeInsets.all(16),

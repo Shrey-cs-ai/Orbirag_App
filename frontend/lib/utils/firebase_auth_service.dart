@@ -28,7 +28,7 @@ class FirebaseAuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   bool get isLoggedIn => _auth.currentUser != null;
 
-  // ==================== EMAIL/PASSWORD AUTH ====================
+  // EMAIL/PASSWORD AUTH
 
   Future<String?> signUp({
     required String name,
@@ -83,7 +83,7 @@ class FirebaseAuthService {
     }
   }
 
-  // ==================== GOOGLE SIGN-IN ====================
+  // GOOGLE SIGN-IN
 
   /// Google Sign-In — platform-aware.
   ///
@@ -140,7 +140,7 @@ class FirebaseAuthService {
     return null;
   }
 
-  // ==================== GITHUB SIGN-IN ====================
+  // GITHUB SIGN-IN
 
   /// GitHub Sign-In — platform-aware.
   ///
@@ -196,7 +196,7 @@ class FirebaseAuthService {
     return null;
   }
 
-  // ==================== PROFILE MANAGEMENT ====================
+  // PROFILE MANAGEMENT
 
   Future<void> updateProfile({String? displayName, String? photoURL}) async {
     final user = _auth.currentUser;
@@ -219,7 +219,7 @@ class FirebaseAuthService {
     await _auth.signOut();
   }
 
-  // ==================== ERROR HANDLING ====================
+  // ERROR HANDLING
 
   String _mapError(FirebaseAuthException e) {
     switch (e.code) {

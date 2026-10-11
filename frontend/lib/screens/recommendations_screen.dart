@@ -56,7 +56,7 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Saved to library'),
+          content: Text('✅ Saved to Saved Papers'),
           backgroundColor: Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
         ),

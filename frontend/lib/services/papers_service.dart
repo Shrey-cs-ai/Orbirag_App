@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 
-// Model
 
 class Paper {
   final String id;
@@ -65,7 +64,6 @@ class Paper {
       );
 }
 
-// Service
 class PapersService {
   static final PapersService _instance = PapersService._internal();
   factory PapersService() => _instance;

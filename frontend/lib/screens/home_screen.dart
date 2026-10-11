@@ -57,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ==================== LOAD USER STATE ====================
+  // ---- LOAD USER STATE ----
   Future<void> _loadUserState() async {
     final hasStarted = await _userState.hasStartedResearch();
     final savedName = await _userState.getFirstName();
@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // ==================== LOAD RECOMMENDATIONS ====================
+  // ---- LOAD RECOMMENDATIONS ----
   Future<void> _loadRecommendations() async {
     setState(() => _loadingRecommendations = true);
     try {
@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== MARK RESEARCH STARTED ====================
+  // ---- MARK RESEARCH STARTED ----
   Future<void> _startResearch() async {
     await _userState.setHasStartedResearch(true);
 
@@ -117,8 +117,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== BOTTOM NAV HANDLER ====================
-  // ✅ FIXED: Clean navigation for all bottom nav taps
+  // ---- BOTTOM NAV HANDLER ----
+  // FIXED: Clean navigation for all bottom nav taps
   void _onBottomNavTap(int index) {
     // If tapping the current tab, do nothing
     if (index == _currentIndex) return;
@@ -150,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ==================== VOICE SEARCH ====================
+  // ---- VOICE SEARCH ----
   Future<void> _openVoiceSearch() async {
     final result = await Navigator.push(
       context,
@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== PERFORM SEARCH ====================
+  // ---- PERFORM SEARCH ----
   Future<void> _performSearch(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
@@ -197,7 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadRecommendations();
   }
 
-  // ==================== BUILD ====================
   @override
   Widget build(BuildContext context) {
     final hour = DateTime.now().hour;
@@ -259,14 +258,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ================================================================
-  // VIEW 1: FIRST-TIME USER
-  // ================================================================
+  // ---- VIEW 1: FIRST-TIME USER ----
   Widget _buildFirstTimeView(String greeting) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Greeting
         Text(
           "$greeting, $_firstName",
           style: const TextStyle(
@@ -282,7 +278,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 20),
 
-        // Search Bar
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
@@ -514,14 +509,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ================================================================
-  // VIEW 2: RETURNING USER
-  // ================================================================
+  // ---- VIEW 2: RETURNING USER ----
   Widget _buildReturningUserView(String greeting) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Greeting
         Text(
           "$greeting, $_firstName",
           style: const TextStyle(
@@ -537,7 +529,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 20),
 
-        // Search Bar
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
@@ -708,9 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ================================================================
-  // SHARED WIDGETS
-  // ================================================================
+  // ---- SHARED WIDGETS ----
 
   Widget _buildExploreItem({
     required IconData icon,

@@ -35,9 +35,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
-  // ============================================================
-  // Backend calls
-  // ============================================================
   Future<void> _loadItems() async {
     setState(() {
       _isLoading = true;
@@ -147,9 +144,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  // ============================================================
-  // Build
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -227,7 +221,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Title
                     const Text(
                       'My Library',
                       style: TextStyle(
@@ -238,7 +231,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Search Bar
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.white,
@@ -335,9 +327,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // ============================================================
-  // Widgets
-  // ============================================================
   Widget _buildErrorState() {
     return Center(
       child: Column(
@@ -459,7 +448,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
           const SizedBox(width: 12),
 
-          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -522,7 +510,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
 
-          // Actions
           Column(
             children: [
               IconButton(

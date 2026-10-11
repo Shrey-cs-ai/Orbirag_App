@@ -2,9 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../utils/app_constants.dart';
 
-// ============================================================
-// Models
-// ============================================================
 class PlagiarismMatch {
   final int id;
   final String text;
@@ -66,9 +63,6 @@ class PlagiarismResult {
       );
 }
 
-// ============================================================
-// Service
-// ============================================================
 class PlagiarismService {
   static final PlagiarismService _instance = PlagiarismService._internal();
   factory PlagiarismService() => _instance;

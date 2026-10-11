@@ -13,9 +13,7 @@ from sqlalchemy import desc
 from models import ScopingSession
 
 
-# ============================================================
 # Gemini — goes through the fallback chain
-# ============================================================
 async def _ask_gemini(prompt: str, temperature: Optional[float] = None) -> dict:
     from services.ai_service import _generate_with_fallback
     raw = await _generate_with_fallback(prompt, json_mode=True, temperature=temperature)
@@ -25,9 +23,7 @@ async def _ask_gemini(prompt: str, temperature: Optional[float] = None) -> dict:
     return json.loads(raw)
 
 
-# ============================================================
 # Prompt templates
-# ============================================================
 _PARSE_PROMPT = """You are a research methods assistant.
 
 Read the rough research topic inside <topic> tags. Extract a PICO
@@ -88,9 +84,7 @@ OUTCOME: {outcome}
 """
 
 
-# ============================================================
 # Public: parse topic → PICO
-# ============================================================
 async def parse_topic(topic: str) -> dict:
     prompt = _PARSE_PROMPT.format(topic=topic[:800])
     data = await _ask_gemini(prompt)
@@ -105,9 +99,7 @@ async def parse_topic(topic: str) -> dict:
     }
 
 
-# ============================================================
 # Public: synthesize research question
-# ============================================================
 async def synthesize_question(payload: dict, regenerate: bool = False) -> str:
     if not payload.get("population"):
         raise ValueError("population is required")
@@ -146,9 +138,7 @@ async def synthesize_question(payload: dict, regenerate: bool = False) -> str:
     return new_q
 
 
-# ============================================================
 # DB CRUD
-# ============================================================
 def save_session(
     db: Session,
     payload: dict,

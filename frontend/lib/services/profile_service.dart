@@ -7,7 +7,7 @@ class ProfileService {
   factory ProfileService() => _instance;
   ProfileService._internal();
 
-  // ==================== ROLE ====================
+  // ROLE
   Future<void> saveRole(String role) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -27,7 +27,7 @@ class ProfileService {
     }
   }
 
-  // ==================== PROGRESS ====================
+  // PROGRESS
   Future<void> saveProgress(Map<String, dynamic> progress) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -50,7 +50,7 @@ class ProfileService {
     return null;
   }
 
-  // ==================== NOTIFICATIONS ====================
+  // NOTIFICATIONS
   Future<void> saveNotifications(List<Map<String, dynamic>> notifications) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -74,7 +74,7 @@ class ProfileService {
     return [];
   }
 
-  // ==================== PROFILE PIC ====================
+  // PROFILE PIC
   Future<void> saveProfilePicPath(String path) async {
     try {
       final prefs = await SharedPreferences.getInstance();

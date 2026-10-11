@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ==================== MESSAGE HELPER ====================
+  // MESSAGE HELPER
 
   void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
@@ -50,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ==================== NAVIGATION HELPER ====================
+  // NAVIGATION HELPER
 
   void _navigateToHome() {
     if (!mounted) return;
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ==================== HANDLERS ====================
+  // HANDLERS
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -112,7 +112,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {

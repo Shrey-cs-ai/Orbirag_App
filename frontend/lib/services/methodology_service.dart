@@ -3,9 +3,7 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 
-// ============================================================
 // Model — matches methodology_form.dart field names
-// ============================================================
 class MethodologyData {
   String studyType;
   String design;
@@ -72,9 +70,6 @@ class MethodologyData {
   }
 }
 
-// ============================================================
-// Service
-// ============================================================
 class MethodologyService {
   static final MethodologyService instance = MethodologyService._internal();
   factory MethodologyService() => instance;
@@ -88,7 +83,7 @@ class MethodologyService {
     return 'http://localhost:8001';
   }
 
-  // ---------- EXTRACT ----------
+  // EXTRACT
   Future<MethodologyData?> extractMethodology(
     String text, {
     String? paperTitle,
@@ -118,7 +113,6 @@ class MethodologyService {
     }
   }
 
-  // ---------- SAVE ----------
   Future<bool> saveMethodology(
     MethodologyData data, {
     String? paperTitle,
@@ -146,7 +140,7 @@ class MethodologyService {
     }
   }
 
-  // ---------- HISTORY ----------
+  // HISTORY
   Future<List<Map<String, dynamic>>> listHistory() async {
     try {
       final r = await http

@@ -7,9 +7,7 @@ import os
 from pathlib import Path
 
 
-# ============================================================
 # Load .env
-# ============================================================
 def _load_env():
     env_path = Path(__file__).resolve().parent.parent / ".env"
     if not env_path.exists():
@@ -30,9 +28,7 @@ _api_key = os.getenv("DEEPGRAM_API_KEY")
 print(f"[Deepgram] API key: {'SET' if _api_key else 'MISSING'}")
 
 
-# ============================================================
 # Transcribe
-# ============================================================
 async def transcribe_audio(audio_bytes: bytes, language: str = "en") -> dict:
     """
     Send audio bytes to Deepgram and return:

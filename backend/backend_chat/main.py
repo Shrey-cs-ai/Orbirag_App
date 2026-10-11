@@ -50,9 +50,6 @@ from services.pdf_service import (
 from services.word_counter_service import build_stats
 
 
-# ============================================================
-# App
-# ============================================================
 app = FastAPI(title="Orbirag Chat API")
 
 app.add_middleware(
@@ -64,9 +61,6 @@ app.add_middleware(
 )
 
 
-# ============================================================
-# Helpers
-# ============================================================
 def _validate_file_size(data: bytes, max_mb: int):
     if len(data) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
@@ -78,15 +72,12 @@ def _to_history_dicts(messages):
     return [{"role": getattr(m, "role", "user"), "content": getattr(m, "content", "")} for m in (messages or [])]
 
 
-# ============================================================
-# Routes
-# ============================================================
 @app.get("/", tags=["Health"])
 def root():
     return {"message": "Orbirag Chat API is running"}
 
 
-# ---------- Ori Chatbot ----------
+# Ori Chatbot
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
 async def chat(request: ChatRequest):
     history_dicts = _to_history_dicts(request.history)
@@ -94,7 +85,7 @@ async def chat(request: ChatRequest):
     return ChatResponse(response=response)
 
 
-# ---------- Voice ----------
+# Voice
 @app.post("/api/voice/transcribe", response_model=TranscribeResponse, tags=["Voice"])
 async def voice_transcribe(
     audio: UploadFile = File(...),
@@ -120,7 +111,7 @@ async def voice_transcribe(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------- Paper Orbit: Upload PDF ----------
+# Paper Orbit: Upload PDF
 @app.post("/api/ai/upload-pdf", response_model=PdfUploadResponse, tags=["Paper Orbit"])
 @app.post("/upload-pdf", response_model=PdfUploadResponse, tags=["Paper Orbit"])
 async def upload_pdf(file: UploadFile = File(...)):
@@ -153,7 +144,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         raise HTTPException(500, f"Upload failed: {e}")
 
 
-# ---------- Paper Orbit: Chat with PDF ----------
+# Paper Orbit: Chat with PDF
 @app.post("/api/ai/chat-with-pdf", response_model=PdfChatResponse, tags=["Paper Orbit"])
 @app.post("/chat-with-pdf", response_model=PdfChatResponse, tags=["Paper Orbit"])
 async def chat_with_pdf(request: PdfChatRequest):
@@ -188,9 +179,7 @@ async def chat_with_pdf(request: PdfChatRequest):
     return PdfChatResponse(response=response, sources=relevant)
 
 
-# ============================================================
 # AI Rewrite (Paraphrase / Humanize)
-# ============================================================
 class RewriteRequest(BaseModel):
     text: str
     mode: str   # "paraphrase" or "humanize"
@@ -246,9 +235,6 @@ async def rewrite_route(req: RewriteRequest):
         raise HTTPException(500, f"Rewrite failed: {e}")
 
 
-# ============================================================
-# Word Counter
-# ============================================================
 @app.post("/api/analyze", response_model=AnalyzeResponse, tags=["Word Counter"])
 async def analyze_text(request: AnalyzeRequest):
     text = request.text

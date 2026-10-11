@@ -7,9 +7,7 @@ class AiService {
   static final AiService instance = AiService._internal();
   AiService._internal();
 
-  // ============================================================
   // ✅ Dynamic Base URL
-  // ============================================================
   String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:8000';
@@ -20,9 +18,7 @@ class AiService {
     return 'http://localhost:8000';
   }
 
-  // ============================================================
   // 1. Ori Chatbot
-  // ============================================================
   Future<String> chat({
     required String message,
     List<Map<String, dynamic>> history = const [],
@@ -58,9 +54,7 @@ class AiService {
     }
   }
 
-  // ============================================================
   // 2. Upload PDF
-  // ============================================================
   Future<Map<String, dynamic>> uploadPdf({
     required List<int> fileBytes,
     required String filename,
@@ -94,9 +88,7 @@ class AiService {
     }
   }
 
-  // ============================================================
   // 3. Chat with PDF
-  // ============================================================
   Future<Map<String, dynamic>> chatWithPdf({
     required String paperId,
     required String question,
@@ -133,9 +125,7 @@ class AiService {
     }
   }
 
-  // ============================================================
   // 4. Transcribe Audio (Voice Input)
-  // ============================================================
   Future<String> transcribeAudio({
     required List<int> audioBytes,
     required String filename,
@@ -170,9 +160,7 @@ class AiService {
     }
   }
 
-  // ============================================================
   // 5. Ingest Pasted Text → doc_id (RAG — backend port 8001)
-  // ============================================================
   String get _ragBaseUrl {
     if (kIsWeb) return 'http://localhost:8001';
     if (defaultTargetPlatform == TargetPlatform.android) {

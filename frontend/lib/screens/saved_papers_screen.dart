@@ -338,7 +338,6 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Filter chips
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(

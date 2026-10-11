@@ -11,9 +11,7 @@ from typing import List, Dict, Optional
 import httpx
 
 
-# ============================================================
 # Load .env before reading S2_API_KEY
-# ============================================================
 def _load_env():
     env_path = Path(__file__).resolve().parent.parent / ".env"
     if not env_path.exists():
@@ -34,9 +32,7 @@ S2_BASE = "https://api.semanticscholar.org/graph/v1/paper/search"
 S2_FIELDS = "title,authors,year,abstract,url,citationCount,venue,externalIds"
 
 
-# ============================================================
 # Read key
-# ============================================================
 _api_key = os.getenv("S2_API_KEY")
 
 if _api_key:
@@ -48,9 +44,6 @@ _headers = {"x-api-key": _api_key} if _api_key else {}
 print(f"[S2 DEBUG] headers = {list(_headers.keys())}")
 
 
-# ============================================================
-# Search
-# ============================================================
 async def search_semantic_scholar(
     query: str,
     limit: int = 10,

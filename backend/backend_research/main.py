@@ -2,9 +2,7 @@
 Orbirag FastAPI backend — Phase 1 + Phase 2 (RAG).
 """
 
-# ============================================================
-# STEP 1: Load .env BEFORE importing services
-# ============================================================
+# ---- STEP 1: Load .env BEFORE importing services ----
 import os
 import asyncio  
 from pydantic import BaseModel, Field
@@ -93,9 +91,7 @@ _dg = os.getenv("DEEPGRAM_API_KEY")
 print(f"[ENV] GEMINI   : {'OK' if _gem else 'MISSING'}")
 print(f"[ENV] DEEPGRAM : {'OK' if _dg else 'MISSING'}")
 
-# ============================================================
-# STEP 2: Now safe to import services
-# ============================================================
+# ---- STEP 2: Now safe to import services ----
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -114,9 +110,7 @@ from services.deepgram_service import transcribe_audio
 from services.rag_service import index_pdf, ask_document, index_text
 
 
-# ============================================================
-# STEP 3: App + middleware
-# ============================================================
+# ---- STEP 3: App + middleware ----
 app = FastAPI(title="Orbirag API", version="0.2.0")
 
 app.add_middleware(
@@ -144,16 +138,14 @@ def _startup():
     print("[Startup] Ready — vector store initializes on first PDF upload")
 
 
-# ============================================================
-# STEP 4: Routes
-# ============================================================
+# ---- STEP 4: Routes ----
 
 @app.get("/")
 def read_root():
     return {"message": "Orbirag API is running", "version": "0.2.0"}
 
 
-# ---------- Ori chatbot ----------
+# ---- Ori chatbot ----
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
@@ -162,7 +154,7 @@ async def chat_endpoint(request: ChatRequest):
     return ChatResponse(response=text)
 
 
-# ---------- Voice ----------
+# ---- Voice ----
 
 @app.post("/api/voice/transcribe", response_model=TranscribeResponse)
 async def transcribe_voice(
@@ -192,7 +184,7 @@ async def transcribe_voice(
         raise HTTPException(500, str(e))
 
 
-# ---------- Paper Orbit (RAG) ----------
+# ---- Paper Orbit (RAG) ----
 
 @app.post("/api/ai/upload-pdf", response_model=UploadPdfResponse)
 async def upload_pdf(
@@ -218,10 +210,7 @@ async def upload_pdf(
         raise HTTPException(500, f"Failed to index PDF: {e}")
 
 
-
-# ============================================================
-# Paper Orbit (RAG) — Paste / Type Text
-# ============================================================
+# ---- Paper Orbit (RAG) — Paste / Type Text ----
 
 class TextIngestRequest(BaseModel):
     text: str
@@ -272,9 +261,7 @@ async def chat_with_pdf(request: RagChatRequest):
     except Exception as e:
         raise HTTPException(500, f"RAG error: {e}")
 
-# ============================================================
-# Literature Retrieval — Step 1: Build Query
-# ============================================================
+# ---- Literature Retrieval — Step 1: Build Query ----
 @app.post(
     "/api/ai/build-search",
     response_model=BuildQueryResponse,
@@ -294,9 +281,7 @@ async def build_search_route(req: BuildQueryRequest):
     )
 
 
-# ============================================================
-# Literature Retrieval — Step 2: Search
-# ============================================================
+# ---- Literature Retrieval — Step 2: Search ----
 @app.post(
     "/api/search",
     response_model=SearchResponse,
@@ -346,9 +331,7 @@ async def search_route(req: SearchRequest):
     return SearchResponse(results=results, count=len(results))
 
 
-# ============================================================
-# Literature Retrieval — Step 3: Save Paper
-# ============================================================
+# ---- Literature Retrieval — Step 3: Save Paper ----
 @app.post("/api/save-paper", tags=["Literature"])
 async def save_paper_route(req: SavePaperRequest):
     """Save a paper to the user's library (Postgres). Returns {success, id}."""
@@ -382,9 +365,7 @@ async def save_paper_route(req: SavePaperRequest):
         raise HTTPException(500, f"Save failed: {e}")
 
 
-# ============================================================
-# Papers Library — list / delete / update progress
-# ============================================================
+# ---- Papers Library — list / delete / update progress ----
 from pydantic import BaseModel as _BaseModel
 
 class _ProgressUpdate(_BaseModel):
@@ -440,9 +421,7 @@ def update_paper_route(paper_id: UUID, payload: _ProgressUpdate, db: Session = D
     return {"success": True}
 
 
-# ============================================================
-# Literature Retrieval — Step 4: Recommendations
-# ============================================================
+# ---- Literature Retrieval — Step 4: Recommendations ----
 @app.get(
     "/api/recommendations",
     response_model=SearchResponse,
@@ -487,9 +466,7 @@ async def recommendations_route(
     return SearchResponse(results=results, count=len(results))
 
 
-# ============================================================
-# Citations
-# ============================================================
+# ---- Citations ----
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -603,9 +580,7 @@ async def delete_citation_route(citation_id: str, user_id: str = "anonymous"):
         print(f"[Citation] delete error: {e}")
         raise HTTPException(500, f"Delete failed: {e}")
 
-# ============================================================
-# Library
-# ============================================================
+# ---- Library ----
 @app.post("/api/library/items", response_model=LibraryItemOut, tags=["Library"])
 def create_library_item(payload: LibraryItemCreate, db: Session = Depends(get_db)):
     return library_service.create_item(db, payload)
@@ -648,9 +623,7 @@ def delete_library_item(item_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Item not found")
     return {"deleted": True}
 
-# ============================================================
-# Notes
-# ============================================================
+# ---- Notes ----
 @app.post("/api/notes/items", response_model=NoteOut, tags=["Notes"])
 def create_note(payload: NoteCreate, db: Session = Depends(get_db)):
     return notes_service.create_note(db, payload)
@@ -693,9 +666,7 @@ def delete_note(note_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Note not found")
     return {"deleted": True}
 
-# ============================================================
-# Auth
-# ============================================================
+# ---- Auth ----
 @app.post("/api/auth/login", response_model=LoginResponse, tags=["Auth"])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = user_service.get_by_username(db, payload.username)
@@ -729,9 +700,7 @@ def update_my_avatar(
     return user
 
 
-# ============================================================
-# Admin — users
-# ============================================================
+# ---- Admin — users ----
 @app.get("/api/admin/users", tags=["Admin"])
 def admin_list_users(
     search: str | None = None,
@@ -928,9 +897,7 @@ def admin_delete_user(
     except Exception as e:
         raise HTTPException(500, f"Failed: {e}")
 
-# ============================================================
-# Plagiarism
-# ============================================================
+# ---- Plagiarism ----
 @app.post("/api/plagiarism/check", response_model=PlagiarismCheckResponse, tags=["Plagiarism"])
 async def plagiarism_check(payload: PlagiarismCheckRequest, db: Session = Depends(get_db)):
     try:
@@ -994,7 +961,7 @@ def plagiarism_delete(check_id: UUID, db: Session = Depends(get_db)):
     return {"deleted": True}
 
 #citation generation endpoints
-# ---------- Generate from URL or Manual ----------
+# ---- Generate from URL or Manual ----
 @app.post("/api/citations/generate", response_model=CitationGenerateResponse, tags=["Citations"])
 async def generate_citation(req: CitationGenerateRequest):
     """
@@ -1029,7 +996,7 @@ async def generate_citation(req: CitationGenerateRequest):
         raise HTTPException(500, detail=f"Citation generation failed: {e}")
 
 
-# ---------- Generate from PDF upload ----------
+# ---- Generate from PDF upload ----
 @app.post("/api/citations/generate-pdf", response_model=CitationGenerateResponse, tags=["Citations"])
 async def generate_citation_from_pdf(
     file: UploadFile = File(...),
@@ -1050,9 +1017,7 @@ async def generate_citation_from_pdf(
     result = await citation_service.generate(style=style, raw_text=text)
     return CitationGenerateResponse(**result)
 
-# ============================================================
-# Methodology
-# ============================================================
+# ---- Methodology ----
 @app.post("/api/methodology/extract",
           response_model=MethodologyExtractResponse,
           tags=["Methodology"])
@@ -1101,9 +1066,7 @@ def methodology_delete(m_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Methodology not found")
     return {"deleted": True}
 
-# ============================================================
-# Guided Topic Scoping
-# ============================================================
+# ---- Guided Topic Scoping ----
 @app.post("/api/scoping/parse", tags=["Scoping"])
 async def scoping_parse(req: ScopingParseRequest):
     try:

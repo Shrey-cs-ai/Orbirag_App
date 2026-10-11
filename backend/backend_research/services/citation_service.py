@@ -14,9 +14,7 @@ import httpx
 from fastapi import HTTPException
 
 
-# ============================================================
-# LLM helper (Groq primary + Gemini fallback)
-# ============================================================
+# ---- LLM helper (Groq primary + Gemini fallback) ----
 async def _ask_gemini(prompt: str, json_mode: bool = False) -> str:
     from services.ai_service import _generate_with_fallback
     text = await _generate_with_fallback(prompt, json_mode=json_mode)
@@ -26,9 +24,7 @@ async def _ask_gemini(prompt: str, json_mode: bool = False) -> str:
     return text
 
 
-# ============================================================
-# PDF text extraction
-# ============================================================
+# ---- PDF text extraction ----
 def extract_text_from_pdf(pdf_bytes: bytes, max_chars: int = 6000) -> str:
     """Extract text from a PDF using pypdf."""
     try:
@@ -45,9 +41,7 @@ def extract_text_from_pdf(pdf_bytes: bytes, max_chars: int = 6000) -> str:
         return ""
 
 
-# ============================================================
-# URL & Academic API helpers
-# ============================================================
+# ---- URL & Academic API helpers ----
 def _extract_doi_from_url(url: str) -> Optional[str]:
     """Extract a DOI from a URL like https://doi.org/10.1145/xxx or
     https://dl.acm.org/doi/10.1145/xxx"""
@@ -276,9 +270,7 @@ def _extract_metadata_from_html(html: str, url: str) -> dict:
     }
 
 
-# ============================================================
-# URL text extraction
-# ============================================================
+# ---- URL text extraction ----
 async def extract_text_from_url(url: str, max_chars: int = 6000) -> str:
     """Fetch a URL and strip the HTML to plain text."""
     html = await _fetch_html(url)
@@ -298,9 +290,7 @@ async def extract_text_from_url(url: str, max_chars: int = 6000) -> str:
     return text[:max_chars]
 
 
-# ============================================================
-# Metadata extraction (Gemini)
-# ============================================================
+# ---- Metadata extraction (Gemini) ----
 _METADATA_PROMPT = """You are extracting bibliographic metadata from a document.
 
 Return ONLY valid JSON with this shape:
@@ -342,9 +332,7 @@ async def extract_metadata(text: str) -> dict:
         }
 
 
-# ============================================================
-# Citation formatting (Gemini)
-# ============================================================
+# ---- Citation formatting (Gemini) ----
 _STYLE_INSTRUCTIONS = {
     "APA 7":   "APA 7th edition. Author, A. A. (Year). Title. Journal, Volume(Issue), pages. DOI/URL",
     "MLA 9":   "MLA 9th edition. Author. \"Title.\" Journal, vol. X, no. Y, Year, pp. Z.",
@@ -418,9 +406,7 @@ async def format_citation(metadata: dict, style: str) -> dict:
         }
 
 
-# ============================================================
-# Top-level: generate from any source
-# ============================================================
+# ---- Top-level: generate from any source ----
 async def generate(
     style: str,
     raw_text: str = "",

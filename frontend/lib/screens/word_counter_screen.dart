@@ -23,7 +23,6 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   int _selectedIndex = 0;
   int _requestId = 0;
 
-  // Backend state
   TextStats? _stats;
   List<Suggestion> _suggestions = [];
   bool _isAnalyzing = false;

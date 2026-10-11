@@ -13,17 +13,13 @@ from sqlalchemy import desc
 
 from models import PlagiarismCheck
 
-# ============================================================
 # Gemini helper — goes through the fallback chain
-# ============================================================
 async def _ask_gemini(prompt: str, json_mode: bool = False) -> str:
     from services.ai_service import _generate_with_fallback
     return await _generate_with_fallback(prompt, json_mode=json_mode)
 
 
-# ============================================================
 # Similarity analysis
-# ============================================================
 async def analyze_text(text: str) -> dict:
     prompt = f"""You are an academic integrity analyzer.
 
@@ -80,9 +76,7 @@ TEXT:
     }
 
 
-# ============================================================
 # Paraphrase / Humanize
-# ============================================================
 _PROMPTS = {
     "paraphrase": """You are an academic writing assistant. Paraphrase the text below
 to reduce plagiarism while preserving meaning. Use different vocabulary and
@@ -113,9 +107,6 @@ async def rewrite_text(text: str, mode: str) -> str:
     return (await _ask_gemini(prompt)).strip()
 
 
-# ============================================================
-# Citation
-# ============================================================
 def format_citation(source: str, year: str = "2023", style: str = "APA 7") -> str:
     """
     Produce an in-text citation string from a source label.
@@ -151,9 +142,7 @@ def format_citation(source: str, year: str = "2023", style: str = "APA 7") -> st
     return f"({source}, {year})"
 
 
-# ============================================================
 # DB CRUD
-# ============================================================
 def save_check(
     db: Session,
     text: str,

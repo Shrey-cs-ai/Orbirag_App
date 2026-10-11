@@ -52,7 +52,7 @@ class _OriChatScreenState extends State<OriChatScreen> {
     super.dispose();
   }
 
-  // ==================== SEND MESSAGE (via backend) ====================
+  // SEND MESSAGE (via backend)
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isTyping) return;
@@ -124,7 +124,6 @@ class _OriChatScreenState extends State<OriChatScreen> {
     });
   }
 
-  // ==================== VOICE INPUT ====================
   void _handleVoiceInput() async {
     final result = await Navigator.push(
       context,

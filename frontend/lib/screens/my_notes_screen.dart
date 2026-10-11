@@ -34,7 +34,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     super.dispose();
   }
 
-  // ---------- Backend ----------
+  // Backend
   Future<void> _loadNotes() async {
     setState(() => _isLoading = true);
     try {

@@ -49,9 +49,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // ============================================================
   // Strength meter helper
-  // ============================================================
   Color _strengthColor(int score) {
     switch (score) {
       case 0:
@@ -236,9 +234,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: 18),
 
-                        // ============================================================
                         // PASSWORD FIELD with strong validation
-                        // ============================================================
                         CustomTextField(
                           label: 'Password',
                           hint: 'Min 8 chars, 1 uppercase, 1 number, 1 symbol',
@@ -262,9 +258,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
 
-                        // ============================================================
                         // PASSWORD STRENGTH METER
-                        // ============================================================
                         if (_passwordController.text.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),

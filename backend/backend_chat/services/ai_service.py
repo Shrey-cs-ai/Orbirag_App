@@ -1,7 +1,5 @@
-# ============================================================
 # AI Service — LLM wrapper for Orbirag Chat Backend
 # Groq first (fast, generous free tier), Gemini fallback
-# ============================================================
 import asyncio
 import os
 import json
@@ -19,9 +17,7 @@ except ImportError:
     _GROQ_AVAILABLE = False
 
 
-# ============================================================
 # 1. LOAD .ENV
-# ============================================================
 def _load_env_file():
     env_path = Path(__file__).resolve().parent.parent / ".env"
     print(f"[ai_service] Loading .env from: {env_path}")
@@ -42,9 +38,7 @@ def _load_env_file():
 _load_env_file()
 
 
-# ============================================================
 # 2. CLIENTS (Groq + Gemini)
-# ============================================================
 _groq_key = os.getenv("GROQ_API_KEY")
 _gemini_key = os.getenv("GEMINI_API_KEY")
 
@@ -67,9 +61,7 @@ if not _groq_client and not _gemini_client:
     )
 
 
-# ============================================================
 # 3. MODELS
-# ============================================================
 GROQ_MODELS = [
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
@@ -87,9 +79,7 @@ GEMINI_MODELS = [
 ]
 
 
-# ============================================================
 # 4. SYSTEM PROMPTS
-# ============================================================
 ORI_SYSTEM = """You are Ori, a friendly AI research assistant for students.
 Be concise, warm, and cite sources when relevant. Never invent citations. Keep answers under 150 words."""
 
@@ -98,9 +88,7 @@ the provided context. Cite page numbers when possible. Keep answers
 under 150 words."""
 
 
-# ============================================================
 # 5. RETRY + FALLBACK HELPERS
-# ============================================================
 async def _try_groq(prompt: str, json_mode: bool = False) -> Optional[str]:
     if not _groq_client:
         return None
@@ -181,9 +169,7 @@ async def _generate_with_fallback(prompt: str, json_mode: bool = False) -> str:
     raise RuntimeError("All LLM providers failed (Groq + Gemini)")
 
 
-# ============================================================
 # 6. FEATURE — Ori Chatbot
-# ============================================================
 async def get_chat_response(message: str, history: list) -> str:
     try:
         parts = [ORI_SYSTEM, ""]
@@ -201,9 +187,7 @@ async def get_chat_response(message: str, history: list) -> str:
         return "I'm having trouble responding right now. Please try again."
 
 
-# ============================================================
 # 7. FEATURE — Paper Orbit
-# ============================================================
 async def get_paper_response(
     question: str,
     context: str,
@@ -237,9 +221,7 @@ async def get_paper_response(
         return "I'm having trouble responding right now. Please try again."
 
 
-# ============================================================
 # 8. FEATURE — Word Counter / Suggestions
-# ============================================================
 LANGUAGETOOL_URL = os.getenv("LANGUAGETOOL_URL", "https://api.languagetool.org/v2/check")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "languagetool")
 

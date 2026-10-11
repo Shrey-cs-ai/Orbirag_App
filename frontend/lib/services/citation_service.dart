@@ -8,12 +8,10 @@ import '../models/citation.dart';
 
 class CitationService {
   static final CitationService instance = CitationService._internal();
-  factory CitationService() => instance;   // ✅ public access to singleton
+  factory CitationService() => instance;   // public access to singleton
   CitationService._internal();
 
-  // ============================================================
   // Backend URL (research backend on 8001)
-  // ============================================================
   String get baseUrl {
     if (kIsWeb) return 'http://localhost:8001';
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -22,18 +20,12 @@ class CitationService {
     return 'http://localhost:8001';
   }
 
-  // ============================================================
-  // In-memory + SharedPreferences cache
-  // ============================================================
   List<Citation> _citations = [];
   bool _isInitialized = false;
 
   List<Citation> get citations => List.unmodifiable(_citations);
   int get citationsCount => _citations.length;
 
-  // ============================================================
-  // Initialize
-  // ============================================================
   Future<void> initialize() async {
     if (_isInitialized) return;
     await _loadFromPrefs();
@@ -77,9 +69,7 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // SAVE — POST backend + local cache
-  // ============================================================
   Future<bool> saveCitation(Citation citation) async {
     _citations.insert(0, citation);
     await _saveToPrefs();
@@ -103,9 +93,7 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // LIST — GET backend
-  // ============================================================
   Future<List<Citation>> listCitations() async {
     try {
       debugPrint('[Citation] GET $baseUrl/api/citations');
@@ -133,9 +121,7 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // DELETE — backend + local
-  // ============================================================
   Future<bool> deleteCitation(String id) async {
     _citations.removeWhere((c) => c.id == id);
     await _saveToPrefs();
@@ -156,17 +142,12 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // Clear all (local)
-  // ============================================================
   Future<void> clearAll() async {
     _citations.clear();
     await _saveToPrefs();
   }
 
-  // ============================================================
-  // Search
-  // ============================================================
   List<Citation> searchCitations(String query) {
     if (query.isEmpty) return _citations;
     final q = query.toLowerCase();
@@ -178,9 +159,7 @@ class CitationService {
         .toList();
   }
 
-  // ============================================================
   // Quick helpers (used by Plagiarism screen)
-  // ============================================================
   String quickInTextFromSource(String source, {String year = "2024"}) {
     if (source.trim().isEmpty) return "($year)";
     String authorPart = source;
@@ -213,9 +192,7 @@ class CitationService {
     _saveToPrefs();
   }
 
-  // ============================================================
   // GENERATE — from URL
-  // ============================================================
   Future<Map<String, dynamic>?> generateFromUrl(String url, String style) async {
     try {
       final r = await http
@@ -242,9 +219,7 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // GENERATE — from manual entry
-  // ============================================================
   Future<Map<String, dynamic>?> generateManual({
     required String title,
     required String authors,
@@ -288,9 +263,7 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // GENERATE — from PDF upload
-  // ============================================================
   Future<Map<String, dynamic>?> generateFromPdf({
     required List<int> bytes,
     required String filename,
@@ -324,9 +297,7 @@ class CitationService {
     }
   }
 
-  // ============================================================
   // Build a Citation object from a generate() response
-  // ============================================================
   Citation citationFromGenerateResponse(
     Map<String, dynamic> res, {
     required String sourceType,

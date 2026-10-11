@@ -79,7 +79,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isPrivacyExpanded = false;
   bool _isAboutExpanded = false;
 
-  // ==================== INIT ====================
+  // ---- INIT ----
 
   @override
   void initState() {
@@ -109,7 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ==================== EDIT PROFILE ====================
+  // ---- EDIT PROFILE ----
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -142,7 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
       setState(() {
-        _profileImageBytes = bytes; // ✅ show the actual uploaded image
+        _profileImageBytes = bytes; // show the actual uploaded image
         _isLoading = false;
       });
 
@@ -186,7 +186,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = false);
   }
 
-  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +222,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           children: [
-            // PROFILE HEADER
             _buildProfileHeader(roleLabels),
             const SizedBox(height: 24),
 
@@ -280,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               content: _buildAboutContent(),
             ),
 
-            // ⚠️ TEMPORARY — remove before submission
+            // TEMPORARY — remove before submission
             const SizedBox(height: 24),
             Center(
               child: GestureDetector(
@@ -316,9 +314,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // PROFILE HEADER
-  // ============================================
 
   Widget _buildProfileHeader(List<String> roleLabels) {
     return Container(
@@ -376,7 +371,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Name
           _isEditMode
               ? TextField(
                   controller: TextEditingController(text: _name),
@@ -399,7 +393,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
           const SizedBox(height: 4),
 
-          // Email
           Text(
             _email,
             style: const TextStyle(
@@ -500,9 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // EXPANDABLE SECTION BUILDER
-  // ============================================
+  // ---- EXPANDABLE SECTION BUILDER ----
 
   Widget _buildExpandableSection({
     required String title,
@@ -544,9 +535,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // EDIT PROFILE CONTENT
-  // ============================================
+  // ---- EDIT PROFILE CONTENT ----
 
   Widget _buildEditProfileContent(List<String> roleLabels) {
     return Container(
@@ -682,9 +671,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // NOTIFICATIONS CONTENT
-  // ============================================
+  // ---- NOTIFICATIONS CONTENT ----
 
   Widget _buildNotificationsContent() {
     return Column(
@@ -738,9 +725,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // PROGRESS CONTENT
-  // ============================================
+  // ---- PROGRESS CONTENT ----
 
   Widget _buildProgressContent() {
     return Column(
@@ -908,9 +893,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // PRIVACY CONTENT
-  // ============================================
+  // ---- PRIVACY CONTENT ----
 
   Widget _buildPrivacyContent() {
     return Column(
@@ -1000,9 +983,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ============================================
-  // ABOUT CONTENT
-  // ============================================
+  // ---- ABOUT CONTENT ----
 
   Widget _buildAboutContent() {
     return Column(

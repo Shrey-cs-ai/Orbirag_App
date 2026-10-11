@@ -93,7 +93,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ==================== PLACEHOLDER SCREENS ====================
+// PLACEHOLDER SCREENS
 
 class ForgotPasswordScreen extends StatelessWidget {
   const ForgotPasswordScreen({super.key});
