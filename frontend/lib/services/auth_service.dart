@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/app_constants.dart';
@@ -28,7 +29,7 @@ class AuthUser {
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
         id: json['id'].toString(),
-        username: json['username'] ?? '',
+        username: (json['display_name'] ?? json['username'] ?? '').toString(),
         email: json['email'],
         avatarBase64: json['avatar_base64'],
         role: json['role'] ?? 'user',
@@ -110,6 +111,33 @@ class AuthService {
     );
     if (response.statusCode == 200) {
       _currentUser = AuthUser.fromJson(jsonDecode(response.body));
+    }
+  }
+
+  Future<void> syncUserToBackend({
+    required String uid,
+    String? email,
+    String? displayName,
+    String? provider,
+    String? photoUrl,
+  }) async {
+    try {
+      final uri = Uri.parse('${AppConstants.researchBaseUrl}/auth/sync');
+      final r = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'firebase_uid': uid,
+          'email': email,
+          'display_name': displayName,
+          'provider': provider ?? 'unknown',
+          'photo_url': photoUrl,
+        }),
+      ).timeout(const Duration(seconds: 15));
+      debugPrint('[Auth] sync status: ${r.statusCode}');
+    } catch (e) {
+      // Non-fatal — user is still logged in even if sync fails
+      debugPrint('[Auth] sync failed: $e');
     }
   }
 }

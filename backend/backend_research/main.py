@@ -700,6 +700,39 @@ def update_my_avatar(
     return user
 
 
+class UserSyncRequest(BaseModel):
+    firebase_uid: str
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    provider: Optional[str] = "unknown"
+    photo_url: Optional[str] = None
+
+
+@app.post("/api/auth/sync", tags=["Auth"])
+def sync_user(payload: UserSyncRequest, db: Session = Depends(get_db)):
+    """
+    Called by the Flutter client after a successful Firebase login.
+    Upserts the user into the local `users` table so the admin dashboard
+    can display them.
+    """
+    from services.user_service import upsert_user_from_firebase
+    user = upsert_user_from_firebase(
+        db,
+        firebase_uid=payload.firebase_uid,
+        email=payload.email,
+        display_name=payload.display_name,
+        provider=payload.provider,
+        photo_url=payload.photo_url,
+    )
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+    }
+
+
 # ---- Admin — users ----
 @app.get("/api/admin/users", tags=["Admin"])
 def admin_list_users(

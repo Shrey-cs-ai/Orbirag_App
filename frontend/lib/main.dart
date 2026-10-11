@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'services/auth_service.dart';
 import 'package:orbirag/screens/chat_with_pdf_screen.dart';
 import 'firebase_options.dart';
 import 'utils/app_colors.dart';
@@ -35,6 +37,18 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    await AuthService().syncUserToBackend(
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      provider: user.providerData.isNotEmpty
+          ? user.providerData.first.providerId
+          : 'unknown',
+      photoUrl: user.photoURL,
+    );
+  }
   runApp(const MyApp());
 }
 

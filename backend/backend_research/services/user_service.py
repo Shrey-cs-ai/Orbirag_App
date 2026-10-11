@@ -92,6 +92,46 @@ def set_avatar(db: Session, user_id, avatar_base64: Optional[str]) -> Optional[U
     return user
 
 
+def upsert_user_from_firebase(
+    db: Session,
+    firebase_uid: str,
+    email: Optional[str] = None,
+    display_name: Optional[str] = None,
+    provider: str = "unknown",
+    photo_url: Optional[str] = None,
+) -> User:
+    """
+    Create or update a User row keyed on firebase_uid.
+    The `username` field falls back to email if display_name is missing.
+    """
+    user = db.query(User).filter(User.username == firebase_uid).first()
+
+    if not user and email:
+        user = db.query(User).filter(User.email == email).first()
+
+    username = display_name or email or firebase_uid
+
+    if user is None:
+        user = User(
+            username=firebase_uid,
+            email=email,
+            password_hash="firebase-managed",
+            role="user",
+            is_active=True,
+            avatar_base64=photo_url,
+        )
+        db.add(user)
+    else:
+        if email:
+            user.email = email
+        if photo_url:
+            user.avatar_base64 = photo_url
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def list_all_users_unified(db: Session, search: Optional[str] = None):
     """
     Merge Firebase Auth users with local Postgres metadata.
@@ -106,10 +146,12 @@ def list_all_users_unified(db: Session, search: Optional[str] = None):
     for fb in firebase_users:
         email = fb.get("email") or ""
         local = db_users.get(email) or db_users.get(fb["uid"])
+        disp_name = fb.get("display_name") or email or (local.username if local and local.username != str(local.id) else "Unknown")
 
         merged.append({
             "id": str(local.id) if local else fb["uid"],
             "username": (local.username if local else (fb.get("display_name") or email or "unknown")),
+            "display_name": disp_name,
             "email": email,
             "role": (local.role if local else "user"),
             "is_active": (not fb["disabled"]) if not local else local.is_active,
@@ -126,12 +168,14 @@ def list_all_users_unified(db: Session, search: Optional[str] = None):
             "source": "firebase",
         })
 
-    # Include local-only users (e.g., "anonymous") that aren't in Firebase
+    # Include local-only users (e.g., "anonymous", synced users) that aren't in Firebase
     for username, u in db_users.items():
         if not any(m["username"] == username or m["id"] == str(u.id) for m in merged):
+            disp = u.username if u.username != str(u.id) else (u.email or "Unknown")
             merged.append({
                 "id": str(u.id),
                 "username": u.username,
+                "display_name": disp,
                 "email": u.email,
                 "role": u.role,
                 "is_active": u.is_active,
@@ -146,6 +190,7 @@ def list_all_users_unified(db: Session, search: Optional[str] = None):
         s = search.lower()
         merged = [m for m in merged if
                   s in (m["username"] or "").lower() or
+                  s in (m.get("display_name") or "").lower() or
                   s in (m["email"] or "").lower()]
 
     return merged

@@ -73,6 +73,7 @@ class PapersService {
   bool _isInitialized = false;
 
   List<Paper> get papers => List.unmodifiable(_papers);
+  bool get isInitialized => _isInitialized;
 
   String get baseUrl {
     if (kIsWeb) return 'http://localhost:8001';

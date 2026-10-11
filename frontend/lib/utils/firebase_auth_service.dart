@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../services/auth_service.dart';
 
 class FirebaseAuthService {
   FirebaseAuthService._internal();
@@ -42,6 +43,16 @@ class FirebaseAuthService {
       );
       await credential.user?.updateDisplayName(name.trim());
       await credential.user?.reload();
+      final u = _auth.currentUser;
+      if (u != null) {
+        await _syncUserToBackend(
+          uid: u.uid,
+          email: u.email,
+          displayName: u.displayName ?? name.trim(),
+          provider: 'password',
+          photoUrl: u.photoURL,
+        );
+      }
       return null;
     } on FirebaseAuthException catch (e) {
       return _mapError(e);
@@ -55,10 +66,20 @@ class FirebaseAuthService {
     required String password,
   }) async {
     try {
-      await _auth.signInWithEmailAndPassword(
+      final cred = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
+      final u = cred.user;
+      if (u != null) {
+        await _syncUserToBackend(
+          uid: u.uid,
+          email: u.email,
+          displayName: u.displayName,
+          provider: 'password',
+          photoUrl: u.photoURL,
+        );
+      }
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'operation-not-allowed' &&
@@ -118,6 +139,14 @@ class FirebaseAuthService {
     if (result.user == null) {
       return 'Google sign-in cancelled';
     }
+    final user = result.user!;
+    await _syncUserToBackend(
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      provider: 'google.com',
+      photoUrl: user.photoURL,
+    );
     debugPrint('[Google Auth] Web popup success: ${result.user?.email}');
     return null;
   }
@@ -135,7 +164,17 @@ class FirebaseAuthService {
       accessToken: googleAuth.accessToken,
     );
 
-    await _auth.signInWithCredential(credential);
+    final userCred = await _auth.signInWithCredential(credential);
+    final user = userCred.user;
+    if (user != null) {
+      await _syncUserToBackend(
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        provider: 'google.com',
+        photoUrl: user.photoURL,
+      );
+    }
     debugPrint('[Google Auth] Mobile success: ${googleUser.email}');
     return null;
   }
@@ -178,6 +217,14 @@ class FirebaseAuthService {
     if (result.user == null) {
       return 'GitHub sign-in cancelled';
     }
+    final user = result.user!;
+    await _syncUserToBackend(
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      provider: 'github.com',
+      photoUrl: user.photoURL,
+    );
     debugPrint('[GitHub Auth] Web popup success: ${result.user?.email}');
     return null;
   }
@@ -192,8 +239,32 @@ class FirebaseAuthService {
     if (result.user == null) {
       return 'GitHub sign-in cancelled';
     }
+    final user = result.user!;
+    await _syncUserToBackend(
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      provider: 'github.com',
+      photoUrl: user.photoURL,
+    );
     debugPrint('[GitHub Auth] Mobile provider success: ${result.user?.email}');
     return null;
+  }
+
+  Future<void> _syncUserToBackend({
+    required String uid,
+    String? email,
+    String? displayName,
+    String? provider,
+    String? photoUrl,
+  }) async {
+    await AuthService().syncUserToBackend(
+      uid: uid,
+      email: email,
+      displayName: displayName,
+      provider: provider,
+      photoUrl: photoUrl,
+    );
   }
 
   // PROFILE MANAGEMENT

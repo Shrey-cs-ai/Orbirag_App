@@ -200,6 +200,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 await _papersService.addPaper(paper);
                 if (!mounted) return;
                 setSt(() => _isAddingPaper = false);
+                if (!ctx.mounted) return;
                 Navigator.pop(ctx);
                 await _loadPapers();
                 messenger.showSnackBar(
