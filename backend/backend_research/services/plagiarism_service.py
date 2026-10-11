@@ -117,8 +117,38 @@ async def rewrite_text(text: str, mode: str) -> str:
 # Citation
 # ============================================================
 def format_citation(source: str, year: str = "2023", style: str = "APA 7") -> str:
-    first_word = source.split()[0].strip(",.") if source else "Unknown"
-    return f"({first_word}, {year})"
+    """
+    Produce an in-text citation string from a source label.
+    Handles full paper titles, author strings, and empty inputs gracefully.
+    """
+    source = (source or "").strip()
+    year = (year or "n.d.").strip()
+
+    # Case 1: no source given — return an empty citation so the frontend
+    # can decide not to append anything.
+    if not source:
+        return ""
+
+    # Case 2: source looks like an author string already (contains a comma
+    # followed by an initial, e.g. "Smith, J." or "Ganeju, S.")
+    # Extract the first author's surname.
+    m = re.match(r"^([A-Z][A-Za-z'\-]+),\s*[A-Z]\.", source)
+    if m:
+        surname = m.group(1)
+        return f"({surname}, {year})"
+
+    # Case 3: source is a full title. Take the first alphabetic word
+    # that isn't a stopword, and treat it as the "Author" placeholder.
+    # This is a fallback — ideally the frontend should send an author name.
+    stopwords = {"a", "an", "the", "of", "in", "on", "for", "and", "or",
+                 "to", "at", "by", "with", "is", "are", "be"}
+    words = re.findall(r"[A-Za-z][A-Za-z'\-]+", source)
+    for w in words:
+        if w.lower() not in stopwords:
+            return f"({w}, {year})"
+
+    # Case 4: whatever's left, use the raw string
+    return f"({source}, {year})"
 
 
 # ============================================================

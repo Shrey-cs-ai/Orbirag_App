@@ -24,3 +24,4 @@ asyncio
 
 bcrypt
 PyJWT
+firebase-admin

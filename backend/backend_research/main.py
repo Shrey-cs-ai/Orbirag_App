@@ -732,14 +732,14 @@ def update_my_avatar(
 # ============================================================
 # Admin — users
 # ============================================================
-@app.get("/api/admin/users", response_model=UserListResponse, tags=["Admin"])
+@app.get("/api/admin/users", tags=["Admin"])
 def admin_list_users(
     search: str | None = None,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    users = user_service.list_users(db, search=search)
-    return UserListResponse(items=users, count=len(users))
+    merged = user_service.list_all_users_unified(db, search=search)
+    return {"items": merged, "count": len(merged)}
 
 
 @app.post("/api/admin/users", response_model=UserOut, tags=["Admin"])
@@ -753,79 +753,180 @@ def admin_create_user(
     return user_service.create_user(db, payload)
 
 
-@app.patch("/api/admin/users/{user_id}/ban", response_model=UserOut, tags=["Admin"])
+@app.patch("/api/admin/users/{user_id}/ban", tags=["Admin"])
 def admin_ban_user(
-    user_id: UUID,
+    user_id: str,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = user_service.set_active(db, user_id, False)
-    if not user:
-        raise HTTPException(404, "User not found")
-    return user
+    # Try UUID first (Postgres user)
+    try:
+        UID = UUID(user_id)
+        user = user_service.set_active(db, UID, False)
+        if not user:
+            raise HTTPException(404, "User not found")
+        return {"success": True}
+    except (ValueError, AttributeError):
+        pass
+
+    # Otherwise treat as Firebase UID — disable in Firebase
+    from services import firebase_admin_service
+    firebase_admin_service._ensure_initialized()
+    if firebase_admin_service._firebase_auth is None:
+        raise HTTPException(503, "Firebase Admin not configured")
+    try:
+        firebase_admin_service._firebase_auth.update_user(user_id, disabled=True)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed: {e}")
 
 
-@app.patch("/api/admin/users/{user_id}/unban", response_model=UserOut, tags=["Admin"])
+@app.patch("/api/admin/users/{user_id}/unban", tags=["Admin"])
 def admin_unban_user(
-    user_id: UUID,
+    user_id: str,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = user_service.set_active(db, user_id, True)
-    if not user:
-        raise HTTPException(404, "User not found")
-    return user
+    # Try UUID first (Postgres user)
+    try:
+        UID = UUID(user_id)
+        user = user_service.set_active(db, UID, True)
+        if not user:
+            raise HTTPException(404, "User not found")
+        return {"success": True}
+    except (ValueError, AttributeError):
+        pass
+
+    # Otherwise treat as Firebase UID — enable in Firebase
+    from services import firebase_admin_service
+    firebase_admin_service._ensure_initialized()
+    if firebase_admin_service._firebase_auth is None:
+        raise HTTPException(503, "Firebase Admin not configured")
+    try:
+        firebase_admin_service._firebase_auth.update_user(user_id, disabled=False)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed: {e}")
 
 
-@app.patch("/api/admin/users/{user_id}/role", response_model=UserOut, tags=["Admin"])
+@app.patch("/api/admin/users/{user_id}/role", tags=["Admin"])
 def admin_set_role(
-    user_id: UUID,
+    user_id: str,
     role: str,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     if role not in ("user", "admin"):
         raise HTTPException(400, "Invalid role")
-    user = user_service.set_role(db, user_id, role)
-    if not user:
-        raise HTTPException(404, "User not found")
-    return user
+    try:
+        UID = UUID(user_id)
+        user = user_service.set_role(db, UID, role)
+        if not user:
+            raise HTTPException(404, "User not found")
+        return {"success": True}
+    except (ValueError, AttributeError):
+        pass
+
+    from services import firebase_admin_service
+    firebase_admin_service._ensure_initialized()
+    if firebase_admin_service._firebase_auth is None:
+        raise HTTPException(503, "Firebase Admin not configured")
+    try:
+        firebase_admin_service._firebase_auth.set_custom_user_claims(user_id, {"role": role})
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed: {e}")
 
 
-@app.patch("/api/admin/users/{user_id}/password", response_model=UserOut, tags=["Admin"])
+@app.patch("/api/admin/users/{user_id}/password", tags=["Admin"])
 def admin_reset_password(
-    user_id: UUID,
+    user_id: str,
     payload: AdminPasswordResetRequest,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = user_service.reset_password(db, user_id, payload.new_password)
-    if not user:
-        raise HTTPException(404, "User not found")
-    return user
+    try:
+        UID = UUID(user_id)
+        user = user_service.reset_password(db, UID, payload.new_password)
+        if not user:
+            raise HTTPException(404, "User not found")
+        return {"success": True}
+    except (ValueError, AttributeError):
+        pass
+
+    from services import firebase_admin_service
+    firebase_admin_service._ensure_initialized()
+    if firebase_admin_service._firebase_auth is None:
+        raise HTTPException(503, "Firebase Admin not configured")
+    try:
+        firebase_admin_service._firebase_auth.update_user(user_id, password=payload.new_password)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed: {e}")
 
 
-@app.get("/api/admin/users/{user_id}", response_model=UserOut, tags=["Admin"])
+@app.get("/api/admin/users/{user_id}", tags=["Admin"])
 def admin_get_user(
-    user_id: UUID,
+    user_id: str,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = user_service.get_by_id(db, user_id)
-    if not user:
-        raise HTTPException(404, "User not found")
-    return user
+    try:
+        UID = UUID(user_id)
+        user = user_service.get_by_id(db, UID)
+        if user:
+            return user
+    except (ValueError, AttributeError):
+        pass
+
+    from services import firebase_admin_service
+    firebase_admin_service._ensure_initialized()
+    if firebase_admin_service._firebase_auth:
+        try:
+            fb = firebase_admin_service._firebase_auth.get_user(user_id)
+            return {
+                "id": fb.uid,
+                "username": fb.display_name or fb.email or "unknown",
+                "email": fb.email,
+                "role": "user",
+                "is_active": not fb.disabled,
+                "avatar_base64": fb.photo_url,
+                "created_at": (
+                    user_service._ms_to_iso(fb.user_metadata.creation_timestamp)
+                    if fb.user_metadata else None
+                ),
+                "last_login": (
+                    user_service._ms_to_iso(fb.user_metadata.last_sign_in_timestamp)
+                    if fb.user_metadata else None
+                ),
+            }
+        except Exception:
+            pass
+    raise HTTPException(404, "User not found")
 
 
 @app.delete("/api/admin/users/{user_id}", tags=["Admin"])
 def admin_delete_user(
-    user_id: UUID,
+    user_id: str,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if not user_service.delete_user(db, user_id):
-        raise HTTPException(404, "User not found")
-    return {"deleted": True}
+    try:
+        UID = UUID(user_id)
+        if user_service.delete_user(db, UID):
+            return {"deleted": True}
+    except (ValueError, AttributeError):
+        pass
+
+    from services import firebase_admin_service
+    firebase_admin_service._ensure_initialized()
+    if firebase_admin_service._firebase_auth is None:
+        raise HTTPException(503, "Firebase Admin not configured")
+    try:
+        firebase_admin_service._firebase_auth.delete_user(user_id)
+        return {"deleted": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed: {e}")
 
 # ============================================================
 # Plagiarism

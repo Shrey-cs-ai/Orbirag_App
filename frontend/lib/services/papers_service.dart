@@ -3,9 +3,8 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 
-// ============================================================
 // Model
-// ============================================================
+
 class Paper {
   final String id;
   final String title;
@@ -66,9 +65,7 @@ class Paper {
       );
 }
 
-// ============================================================
 // Service
-// ============================================================
 class PapersService {
   static final PapersService _instance = PapersService._internal();
   factory PapersService() => _instance;
@@ -102,9 +99,8 @@ class PapersService {
       if (r.statusCode == 200) {
         final data = jsonDecode(r.body) as Map<String, dynamic>;
         final list = (data['items'] ?? []) as List;
-        _papers = list
-            .map((e) => Paper.fromJson(e as Map<String, dynamic>))
-            .toList();
+        _papers =
+            list.map((e) => Paper.fromJson(e as Map<String, dynamic>)).toList();
         _sortPapers();
       } else {
         debugPrint('[Papers] fetch error ${r.statusCode}: ${r.body}');
@@ -171,7 +167,8 @@ class PapersService {
   Future<void> toggleFavorite(String id) async {
     final idx = _papers.indexWhere((p) => p.id == id);
     if (idx != -1) {
-      _papers[idx] = _papers[idx].copyWith(isFavorite: !_papers[idx].isFavorite);
+      _papers[idx] =
+          _papers[idx].copyWith(isFavorite: !_papers[idx].isFavorite);
       _sortPapers();
     }
   }

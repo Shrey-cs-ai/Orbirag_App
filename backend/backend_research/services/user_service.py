@@ -90,3 +90,71 @@ def set_avatar(db: Session, user_id, avatar_base64: Optional[str]) -> Optional[U
     db.commit()
     db.refresh(user)
     return user
+
+
+def list_all_users_unified(db: Session, search: Optional[str] = None):
+    """
+    Merge Firebase Auth users with local Postgres metadata.
+    Returns a list of dicts suitable for the admin dashboard.
+    """
+    from services.firebase_admin_service import list_firebase_users
+
+    firebase_users = list_firebase_users()
+    db_users = {u.username: u for u in db.query(User).all()}
+
+    merged = []
+    for fb in firebase_users:
+        email = fb.get("email") or ""
+        local = db_users.get(email) or db_users.get(fb["uid"])
+
+        merged.append({
+            "id": str(local.id) if local else fb["uid"],
+            "username": (local.username if local else (fb.get("display_name") or email or "unknown")),
+            "email": email,
+            "role": (local.role if local else "user"),
+            "is_active": (not fb["disabled"]) if not local else local.is_active,
+            "avatar_base64": (local.avatar_base64 if local else fb.get("photo_url")),
+            "created_at": (
+                local.created_at.isoformat() if local and local.created_at
+                else (_ms_to_iso(fb["created_at"]) if fb.get("created_at") else None)
+            ),
+            "last_login": (
+                local.last_login.isoformat() if local and local.last_login
+                else (_ms_to_iso(fb["last_sign_in"]) if fb.get("last_sign_in") else None)
+            ),
+            "provider": fb.get("provider", "unknown"),
+            "source": "firebase",
+        })
+
+    # Include local-only users (e.g., "anonymous") that aren't in Firebase
+    for username, u in db_users.items():
+        if not any(m["username"] == username or m["id"] == str(u.id) for m in merged):
+            merged.append({
+                "id": str(u.id),
+                "username": u.username,
+                "email": u.email,
+                "role": u.role,
+                "is_active": u.is_active,
+                "avatar_base64": u.avatar_base64,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "last_login": u.last_login.isoformat() if u.last_login else None,
+                "provider": "local",
+                "source": "postgres",
+            })
+
+    if search:
+        s = search.lower()
+        merged = [m for m in merged if
+                  s in (m["username"] or "").lower() or
+                  s in (m["email"] or "").lower()]
+
+    return merged
+
+
+def _ms_to_iso(ms):
+    """Convert a Firebase millisecond timestamp to an ISO string."""
+    from datetime import datetime, timezone
+    try:
+        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).isoformat()
+    except Exception:
+        return None

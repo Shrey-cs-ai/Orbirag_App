@@ -27,3 +27,4 @@ vectors/
 *.iml
 .DS_Store
 Thumbs.db
+firebase-service-account.json

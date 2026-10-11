@@ -33,9 +33,9 @@ class AuthUser {
         avatarBase64: json['avatar_base64'],
         role: json['role'] ?? 'user',
         isActive: json['is_active'] ?? true,
-        createdAt: DateTime.parse(json['created_at']).toLocal(),
+        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
         lastLogin: json['last_login'] != null
-            ? DateTime.parse(json['last_login']).toLocal()
+            ? DateTime.tryParse(json['last_login'].toString())
             : null,
       );
 }
