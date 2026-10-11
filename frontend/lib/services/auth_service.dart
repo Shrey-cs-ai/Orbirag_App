@@ -34,7 +34,8 @@ class AuthUser {
         avatarBase64: json['avatar_base64'],
         role: json['role'] ?? 'user',
         isActive: json['is_active'] ?? true,
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+            DateTime.now(),
         lastLogin: json['last_login'] != null
             ? DateTime.tryParse(json['last_login'].toString())
             : null,
@@ -123,17 +124,19 @@ class AuthService {
   }) async {
     try {
       final uri = Uri.parse('${AppConstants.researchBaseUrl}/auth/sync');
-      final r = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'firebase_uid': uid,
-          'email': email,
-          'display_name': displayName,
-          'provider': provider ?? 'unknown',
-          'photo_url': photoUrl,
-        }),
-      ).timeout(const Duration(seconds: 15));
+      final r = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'firebase_uid': uid,
+              'email': email,
+              'display_name': displayName,
+              'provider': provider ?? 'unknown',
+              'photo_url': photoUrl,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
       debugPrint('[Auth] sync status: ${r.statusCode}');
     } catch (e) {
       // Non-fatal — user is still logged in even if sync fails
