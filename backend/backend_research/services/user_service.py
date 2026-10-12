@@ -14,9 +14,13 @@ def get_by_username(db: Session, username: str) -> Optional[User]:
 def get_by_id(db: Session, user_id) -> Optional[User]:
     try:
         uid = UUID(str(user_id))
+        user = db.query(User).filter(User.id == uid).first()
+        if user:
+            return user
     except (ValueError, AttributeError):
-        return None
-    return db.query(User).filter(User.id == uid).first()
+        pass
+    s = str(user_id).strip()
+    return db.query(User).filter((User.username == s) | (User.email == s)).first()
 
 
 def list_users(db: Session, search: Optional[str] = None) -> List[User]:
@@ -104,17 +108,16 @@ def upsert_user_from_firebase(
     Create or update a User row keyed on firebase_uid.
     The `username` field falls back to email if display_name is missing.
     """
+    clean_email = (email or "").strip() or None
     user = db.query(User).filter(User.username == firebase_uid).first()
 
-    if not user and email:
-        user = db.query(User).filter(User.email == email).first()
-
-    username = display_name or email or firebase_uid
+    if not user and clean_email:
+        user = db.query(User).filter(User.email == clean_email).first()
 
     if user is None:
         user = User(
             username=firebase_uid,
-            email=email,
+            email=clean_email,
             password_hash="firebase-managed",
             role="user",
             is_active=True,
@@ -122,8 +125,8 @@ def upsert_user_from_firebase(
         )
         db.add(user)
     else:
-        if email:
-            user.email = email
+        if clean_email:
+            user.email = clean_email
         if photo_url:
             user.avatar_base64 = photo_url
 

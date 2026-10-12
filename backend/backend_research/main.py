@@ -761,26 +761,21 @@ def admin_ban_user(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    # Try UUID first (Postgres user)
-    try:
-        UID = UUID(user_id)
-        user = user_service.set_active(db, UID, False)
-        if not user:
-            raise HTTPException(404, "User not found")
-        return {"success": True}
-    except (ValueError, AttributeError):
-        pass
+    user = user_service.set_active(db, user_id, False)
 
-    # Otherwise treat as Firebase UID — disable in Firebase
     from services import firebase_admin_service
-    firebase_admin_service._ensure_initialized()
-    if firebase_admin_service._firebase_auth is None:
-        raise HTTPException(503, "Firebase Admin not configured")
-    try:
-        firebase_admin_service._firebase_auth.update_user(user_id, disabled=True)
+    if firebase_admin_service.is_firebase_configured():
+        try:
+            fb_uid = user.username if user else user_id
+            firebase_admin_service._firebase_auth.update_user(fb_uid, disabled=True)
+        except Exception as e:
+            print(f"[Admin] Firebase ban failed: {e}")
+
+    if user:
         return {"success": True}
-    except Exception as e:
-        raise HTTPException(500, f"Failed: {e}")
+    if not firebase_admin_service.is_firebase_configured():
+        raise HTTPException(404, "User not found")
+    return {"success": True}
 
 
 @app.patch("/api/admin/users/{user_id}/unban", tags=["Admin"])
@@ -789,26 +784,21 @@ def admin_unban_user(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    # Try UUID first (Postgres user)
-    try:
-        UID = UUID(user_id)
-        user = user_service.set_active(db, UID, True)
-        if not user:
-            raise HTTPException(404, "User not found")
-        return {"success": True}
-    except (ValueError, AttributeError):
-        pass
+    user = user_service.set_active(db, user_id, True)
 
-    # Otherwise treat as Firebase UID — enable in Firebase
     from services import firebase_admin_service
-    firebase_admin_service._ensure_initialized()
-    if firebase_admin_service._firebase_auth is None:
-        raise HTTPException(503, "Firebase Admin not configured")
-    try:
-        firebase_admin_service._firebase_auth.update_user(user_id, disabled=False)
+    if firebase_admin_service.is_firebase_configured():
+        try:
+            fb_uid = user.username if user else user_id
+            firebase_admin_service._firebase_auth.update_user(fb_uid, disabled=False)
+        except Exception as e:
+            print(f"[Admin] Firebase unban failed: {e}")
+
+    if user:
         return {"success": True}
-    except Exception as e:
-        raise HTTPException(500, f"Failed: {e}")
+    if not firebase_admin_service.is_firebase_configured():
+        raise HTTPException(404, "User not found")
+    return {"success": True}
 
 
 @app.patch("/api/admin/users/{user_id}/role", tags=["Admin"])
@@ -820,24 +810,22 @@ def admin_set_role(
 ):
     if role not in ("user", "admin"):
         raise HTTPException(400, "Invalid role")
-    try:
-        UID = UUID(user_id)
-        user = user_service.set_role(db, UID, role)
-        if not user:
-            raise HTTPException(404, "User not found")
-        return {"success": True}
-    except (ValueError, AttributeError):
-        pass
+
+    user = user_service.set_role(db, user_id, role)
 
     from services import firebase_admin_service
-    firebase_admin_service._ensure_initialized()
-    if firebase_admin_service._firebase_auth is None:
-        raise HTTPException(503, "Firebase Admin not configured")
-    try:
-        firebase_admin_service._firebase_auth.set_custom_user_claims(user_id, {"role": role})
+    if firebase_admin_service.is_firebase_configured():
+        try:
+            fb_uid = user.username if user else user_id
+            firebase_admin_service._firebase_auth.set_custom_user_claims(fb_uid, {"role": role})
+        except Exception as e:
+            print(f"[Admin] Firebase set role failed: {e}")
+
+    if user:
         return {"success": True}
-    except Exception as e:
-        raise HTTPException(500, f"Failed: {e}")
+    if not firebase_admin_service.is_firebase_configured():
+        raise HTTPException(404, "User not found")
+    return {"success": True}
 
 
 @app.patch("/api/admin/users/{user_id}/password", tags=["Admin"])
@@ -847,24 +835,21 @@ def admin_reset_password(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    try:
-        UID = UUID(user_id)
-        user = user_service.reset_password(db, UID, payload.new_password)
-        if not user:
-            raise HTTPException(404, "User not found")
-        return {"success": True}
-    except (ValueError, AttributeError):
-        pass
+    user = user_service.reset_password(db, user_id, payload.new_password)
 
     from services import firebase_admin_service
-    firebase_admin_service._ensure_initialized()
-    if firebase_admin_service._firebase_auth is None:
-        raise HTTPException(503, "Firebase Admin not configured")
-    try:
-        firebase_admin_service._firebase_auth.update_user(user_id, password=payload.new_password)
+    if firebase_admin_service.is_firebase_configured():
+        try:
+            fb_uid = user.username if user else user_id
+            firebase_admin_service._firebase_auth.update_user(fb_uid, password=payload.new_password)
+        except Exception as e:
+            print(f"[Admin] Firebase password reset failed: {e}")
+
+    if user:
         return {"success": True}
-    except Exception as e:
-        raise HTTPException(500, f"Failed: {e}")
+    if not firebase_admin_service.is_firebase_configured():
+        raise HTTPException(404, "User not found")
+    return {"success": True}
 
 
 @app.get("/api/admin/users/{user_id}", tags=["Admin"])
@@ -873,17 +858,12 @@ def admin_get_user(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    try:
-        UID = UUID(user_id)
-        user = user_service.get_by_id(db, UID)
-        if user:
-            return user
-    except (ValueError, AttributeError):
-        pass
+    user = user_service.get_by_id(db, user_id)
+    if user:
+        return user
 
     from services import firebase_admin_service
-    firebase_admin_service._ensure_initialized()
-    if firebase_admin_service._firebase_auth:
+    if firebase_admin_service.is_firebase_configured():
         try:
             fb = firebase_admin_service._firebase_auth.get_user(user_id)
             return {
@@ -913,22 +893,20 @@ def admin_delete_user(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    try:
-        UID = UUID(user_id)
-        if user_service.delete_user(db, UID):
-            return {"deleted": True}
-    except (ValueError, AttributeError):
-        pass
+    deleted = user_service.delete_user(db, user_id)
 
     from services import firebase_admin_service
-    firebase_admin_service._ensure_initialized()
-    if firebase_admin_service._firebase_auth is None:
-        raise HTTPException(503, "Firebase Admin not configured")
-    try:
-        firebase_admin_service._firebase_auth.delete_user(user_id)
+    if firebase_admin_service.is_firebase_configured():
+        try:
+            firebase_admin_service._firebase_auth.delete_user(user_id)
+        except Exception as e:
+            print(f"[Admin] Firebase delete user failed: {e}")
+
+    if deleted:
         return {"deleted": True}
-    except Exception as e:
-        raise HTTPException(500, f"Failed: {e}")
+    if not firebase_admin_service.is_firebase_configured():
+        raise HTTPException(404, "User not found")
+    return {"deleted": True}
 
 # ---- Plagiarism ----
 @app.post("/api/plagiarism/check", response_model=PlagiarismCheckResponse, tags=["Plagiarism"])

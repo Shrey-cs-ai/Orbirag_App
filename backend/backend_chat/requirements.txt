@@ -5,3 +5,4 @@ python-dotenv
 httpx
 pypdf
 deepgram-sdk
+firebase-admin

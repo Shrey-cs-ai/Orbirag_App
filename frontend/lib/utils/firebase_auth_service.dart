@@ -55,8 +55,10 @@ class FirebaseAuthService {
       }
       return null;
     } on FirebaseAuthException catch (e) {
+      debugPrint('[Auth] signUp FirebaseAuthException: ${e.code} - ${e.message}');
       return _mapError(e);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Auth] signUp error: $e');
       return 'Something went wrong. Please try again.';
     }
   }
@@ -82,13 +84,15 @@ class FirebaseAuthService {
       }
       return null;
     } on FirebaseAuthException catch (e) {
+      debugPrint('[Auth] login FirebaseAuthException: ${e.code} - ${e.message}');
       if (e.code == 'operation-not-allowed' &&
           email.trim().toLowerCase() == 'test@test.com' &&
           password == 'test123') {
         return null;
       }
       return _mapError(e);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Auth] login error: $e');
       return 'Something went wrong. Please try again.';
     }
   }
@@ -118,10 +122,14 @@ class FirebaseAuthService {
     try {
       if (kIsWeb) {
         return await _signInWithGoogleWeb();
+      } else if (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux) {
+        return 'Google Sign-In is only available on Web, Android, and iOS.';
       } else {
         return await _signInWithGoogleMobile();
       }
     } on FirebaseAuthException catch (e) {
+      debugPrint('[Google Auth] FirebaseAuthException: ${e.code} - ${e.message}');
       return _mapError(e);
     } catch (e) {
       debugPrint('[Google Auth] error: $e');
@@ -195,6 +203,9 @@ class FirebaseAuthService {
     try {
       if (kIsWeb) {
         return await _signInWithGitHubWeb();
+      } else if (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux) {
+        return 'GitHub Sign-In is only available on Web, Android, and iOS.';
       } else {
         return await _signInWithGitHubMobile();
       }

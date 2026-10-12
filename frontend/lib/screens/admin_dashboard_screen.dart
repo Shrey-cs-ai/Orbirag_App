@@ -95,6 +95,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  ImageProvider? _avatarImageProvider(String? avatar) {
+    if (avatar == null || avatar.trim().isEmpty) return null;
+    final val = avatar.trim();
+    if (val.startsWith('http://') || val.startsWith('https://')) {
+      return NetworkImage(val);
+    }
+    try {
+      return MemoryImage(base64Decode(val));
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _showUserDetails(AuthUser user) {
     showModalBottomSheet(
       context: context,
@@ -113,10 +126,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 backgroundColor: user.isAdmin
                     ? AppColors.purple.withValues(alpha: 0.2)
                     : AppColors.primary.withValues(alpha: 0.2),
-                backgroundImage: user.avatarBase64 != null &&
-                        user.avatarBase64!.isNotEmpty
-                    ? MemoryImage(base64Decode(user.avatarBase64!))
-                    : null,
+                backgroundImage: _avatarImageProvider(user.avatarBase64),
                 child: (user.avatarBase64 == null ||
                         user.avatarBase64!.isEmpty)
                     ? Icon(
@@ -350,10 +360,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 backgroundColor: user.isAdmin
                     ? AppColors.purple.withValues(alpha: 0.2)
                     : AppColors.primary.withValues(alpha: 0.2),
-                backgroundImage: user.avatarBase64 != null &&
-                        user.avatarBase64!.isNotEmpty
-                    ? MemoryImage(base64Decode(user.avatarBase64!))
-                    : null,
+                backgroundImage: _avatarImageProvider(user.avatarBase64),
                 child: (user.avatarBase64 == null ||
                         user.avatarBase64!.isEmpty)
                     ? Icon(

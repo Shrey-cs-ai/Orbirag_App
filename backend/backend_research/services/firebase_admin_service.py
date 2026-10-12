@@ -2,21 +2,44 @@ import os
 from pathlib import Path
 from typing import List, Dict, Optional
 
+_init_attempted = False
 _initialized = False
 _firebase_auth = None
 
 
 def _ensure_initialized():
-    global _initialized, _firebase_auth
-    if _initialized and _firebase_auth is not None:
+    global _init_attempted, _initialized, _firebase_auth
+    if _firebase_auth is not None:
         return
+    if _init_attempted:
+        return
+    _init_attempted = True
+
     try:
         import firebase_admin
         from firebase_admin import credentials, auth as fb_auth
 
-        cred_path = Path(__file__).resolve().parent.parent / "firebase-service-account.json"
-        if not cred_path.exists() or cred_path.stat().st_size == 0:
-            print(f"[FirebaseAdmin] No service account at {cred_path}")
+        # Search possible locations for service account credentials
+        base_dir = Path(__file__).resolve().parent.parent
+        candidates = [
+            os.getenv("FIREBASE_SERVICE_ACCOUNT"),
+            os.getenv("FIREBASE_CREDENTIALS_PATH"),
+            os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+            str(base_dir / "firebase-service-account.json"),
+            str(base_dir.parent / "firebase-service-account.json"),
+            str(Path.cwd() / "firebase-service-account.json"),
+        ]
+
+        cred_path = None
+        for candidate in candidates:
+            if candidate:
+                p = Path(candidate)
+                if p.exists() and p.stat().st_size > 0:
+                    cred_path = p
+                    break
+
+        if not cred_path:
+            print(f"[FirebaseAdmin] No service account found at {base_dir / 'firebase-service-account.json'}")
             _initialized = True
             _firebase_auth = None
             return
@@ -32,6 +55,11 @@ def _ensure_initialized():
         print(f"[FirebaseAdmin] Init failed: {e}")
         _initialized = True
         _firebase_auth = None
+
+
+def is_firebase_configured() -> bool:
+    _ensure_initialized()
+    return _firebase_auth is not None
 
 
 def list_firebase_users(max_results: int = 500) -> List[Dict]:
@@ -86,8 +114,8 @@ def list_firebase_users(max_results: int = 500) -> List[Dict]:
 
         return users
     except Exception as e:
-            print(f"[FirebaseAdmin] list_users failed: {e}")
-            return []
+        print(f"[FirebaseAdmin] list_users failed: {e}")
+        return []
 
 
 # Initialize once on module load
