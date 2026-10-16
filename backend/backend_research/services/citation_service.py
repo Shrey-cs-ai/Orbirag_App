@@ -333,6 +333,86 @@ async def extract_metadata(text: str) -> dict:
         }
 
 
+# ---- In-text citation helpers ----
+def _parse_authors(author_str: str) -> list:
+    """
+    Parse an author string into a list of last names.
+    Handles multiple formats:
+      - "Vaswani, A., Shazeer, N., Parmar, N."        → ["Vaswani", "Shazeer", "Parmar"]
+      - "Ganeju, S., Subedi, A."                      → ["Ganeju", "Subedi"]
+      - "Lewis, P., Perez, E., Piktus, A., et al."    → ["Lewis", "Perez", "Piktus"]
+      - "Smith, J."                                   → ["Smith"]
+      - "John Smith, Jane Doe"                        → ["Smith", "Doe"]
+      - "Ashish Vaswani, Noam Shazeer"                → ["Vaswani", "Shazeer"]
+    """
+    if not author_str or not author_str.strip():
+        return []
+
+    s = author_str.strip()
+
+    # Remove "et al." if present (we already have the authors listed before)
+    s = re.sub(r",?\s*et\s+al\.?", "", s, flags=re.IGNORECASE).strip()
+
+    # Split on the "Last, F." pattern
+    # Match uppercase-starting words followed by a comma
+    pattern = r"([A-Z][A-Za-z'\-]+)\s*,\s*[A-Z]\."
+    matches = re.findall(pattern, s)
+    if matches:
+        return matches
+
+    # Fallback 1: comma-separated parts (e.g., "John Smith, Jane Doe")
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    # If each part is "First Last", take the last word
+    last_names = []
+    for p in parts:
+        words = p.split()
+        if words:
+            last_names.append(words[-1].strip(".,"))
+    # Filter out single-letter or empty results
+    last_names = [ln for ln in last_names if len(ln) > 1]
+    if last_names:
+        return last_names
+
+    # Fallback 2: just take the first word that looks like a surname
+    words = s.split()
+    if words:
+        return [words[0].strip(".,")]
+
+    return []
+
+
+def _build_in_text(metadata: dict) -> str:
+    """
+    Deterministic in-text citation:
+      - 1 author:  (Lastname, Year)
+      - 2+ authors: (FirstLastname et al., Year)
+      - 0 authors:  (Title, Year) with a short title fallback
+    """
+    authors = (metadata.get("authors") or "").strip()
+    year = (metadata.get("year") or "").strip() or "n.d."
+    title = (metadata.get("title") or "").strip()
+
+    last_names = _parse_authors(authors)
+
+    if len(last_names) == 1:
+        return f"({last_names[0]}, {year})"
+
+    if len(last_names) >= 2:
+        return f"({last_names[0]} et al., {year})"
+
+    # No authors — fall back to first meaningful title word
+    if title:
+        stopwords = {"a", "an", "the", "of", "in", "on", "for", "and", "or",
+                     "to", "at", "by", "with", "is", "are", "be", "using",
+                     "based", "designing", "towards", "toward", "from",
+                     "into", "over", "under"}
+        for w in re.findall(r"[A-Za-z][A-Za-z'\-]+", title):
+            if w.lower() not in stopwords and len(w) > 2:
+                return f"({w}, {year})"
+
+    return ""
+
+
 # ---- Citation formatting (Gemini) ----
 _STYLE_INSTRUCTIONS = {
     "APA 7":   "APA 7th edition. Author, A. A. (Year). Title. Journal, Volume(Issue), pages. DOI/URL",
@@ -342,7 +422,8 @@ _STYLE_INSTRUCTIONS = {
     "Harvard": "Harvard. Author (Year) 'Title', Journal, vol. X, no. Y, pp. Z.",
 }
 
-_FORMAT_PROMPT = """You are a citation formatter. Produce a citation in the requested style.
+_FORMAT_PROMPT = """You are a citation formatter. Produce ONLY the reference-list
+entry in the requested style.
 
 Style: {style}
 Rule: {rule}
@@ -358,33 +439,30 @@ Metadata:
 
 Return ONLY valid JSON with this shape:
 {{
-  "in_text": "short in-text citation like (Smith, 2023)",
   "reference_list": "full formatted reference"
 }}
 
 Rules:
-- If metadata is missing, infer nothing — use available fields only
-- Do not add quotes around the JSON output
+- Produce the full bibliographic entry, not just the author-year part.
+- If a field is missing, omit that part gracefully.
+- Do NOT include quotes around the JSON output.
+- Do NOT invent metadata.
 """
 
 
 async def format_citation(metadata: dict, style: str) -> dict:
-    title = (metadata.get("title") or "").strip()
-    authors = (metadata.get("authors") or "").strip()
-    if not title and not authors:
-        return {
-            "in_text": "",
-            "reference_list": "",
-        }
-
     if style not in _STYLE_INSTRUCTIONS:
         style = "APA 7"
 
+    # Deterministic in-text citation
+    in_text = _build_in_text(metadata)
+
+    # LLM still produces the reference_list
     prompt = _FORMAT_PROMPT.format(
         style=style,
         rule=_STYLE_INSTRUCTIONS[style],
-        title=title,
-        authors=authors,
+        title=metadata.get("title", ""),
+        authors=metadata.get("authors", ""),
         year=metadata.get("year", ""),
         journal=metadata.get("journal", ""),
         publisher=metadata.get("publisher", ""),
@@ -394,17 +472,23 @@ async def format_citation(metadata: dict, style: str) -> dict:
 
     try:
         raw = await _ask_gemini(prompt, json_mode=True)
-        return json.loads(raw)
+        data = json.loads(raw)
+        reference_list = (data.get("reference_list") or "").strip()
     except Exception as e:
-        print(f"[Citation] format failed: {e}")
-        # Fallback — plain concatenation
-        t = title or "Untitled"
-        a = authors or "Unknown"
-        y = metadata.get("year") or "n.d."
-        return {
-            "in_text": f"({a.split(',')[0]}, {y})",
-            "reference_list": f"{a} ({y}). {t}.",
-        }
+        print(f"[Citation] LLM format failed: {e}")
+        # Fallback: build a simple reference
+        title = metadata.get("title") or "Untitled"
+        authors = metadata.get("authors") or "Unknown"
+        year = metadata.get("year") or "n.d."
+        journal = metadata.get("journal") or ""
+        reference_list = f"{authors} ({year}). {title}."
+        if journal:
+            reference_list += f" {journal}."
+
+    return {
+        "in_text": in_text,
+        "reference_list": reference_list,
+    }
 
 
 def format_bibtex(metadata: dict) -> str:
