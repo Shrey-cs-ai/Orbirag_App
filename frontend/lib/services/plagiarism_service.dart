@@ -8,6 +8,7 @@ class PlagiarismMatch {
   final String percentage;
   final int words;
   final String source;
+  final String authors;       // ← NEW
   final String year;
   final String excerpt;
 
@@ -17,29 +18,32 @@ class PlagiarismMatch {
     required this.percentage,
     required this.words,
     required this.source,
+    required this.authors,    // ← NEW
     required this.year,
     required this.excerpt,
   });
 
   factory PlagiarismMatch.fromJson(Map<String, dynamic> json) => PlagiarismMatch(
-        id: json['id'] ?? 0,
-        text: json['text'] ?? '',
-        percentage: json['percentage'] ?? '0%',
-        words: json['words'] ?? 0,
-        source: json['source'] ?? '',
-        year: json['year'] ?? '',
-        excerpt: json['excerpt'] ?? '',
-      );
+    id: json['id'] ?? 0,
+    text: json['text'] ?? '',
+    percentage: json['percentage'] ?? '0%',
+    words: json['words'] ?? 0,
+    source: json['source'] ?? '',
+    authors: json['authors'] ?? '',        // ← NEW
+    year: json['year'] ?? '',
+    excerpt: json['excerpt'] ?? '',
+  );
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'text': text,
-        'percentage': percentage,
-        'words': words,
-        'source': source,
-        'year': year,
-        'excerpt': excerpt,
-      };
+    'id': id,
+    'text': text,
+    'percentage': percentage,
+    'words': words,
+    'source': source,
+    'authors': authors,                    // ← NEW
+    'year': year,
+    'excerpt': excerpt,
+  };
 }
 
 class PlagiarismResult {

@@ -8,6 +8,7 @@ import re
 from typing import List, Optional
 from uuid import UUID
 
+import numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -19,59 +20,98 @@ async def _ask_gemini(prompt: str, json_mode: bool = False) -> str:
     return await _generate_with_fallback(prompt, json_mode=json_mode)
 
 
-# Similarity analysis
+def _split_sentences(text: str) -> List[str]:
+    # Simple, robust sentence splitter
+    text = re.sub(r'\s+', ' ', text.strip())
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    return [p.strip() for p in parts if len(p.strip()) > 15]
+
+
+def _cosine(a, b):
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    denom = (np.linalg.norm(a) * np.linalg.norm(b)) or 1e-9
+    return float(np.dot(a, b) / denom)
+
+
 async def analyze_text(text: str) -> dict:
-    prompt = f"""You are an academic integrity analyzer.
+    """
+    Real plagiarism detection using embeddings against Semantic Scholar.
+    """
+    from services.ai_service import build_search_query
+    from services.search_service import search_semantic_scholar
+    from services.embedding_service import embed_texts
 
-Analyze the text below for potential plagiarism. Return ONLY valid JSON in this shape:
+    # ---- 1. Sentences ----
+    sentences = _split_sentences(text)
+    if not sentences:
+        return {"similarity_score": "0%", "matches": []}
 
-{{
-  "similarity_score": "<integer>%",
-  "matches": [
-    {{
-      "text": "<exact substring from the input text>",
-      "percentage": "<integer>%",
-      "source": "<plausible academic paper title>",
-      "year": "<4-digit year>",
-      "excerpt": "<short 10-15 word excerpt from source>"
-    }}
-  ]
-}}
+    # ---- 2. Keywords (LLM, 1 call) ----
+    keywords_data = await build_search_query(text[:1500])
+    if keywords_data and keywords_data.get("boolean_query"):
+        query = keywords_data["boolean_query"]
+    elif keywords_data and keywords_data.get("keywords"):
+        query = " ".join(keywords_data["keywords"][:4])
+    else:
+        query = " ".join(sentences[0].split()[:8])
 
-Rules:
-- "similarity_score" is 0-100
-- Each match "text" MUST be an exact substring of the input
-- Provide 0-4 matches. If the text looks original, return an empty list and a score below 20
-- Sources should be plausible academic paper titles
-- Do NOT include any explanation outside the JSON
+    # ---- 3. Corpus from Semantic Scholar ----
+    try:
+        papers = await search_semantic_scholar(query=query, limit=20)
+    except Exception as e:
+        print(f"[Plagiarism] S2 fetch failed: {e}")
+        papers = []
 
-TEXT:
-\"\"\"{text[:8000]}\"\"\"
-"""
+    # Filter out papers without an abstract
+    papers = [p for p in papers if p.get("abstract") and len(p["abstract"]) > 100]
 
-    raw = (await _ask_gemini(prompt, json_mode=True)).strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE)
+    if not papers:
+        return {
+            "similarity_score": "0%",
+            "matches": [],
+            "note": "No comparable papers found in Semantic Scholar.",
+        }
 
-    data = json.loads(raw)
+    # ---- 4. Embed everything in two batches ----
+    sentence_vecs = embed_texts(sentences)
+    abstract_vecs = embed_texts([p["abstract"] for p in papers])
 
+    # ---- 5. Compare ----
     matches = []
-    for i, m in enumerate(data.get("matches", []), start=1):
-        t = (m.get("text") or "").strip()
-        if not t or t not in text:
-            continue
-        matches.append({
-            "id": i,
-            "text": t,
-            "percentage": m.get("percentage", "0%"),
-            "words": len(t.split()),
-            "source": m.get("source", "Unknown source"),
-            "year": str(m.get("year", "2023")),
-            "excerpt": m.get("excerpt", ""),
-        })
+    flagged_sentence_indices = set()
+    THRESHOLD = 0.75
+
+    for i, s_vec in enumerate(sentence_vecs):
+        best_score = 0.0
+        best_paper = None
+        for j, a_vec in enumerate(abstract_vecs):
+            score = _cosine(s_vec, a_vec)
+            if score > best_score:
+                best_score = score
+                best_paper = papers[j]
+
+        if best_score >= THRESHOLD and best_paper is not None:
+            flagged_sentence_indices.add(i)
+            matches.append({
+                "id": len(matches) + 1,
+                "text": sentences[i],
+                "percentage": f"{int(best_score * 100)}%",
+                "words": len(sentences[i].split()),
+                "source": best_paper.get("title") or "Unknown source",
+                "authors": best_paper.get("authors") or "",
+                "year": str(best_paper.get("year") or "n.d."),
+                "url": best_paper.get("url") or "",
+                "excerpt": (best_paper.get("abstract") or "")[:200],
+            })
+
+    # ---- 6. Overall score ----
+    total = len(sentences)
+    flagged = len(flagged_sentence_indices)
+    score_pct = int(round((flagged / total) * 100)) if total else 0
 
     return {
-        "similarity_score": data.get("similarity_score", "0%"),
+        "similarity_score": f"{score_pct}%",
         "matches": matches,
     }
 
@@ -108,37 +148,30 @@ async def rewrite_text(text: str, mode: str) -> str:
 
 
 def format_citation(source: str, year: str = "2023", style: str = "APA 7") -> str:
-    """
-    Produce an in-text citation string from a source label.
-    Handles full paper titles, author strings, and empty inputs gracefully.
-    """
     source = (source or "").strip()
     year = (year or "n.d.").strip()
-
-    # Case 1: no source given — return an empty citation so the frontend
-    # can decide not to append anything.
     if not source:
         return ""
 
-    # Case 2: source looks like an author string already (contains a comma
-    # followed by an initial, e.g. "Smith, J." or "Ganeju, S.")
-    # Extract the first author's surname.
+    # Case 1: single author "Ganeju, S."
     m = re.match(r"^([A-Z][A-Za-z'\-]+),\s*[A-Z]\.", source)
-    if m:
-        surname = m.group(1)
-        return f"({surname}, {year})"
+    if m and source.count(",") == 1:
+        return f"({m.group(1)}, {year})"
 
-    # Case 3: source is a full title. Take the first alphabetic word
-    # that isn't a stopword, and treat it as the "Author" placeholder.
-    # This is a fallback — ideally the frontend should send an author name.
+    # Case 2: multi-author "Ganeju, S., Subedi, A., ..."
+    m = re.match(r"^([A-Z][A-Za-z'\-]+),", source)
+    if m:
+        return f"({m.group(1)} et al., {year})"
+
+    # Case 3: title — skip stopwords, take first meaningful word
     stopwords = {"a", "an", "the", "of", "in", "on", "for", "and", "or",
-                 "to", "at", "by", "with", "is", "are", "be"}
-    words = re.findall(r"[A-Za-z][A-Za-z'\-]+", source)
-    for w in words:
-        if w.lower() not in stopwords:
+                 "to", "at", "by", "with", "is", "are", "be", "using",
+                 "based", "designing", "towards", "toward", "from",
+                 "into", "over", "under"}
+    for w in re.findall(r"[A-Za-z][A-Za-z'\-]+", source):
+        if w.lower() not in stopwords and len(w) > 2:
             return f"({w}, {year})"
 
-    # Case 4: whatever's left, use the raw string
     return f"({source}, {year})"
 
 

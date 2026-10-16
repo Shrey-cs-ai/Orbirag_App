@@ -267,6 +267,7 @@ class PlagiarismMatch(BaseModel):
     percentage: str
     words: int
     source: str
+    authors: str = ""        # ← NEW
     year: str
     excerpt: str
 

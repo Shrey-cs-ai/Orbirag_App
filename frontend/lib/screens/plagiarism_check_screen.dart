@@ -108,52 +108,38 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   }
 
   Future<void> _onCite() async {
-    if (_isRewriting) return;
-    final target = _selectedMatch?.text ?? _targetText();
-    if (target.trim().isEmpty) {
-      _showMessage('Please enter or select text first');
+    if (_selectedMatch == null) {
+      _showMessage('Please select a matched text first');
       return;
     }
-    setState(() => _isRewriting = true);
+
+    // Prefer authors; fall back to source title
+    final sourceToCite = _selectedMatch!.authors.isNotEmpty
+        ? _selectedMatch!.authors
+        : _selectedMatch!.source;
+
     try {
-      final source = _selectedMatch?.source ?? 'Unknown source';
-      final year = _selectedMatch?.year ?? '2023';
-      debugPrint('[Plagiarism] calling cite source=$source, year=$year');
-      final citation = await _service.cite(source, year);
-      debugPrint('[Plagiarism] result=$citation');
-      if (!mounted) return;
+      final citation = await _service.cite(
+        sourceToCite,
+        _selectedMatch!.year,
+      );
+
       final original = _documentController.text;
-      if (_selectedMatch != null && original.contains(target)) {
-        // Replace inline (existing behavior)
+      final matchedText = _selectedMatch!.text;
+
+      if (original.contains(matchedText)) {
         setState(() {
           _documentController.text =
-              original.replaceFirst(target, '$target $citation');
+              original.replaceFirst(matchedText, '$matchedText $citation');
           _aiSuggestion = null;
-          _isRewriting = false;
         });
-      } else if (_selectedMatch != null && original.contains(target.trim())) {
-        setState(() {
-          _documentController.text = original.replaceFirst(
-              target.trim(), '${target.trim()} $citation');
-          _aiSuggestion = null;
-          _isRewriting = false;
-        });
-      } else {
-        // Append to the end
-        setState(() {
-          _documentController.text =
-              original.isEmpty ? citation : '$original\n\n$citation';
-          _aiSuggestion = null;
-          _isRewriting = false;
-        });
+        _showMessage('Citation added: $citation');
       }
-      _showMessage('Citation added: $citation');
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isRewriting = false);
       _showMessage('Cite failed: $e');
     }
   }
+
 
   Future<void> _onParaphrase() async {
     if (_isRewriting) return;
@@ -519,7 +505,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'A similarity match does not necessarily mean plagiarism. Review highlighted sections carefully to ensure proper citation.',
+              'Similarity is measured against abstracts of papers retrieved from Semantic Scholar. This is an educational tool — for institutional-grade results, consult Turnitin or iThenticate.',
               style: TextStyle(fontSize: 13, height: 1.4),
             ),
           ),
