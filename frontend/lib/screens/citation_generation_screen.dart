@@ -54,6 +54,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
   // ---- Result ----
   String? _inText;
   String? _referenceList;
+  String? _bibtex;
   String? _lastSource; // "manual" | "url" | "pdf"
   String? _extractedTitle;
 
@@ -88,8 +89,6 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
 
     setState(() {
       _isGenerating = true;
-      _inText = null;
-      _referenceList = null;
     });
 
     try {
@@ -113,11 +112,14 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
         );
       } else if (tabIndex == 1) {
         // URL
-        final url = _urlCtrl.text.trim();
+        var url = _urlCtrl.text.trim();
         if (url.isEmpty) {
           _showSnack('Please paste a URL');
           setState(() => _isGenerating = false);
           return;
+        }
+        if (!url.contains('://') && url.startsWith('10.')) {
+          url = 'https://doi.org/$url';
         }
         source = 'url';
         res = await _service.generateFromUrl(url, _style);
@@ -141,7 +143,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
         );
       }
 
-            if (!mounted) return;
+      if (!mounted) return;
 
       if (res == null) {
         _showSnack('Generation failed. Check the backend.');
@@ -152,6 +154,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       // Extract BEFORE setState so Dart sees non-nullable values inside the closure
       final inText = (res['in_text'] ?? '').toString();
       final refList = (res['reference_list'] ?? '').toString();
+      final bibtex = (res['bibtex'] ?? '').toString();
       final meta = (res['metadata'] ?? {}) as Map<String, dynamic>;
       final extTitle = (meta['title'] ?? '').toString();
       final src = source;
@@ -159,6 +162,7 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       setState(() {
         _inText = inText;
         _referenceList = refList;
+        _bibtex = bibtex;
         _lastSource = src;
         _extractedTitle = extTitle;
         _isGenerating = false;
@@ -319,7 +323,16 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
                         child: ChoiceChip(
                           label: Text(s),
                           selected: selected,
-                          onSelected: (_) => setState(() => _style = s),
+                          onSelected: (_) async {
+                            if (_style == s) return;
+                            setState(() => _style = s);
+
+                            // Auto-regenerate if a citation has already been produced
+                            if (_referenceList != null &&
+                                _referenceList!.isNotEmpty) {
+                              await _generate();
+                            }
+                          },
                           selectedColor:
                               AppColors.primary.withValues(alpha: 0.15),
                           labelStyle: TextStyle(
@@ -341,6 +354,18 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
                     }).toList(),
                   ),
                 ),
+                if (_isGenerating) ...[
+                  const SizedBox(height: 10),
+                  const ClipRRect(
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      backgroundColor: Colors.transparent,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -429,7 +454,13 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
 
                   if (_referenceList != null) ...[
                     const SizedBox(height: 20),
-                    _buildResultCard(),
+                    Opacity(
+                      opacity: _isGenerating ? 0.5 : 1.0,
+                      child: IgnorePointer(
+                        ignoring: _isGenerating,
+                        child: _buildResultCard(),
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -511,8 +542,8 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
       children: [
         _textField(
           controller: _urlCtrl,
-          label: 'Article URL',
-          hint: 'https://example.com/article',
+          label: 'Article URL or DOI',
+          hint: 'Paste a URL or DOI (e.g. https://... or 10.xxxx/xxxxx)',
           keyboardType: TextInputType.url,
         ),
       ],
@@ -661,7 +692,10 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
                 child: OutlinedButton.icon(
                   onPressed: _copyReference,
                   icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('Copy'),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Copy'),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary),
@@ -672,7 +706,41 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final bibtex = _bibtex;
+                    if (bibtex == null || bibtex.isEmpty) {
+                      _showSnack('No BibTeX available');
+                      return;
+                    }
+                    final safeTitle = (_titleCtrl.text.trim().isEmpty
+                            ? (_extractedTitle != null &&
+                                    _extractedTitle!.isNotEmpty
+                                ? _extractedTitle!
+                                : 'orbirag-citation')
+                            : _titleCtrl.text.trim())
+                        .replaceAll(RegExp(r'[^A-Za-z0-9\-_]+'), '_');
+                    await CitationService().downloadBibtex(bibtex, safeTitle);
+                    _showSnack('BibTeX downloaded');
+                  },
+                  icon: const Icon(Icons.download, size: 16),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('BibTeX'),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _isSaving ? null : _save,
@@ -686,7 +754,10 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
                           ),
                         )
                       : const Icon(Icons.bookmark_add, size: 18),
-                  label: Text(_isSaving ? 'Saving…' : 'Save to Library'),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(_isSaving ? 'Saving…' : 'Save to Library'),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,

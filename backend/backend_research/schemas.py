@@ -115,6 +115,7 @@ class CitationGenerateResponse(BaseModel):
     style: str
     in_text: str
     reference_list: str
+    bibtex: str = ""        # NEW
 
 # Literature Retrieval
 

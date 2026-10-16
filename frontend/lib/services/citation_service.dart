@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
@@ -10,6 +12,16 @@ class CitationService {
   static final CitationService instance = CitationService._internal();
   factory CitationService() => instance;   // public access to singleton
   CitationService._internal();
+
+  Future<void> downloadBibtex(String bibtex, String suggestedName) async {
+    final bytes = utf8.encode(bibtex);
+    await FileSaver.instance.saveFile(
+      name: suggestedName,
+      bytes: Uint8List.fromList(bytes),
+      ext: 'bib',
+      mimeType: MimeType.other,
+    );
+  }
 
   // Backend URL (research backend on 8001)
   String get baseUrl {
