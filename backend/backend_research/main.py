@@ -121,6 +121,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from routes import gap_analysis; app.include_router(gap_analysis.router)
+
 
 @app.on_event("startup")
 def _startup():
