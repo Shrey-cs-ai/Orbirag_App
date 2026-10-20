@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/ai_service.dart';
@@ -255,11 +256,117 @@ class _OriChatScreenState extends State<OriChatScreen> {
                   );
                 }
                 final msg = _messages[index];
-                return ChatBubble(
-                  message: msg['text'],
-                  isUser: msg['isUser'],
-                  time: msg['time'],
-                  showAvatar: true,
+                if (msg['isUser'] == true) {
+                  return ChatBubble(
+                    message: msg['text'],
+                    isUser: true,
+                    time: msg['time'],
+                    showAvatar: true,
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.oriGradient,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'O',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(4),
+                                  bottomRight: Radius.circular(16),
+                                ),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: MarkdownBody(
+                                data: msg['text'] as String? ?? '',
+                                selectable: true,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: const TextStyle(fontSize: 15, height: 1.5),
+                                  h1: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  h2: const TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  h3: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  strong: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  em: const TextStyle(
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  code: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 14,
+                                    backgroundColor: AppColors.cardBg,
+                                    color: AppColors.primary,
+                                  ),
+                                  codeblockDecoration: BoxDecoration(
+                                    color: AppColors.cardBg,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  blockquoteDecoration: BoxDecoration(
+                                    color: AppColors.cardBg,
+                                    border: const Border(
+                                      left: BorderSide(
+                                        color: AppColors.primary,
+                                        width: 3,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (msg['time'] != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                msg['time'] as String,
+                                style: AppTextStyles.chatTime,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),

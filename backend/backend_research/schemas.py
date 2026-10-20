@@ -262,14 +262,13 @@ class AvatarUpdateRequest(BaseModel):
     avatar_base64: Optional[str] = None
 
 class PlagiarismMatch(BaseModel):
-    id: int
+    id: str
     text: str
-    percentage: str
-    words: int
-    source: str
-    authors: str = ""        # ← NEW
-    year: str
-    excerpt: str
+    similarity_percentage: int
+    source_title: str
+    source_author: str
+    source_year: str
+    citation_string: str
 
 
 class PlagiarismCheckRequest(BaseModel):
@@ -278,10 +277,12 @@ class PlagiarismCheckRequest(BaseModel):
 
 
 class PlagiarismCheckResponse(BaseModel):
-    id: uuid.UUID
-    similarity_score: str
+    similarity_score: int
+    ai_likelihood_score: int
+    ai_likelihood_explanation: str
     matches: List[PlagiarismMatch]
-    created_at: datetime
+    id: Optional[uuid.UUID] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
