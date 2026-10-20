@@ -3,64 +3,79 @@ import 'package:http/http.dart' as http;
 import '../utils/app_constants.dart';
 
 class PlagiarismMatch {
-  final int id;
+  final String id;
   final String text;
-  final String percentage;
-  final int words;
-  final String source;
-  final String authors;       // ← NEW
-  final String year;
-  final String excerpt;
+  final int similarityPercentage;
+  final String sourceTitle;
+  final String sourceAuthor;
+  final String sourceYear;
+  final String citationString;
 
   PlagiarismMatch({
     required this.id,
     required this.text,
-    required this.percentage,
-    required this.words,
-    required this.source,
-    required this.authors,    // ← NEW
-    required this.year,
-    required this.excerpt,
+    required this.similarityPercentage,
+    required this.sourceTitle,
+    required this.sourceAuthor,
+    required this.sourceYear,
+    required this.citationString,
   });
 
+  // Backward compatibility getters
+  String get source => sourceTitle;
+  String get authors => sourceAuthor;
+  String get year => sourceYear;
+  String get percentage => '$similarityPercentage%';
+
   factory PlagiarismMatch.fromJson(Map<String, dynamic> json) => PlagiarismMatch(
-    id: json['id'] ?? 0,
+    id: json['id']?.toString() ?? '',
     text: json['text'] ?? '',
-    percentage: json['percentage'] ?? '0%',
-    words: json['words'] ?? 0,
-    source: json['source'] ?? '',
-    authors: json['authors'] ?? '',        // ← NEW
-    year: json['year'] ?? '',
-    excerpt: json['excerpt'] ?? '',
+    similarityPercentage: json['similarity_percentage'] is int
+        ? json['similarity_percentage']
+        : int.tryParse(json['similarity_percentage']?.toString().replaceAll('%', '') ?? '0') ??
+            int.tryParse(json['percentage']?.toString().replaceAll('%', '') ?? '0') ?? 0,
+    sourceTitle: json['source_title'] ?? json['source'] ?? '',
+    sourceAuthor: json['source_author'] ?? json['authors'] ?? '',
+    sourceYear: json['source_year']?.toString() ?? json['year']?.toString() ?? '',
+    citationString: json['citation_string'] ?? '',
   );
 
   Map<String, dynamic> toMap() => {
     'id': id,
     'text': text,
-    'percentage': percentage,
-    'words': words,
-    'source': source,
-    'authors': authors,                    // ← NEW
-    'year': year,
-    'excerpt': excerpt,
+    'similarity_percentage': similarityPercentage,
+    'source_title': sourceTitle,
+    'source_author': sourceAuthor,
+    'source_year': sourceYear,
+    'citation_string': citationString,
   };
 }
 
 class PlagiarismResult {
   final String id;
-  final String similarityScore;
+  final int similarityScore;
+  final int aiLikelihoodScore;
+  final String aiLikelihoodExplanation;
   final List<PlagiarismMatch> matches;
 
   PlagiarismResult({
     required this.id,
     required this.similarityScore,
+    required this.aiLikelihoodScore,
+    required this.aiLikelihoodExplanation,
     required this.matches,
   });
 
   factory PlagiarismResult.fromJson(Map<String, dynamic> json) =>
       PlagiarismResult(
-        id: json['id'].toString(),
-        similarityScore: json['similarity_score'] ?? '0%',
+        id: json['id']?.toString() ?? '',
+        similarityScore: json['similarity_score'] is int
+            ? json['similarity_score']
+            : int.tryParse(json['similarity_score']?.toString().replaceAll('%', '') ?? '0') ?? 0,
+        aiLikelihoodScore: json['ai_likelihood_score'] is int
+            ? json['ai_likelihood_score']
+            : int.tryParse(json['ai_likelihood_score']?.toString().replaceAll('%', '') ?? '0') ?? 0,
+        aiLikelihoodExplanation: json['ai_likelihood_explanation'] ?? '',
         matches: (json['matches'] as List? ?? [])
             .map((m) => PlagiarismMatch.fromJson(m as Map<String, dynamic>))
             .toList(),

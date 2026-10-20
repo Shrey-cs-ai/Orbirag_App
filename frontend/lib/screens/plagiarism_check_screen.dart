@@ -24,7 +24,9 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
   final PlagiarismService _service = PlagiarismService();
 
   List<PlagiarismMatch> _matches = [];
-  String _similarityScore = '';
+  int? _similarityScore;
+  int? _aiLikelihoodScore;
+  String? _aiLikelihoodExplanation;
   PlagiarismMatch? _selectedMatch;
   String? _aiSuggestion;
   String _suggestionType = '';
@@ -85,7 +87,9 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       _selectedMatch = null;
       _lastTargetText = null;
       _matches = [];
-      _similarityScore = '';
+      _similarityScore = null;
+      _aiLikelihoodScore = null;
+      _aiLikelihoodExplanation = null;
     });
 
     try {
@@ -93,6 +97,8 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
       if (!mounted) return;
       setState(() {
         _similarityScore = result.similarityScore;
+        _aiLikelihoodScore = result.aiLikelihoodScore;
+        _aiLikelihoodExplanation = result.aiLikelihoodExplanation;
         _matches = result.matches;
         if (_matches.isNotEmpty) {
           _selectedMatch = _matches.first;
@@ -107,36 +113,69 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     }
   }
 
-  Future<void> _onCite() async {
-    if (_selectedMatch == null) {
-      _showMessage('Please select a matched text first');
+  void _citeMatch(PlagiarismMatch match) {
+    final original = _documentController.text;
+    final matchedText = match.text;
+
+    if (!original.contains(matchedText) &&
+        !original.contains(matchedText.trim())) {
+      _showMessage('Matched text not found in document (it may have been edited)');
       return;
     }
 
-    // Prefer authors; fall back to source title
-    final sourceToCite = _selectedMatch!.authors.isNotEmpty
-        ? _selectedMatch!.authors
-        : _selectedMatch!.source;
+    final targetText =
+        original.contains(matchedText) ? matchedText : matchedText.trim();
 
-    try {
-      final citation = await _service.cite(
-        sourceToCite,
-        _selectedMatch!.year,
-      );
+    // Format in-text citation: e.g. (Ganeju et al., 2026)
+    final authorStr = match.sourceAuthor.isNotEmpty
+        ? match.sourceAuthor
+        : (match.sourceTitle.isNotEmpty ? match.sourceTitle : 'Unknown');
+    final yearStr = match.sourceYear.isNotEmpty ? match.sourceYear : 'n.d.';
+    final inTextCitation = '($authorStr, $yearStr)';
 
-      final original = _documentController.text;
-      final matchedText = _selectedMatch!.text;
+    String newText = original;
+    final alreadyCited = original.contains('$targetText $inTextCitation') ||
+        original.contains('$targetText$inTextCitation');
 
-      if (original.contains(matchedText)) {
-        setState(() {
-          _documentController.text =
-              original.replaceFirst(matchedText, '$matchedText $citation');
-          _aiSuggestion = null;
-        });
-        _showMessage('Citation added: $citation');
+    if (!alreadyCited) {
+      newText = newText.replaceFirst(targetText, '$targetText $inTextCitation');
+    }
+
+    // Full reference string from backend
+    final fullReference = match.citationString.isNotEmpty
+        ? match.citationString
+        : '$authorStr ($yearStr). ${match.sourceTitle}.';
+
+    // Add full reference to References section at bottom if not already present
+    if (!newText.contains(fullReference)) {
+      final refHeaderRegex =
+          RegExp(r'\n\s*References:\s*', caseSensitive: false);
+      if (refHeaderRegex.hasMatch(newText)) {
+        newText = '$newText\n- $fullReference';
+      } else {
+        newText = '$newText\n\nReferences:\n- $fullReference';
       }
-    } catch (e) {
-      _showMessage('Cite failed: $e');
+    }
+
+    setState(() {
+      _documentController.text = newText;
+      _aiSuggestion = null;
+    });
+
+    if (alreadyCited && original.contains(fullReference)) {
+      _showMessage('Citation already added');
+    } else {
+      _showMessage('Citation added: $inTextCitation');
+    }
+  }
+
+  void _onCite() {
+    if (_selectedMatch != null) {
+      _citeMatch(_selectedMatch!);
+    } else if (_matches.isNotEmpty) {
+      _citeMatch(_matches.first);
+    } else {
+      _showMessage('Please select a matched text first');
     }
   }
 
@@ -349,42 +388,15 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
                 ),
               ),
             ),
-            if (_similarityScore.isNotEmpty) ...[
+            if (_similarityScore != null) ...[
               const SizedBox(height: 20),
-              _buildScoreCard(),
+              _buildScoresSection(),
               const SizedBox(height: 16),
               _buildInfoBox(),
               const SizedBox(height: 12),
               _buildActionBar(),
-              const SizedBox(height: 24),
-            ],
-            if (_matches.isNotEmpty)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Matched Text',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_matches.length} Matches Found',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            if (_matches.isNotEmpty) const SizedBox(height: 12),
-            if (_matches.isNotEmpty) _buildMatchesList(),
-            if (_selectedMatch != null) ...[
               const SizedBox(height: 20),
-              _buildSelectedMatchCard(),
+              _buildMatchedSourcesSection(),
             ],
             if (_aiSuggestion != null) ...[
               const SizedBox(height: 16),
@@ -452,39 +464,144 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     );
   }
 
-  Widget _buildScoreCard() {
+  Widget _buildScoresSection() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildScoreCardItem(
+                title: 'Overall Similarity',
+                score: '$_similarityScore%',
+                subtitle: 'Matched against sources',
+                icon: Icons.find_in_page_outlined,
+                color: (_similarityScore ?? 0) > 40
+                    ? const Color(0xFFEF4444)
+                    : ((_similarityScore ?? 0) > 15
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFF10B981)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildScoreCardItem(
+                title: 'AI-Likelihood',
+                score: '$_aiLikelihoodScore%',
+                subtitle: 'Probabilistic AI indicator',
+                icon: Icons.psychology_outlined,
+                color: (_aiLikelihoodScore ?? 0) > 50
+                    ? const Color(0xFF8B5CF6)
+                    : const Color(0xFF3B82F6),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'AI detection is probabilistic and should not be treated as definitive proof.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_aiLikelihoodExplanation != null &&
+            _aiLikelihoodExplanation!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.psychology, size: 16, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _aiLikelihoodExplanation!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textPrimary,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildScoreCardItem({
+    required String title,
+    required String score,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+  }) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Similarity Score',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              Text(
-                _similarityScore,
-                style:
-                    const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Row(
-            children: [
-              Icon(Icons.verified, size: 16, color: AppColors.primaryLight),
-              SizedBox(width: 4),
-              Text(
-                'AI Scanned',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ],
+          const SizedBox(height: 10),
+          Text(
+            score,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -535,44 +652,6 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     );
   }
 
-  Widget _buildMatchesList() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _matches.map((match) {
-        final isSelected = _selectedMatch?.id == match.id;
-        return GestureDetector(
-          onTap: () {
-            debugPrint('[Plagiarism] tapped match id=${match.id}');
-            setState(() {
-              _selectedMatch = isSelected ? null : match;
-              _aiSuggestion = null;
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.primary.withValues(alpha: 0.15)
-                  : const Color(0xFFE0E7FF),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : Colors.transparent,
-              ),
-            ),
-            child: Text(
-              'Match #${match.id} · ${match.percentage}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? AppColors.primary : AppColors.textPrimary,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
 
   Widget _buildActionBar() {
     return Container(
@@ -616,79 +695,171 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     );
   }
 
-  Widget _buildSelectedMatchCard() {
-    final match = _selectedMatch!;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: AppColors.primary,
-                child: Text(
-                  '${match.id}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('Match #${match.id}',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEE2E2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${match.percentage} Match',
-                  style: const TextStyle(
-                    color: Color(0xFFB91C1C),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text('"${match.text}"',
-              style:
-                  const TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
-          const SizedBox(height: 8),
-          Text(
-            'Source: ${match.source} (${match.year})',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
+  Widget _buildMatchedSourcesSection() {
+    if (_matches.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Text(
+            'No matching sources found. Similarity is low!',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              fontStyle: FontStyle.italic,
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _actionButton('Cite', Icons.format_quote, _onCite),
-              const SizedBox(width: 8),
-              _actionButton('Paraphrase', Icons.auto_fix_high, _onParaphrase),
-              const SizedBox(width: 8),
-              _actionButton('Humanize', Icons.person_outline, _onHumanize),
-            ],
-          ),
-          if (_isRewriting) ...[
-            const SizedBox(height: 12),
-            const LinearProgressIndicator(minHeight: 2),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Matched Sources (${_matches.length})',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (_selectedMatch != null)
+              TextButton(
+                onPressed: () => setState(() => _selectedMatch = null),
+                child: const Text('Clear selection', style: TextStyle(fontSize: 12)),
+              ),
           ],
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        ..._matches.map((match) {
+          final isSelected = _selectedMatch?.id == match.id;
+          final authorDisplay = match.sourceAuthor.isNotEmpty
+              ? match.sourceAuthor
+              : 'Unknown Author';
+          final yearDisplay =
+              match.sourceYear.isNotEmpty ? match.sourceYear : 'n.d.';
+          final possibleSourceText =
+              'Possible source: $authorDisplay, $yearDisplay';
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.05)
+                  : AppColors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected ? AppColors.primary : AppColors.border,
+                width: isSelected ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${match.similarityPercentage}% Similarity',
+                        style: const TextStyle(
+                          color: Color(0xFFB91C1C),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedMatch = isSelected ? null : match;
+                          _aiSuggestion = null;
+                        });
+                      },
+                      child: Text(
+                        isSelected ? 'Selected' : 'Select for Paraphrase',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.textSecondary,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '"${match.text}"',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                    height: 1.4,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  possibleSourceText,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                if (match.sourceTitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    match.sourceTitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _citeMatch(match),
+                    icon: const Icon(Icons.format_quote, size: 16),
+                    label: const Text(
+                      'Cite this match',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 

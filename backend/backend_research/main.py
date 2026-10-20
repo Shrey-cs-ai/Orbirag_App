@@ -916,14 +916,16 @@ async def plagiarism_check(payload: PlagiarismCheckRequest, db: Session = Depend
         row = plagiarism_service.save_check(
             db,
             text=payload.text,
-            similarity_score=result["similarity_score"],
+            similarity_score=str(result["similarity_score"]),
             matches=result["matches"],
             user_id=payload.user_id,
         )
         return PlagiarismCheckResponse(
+            similarity_score=result["similarity_score"],
+            ai_likelihood_score=result["ai_likelihood_score"],
+            ai_likelihood_explanation=result["ai_likelihood_explanation"],
+            matches=[PlagiarismMatch(**m) for m in result["matches"]],
             id=row.id,
-            similarity_score=row.similarity_score,
-            matches=row.matches,
             created_at=row.created_at,
         )
     except Exception as e:
