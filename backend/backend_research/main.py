@@ -70,6 +70,9 @@ from schemas import (
 )
 from services import scoping_service
 
+from backend_research.routes import gap_analysis_routes
+from backend_research.models import GapAnalysis  # noqa: F401
+
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
     print(f"[ENV] Loading from: {env_path}")
@@ -1116,3 +1119,5 @@ def scoping_list(user_id: str | None = None, db: Session = Depends(get_db)):
     rows = scoping_service.list_sessions(db, user_id=user_id)
     items = [ScopingSessionOut(**scoping_service.to_dict(r)) for r in rows]
     return ScopingListResponse(items=items, count=len(items))
+
+app.include_router(gap_analysis_routes.router)

@@ -251,3 +251,97 @@ class Methodology(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# RESEARCH GAP ANALYSIS MODELS
+
+class GapAnalysis(Base):
+    __tablename__ = "gap_analyses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=True, index=True)
+    topic = Column(Text, nullable=False)
+    research_question = Column(Text, nullable=True)
+    keywords = Column(JSON, default=list)
+    scope = Column(JSON, default=dict)
+    status = Column(String(32), default="draft")  # draft, extracting, analyzed, saved
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    papers = relationship("GapPaper", back_populates="analysis", cascade="all, delete-orphan", order_by="GapPaper.id")
+    gaps = relationship("GapCandidate", back_populates="analysis", cascade="all, delete-orphan", order_by="GapCandidate.id")
+
+
+class GapPaper(Base):
+    __tablename__ = "gap_papers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_id = Column(Integer, ForeignKey("gap_analyses.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(Text, nullable=False)
+    authors = Column(Text, default="")
+    year = Column(String(32), default="")
+    venue = Column(Text, default="")
+    doi = Column(String(128), default="")
+    url = Column(Text, default="")
+    external_id = Column(String(128), default="")
+    abstract = Column(Text, default="")
+
+    # Extracted evidence
+    research_objective = Column(Text, default="")
+    research_question = Column(Text, default="")
+    population = Column(Text, default="")
+    dataset = Column(Text, default="")
+    methodology = Column(Text, default="")
+    evaluation = Column(Text, default="")
+    key_findings = Column(Text, default="")
+    limitations = Column(Text, default="")
+    future_work = Column(Text, default="")
+    is_extracted = Column(Boolean, default=False)
+    included = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    analysis = relationship("GapAnalysis", back_populates="papers")
+
+
+class GapCandidate(Base):
+    __tablename__ = "gap_candidates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_id = Column(Integer, ForeignKey("gap_analyses.id", ondelete="CASCADE"), nullable=False, index=True)
+    gap_type = Column(String(64), nullable=False)
+    description = Column(Text, nullable=False)
+    evidence_summary = Column(Text, default="")
+    supporting_paper_ids = Column(JSON, default=list)
+    contradictory_paper_ids = Column(JSON, default=list)
+    confidence = Column(String(32), default="unverified")
+    confidence_reason = Column(Text, default="")
+    status = Column(String(32), default="pending")  # pending, accepted, rejected, uncertain
+    user_notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    analysis = relationship("GapAnalysis", back_populates="gaps")
+    directions = relationship("GapResearchDirection", back_populates="gap", cascade="all, delete-orphan", order_by="GapResearchDirection.id")
+
+
+class GapResearchDirection(Base):
+    __tablename__ = "gap_research_directions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    gap_id = Column(Integer, ForeignKey("gap_candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    research_question = Column(Text, nullable=False)
+    objective = Column(Text, nullable=False)
+    hypothesis = Column(Text, default="")
+    status = Column(String(32), default="proposed")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    gap = relationship("GapCandidate", back_populates="directions")
+
+
+# Backwards compatibility for imports expecting `gap_analysis_models` submodule
+import sys as _sys
+_sys.modules.setdefault("backend_research.models.gap_analysis_models", _sys.modules[__name__])
+_sys.modules.setdefault("models.gap_analysis_models", _sys.modules[__name__])
+gap_analysis_models = _sys.modules[__name__]

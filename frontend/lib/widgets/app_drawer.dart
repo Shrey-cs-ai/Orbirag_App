@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:orbirag/screens/gap_research_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/firebase_auth_service.dart';
 import '../screens/home_screen.dart';
@@ -12,7 +11,9 @@ import '../screens/plagiarism_check_screen.dart';
 import '../screens/citation_generation_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
-import '../screens/saved_papers_screen.dart'; 
+import '../screens/saved_papers_screen.dart';
+import '../screens/gap_research_screen.dart';
+
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
@@ -139,8 +140,8 @@ class AppDrawer extends StatelessWidget {
                   _item(
                     context,
                     icon: Icons.insights_outlined,
-                    title: "Gap Research",
-                    screen: const GapAnalysisScreen(),
+                    title: "Gap Analysis",
+                    screen: const GapResearchScreen(),
                   ),
                 ],
               ),
