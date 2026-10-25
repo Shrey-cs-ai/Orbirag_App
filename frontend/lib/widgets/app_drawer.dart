@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:orbirag/screens/gap_research_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/firebase_auth_service.dart';
 import '../screens/home_screen.dart';
@@ -134,6 +135,12 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.library_books_outlined,
                     title: "Library",
                     screen: const LibraryScreen(),
+                  ),
+                  _item(
+                    context,
+                    icon: Icons.insights_outlined,
+                    title: "Gap Research",
+                    screen: const GapAnalysisScreen(),
                   ),
                 ],
               ),

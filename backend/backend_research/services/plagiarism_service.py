@@ -3,6 +3,7 @@ Plagiarism service: AI similarity analysis, paraphrase/humanize, citation, DB CR
 Uses the multi-model fallback chain from ai_service to survive per-model quota errors.
 """
 
+import asyncio
 import json
 import re
 from typing import List, Optional
@@ -182,30 +183,44 @@ async def analyze_text(text: str) -> dict:
 
     # 3. Retrieve reference papers (Semantic Scholar with OpenAlex fallback)
     papers = []
-    try:
-        s2_papers = await search_semantic_scholar(query=query, limit=20)
-        for p in s2_papers:
-            abs_text = p.get("abstract") or ""
-            if len(abs_text) > 80:
-                raw_authors = p.get("authors") or ""
-                authors_list = [a.strip() for a in raw_authors.split(",") if a.strip()]
-                if not authors_list:
-                    source_author = "Unknown"
-                elif len(authors_list) == 1:
-                    source_author = authors_list[0].split()[-1]
-                else:
-                    source_author = f"{authors_list[0].split()[-1]} et al."
-                y = str(p.get("year") or "n.d.")
+    seen_titles = set()
+    search_queries = [query]
+
+    for idx, q in enumerate(search_queries):
+        try:
+            # Respect Semantic Scholar free tier rate limit (1 request per second)
+            await asyncio.sleep(1.2)
+            s2_papers = await search_semantic_scholar(query=q, limit=20)
+            for p in s2_papers:
                 t = p.get("title") or "Untitled"
-                papers.append({
-                    "title": t,
-                    "year": y,
-                    "source_author": source_author,
-                    "citation_string": f"{raw_authors} ({y}). {t}.",
-                    "abstract": abs_text,
-                })
-    except Exception as e:
-        print(f"[Plagiarism] S2 search failed: {e}")
+                if t in seen_titles:
+                    continue
+                abs_text = p.get("abstract") or ""
+                if len(abs_text) > 80:
+                    seen_titles.add(t)
+                    raw_authors = p.get("authors") or ""
+                    authors_list = [a.strip() for a in raw_authors.split(",") if a.strip()]
+                    if not authors_list:
+                        source_author = "Unknown"
+                    elif len(authors_list) == 1:
+                        source_author = authors_list[0].split()[-1]
+                    else:
+                        source_author = f"{authors_list[0].split()[-1]} et al."
+                    y = str(p.get("year") or "n.d.")
+                    papers.append({
+                        "title": t,
+                        "year": y,
+                        "source_author": source_author,
+                        "citation_string": f"{raw_authors} ({y}). {t}.",
+                        "abstract": abs_text,
+                    })
+        except Exception as e:
+            err_msg = str(e)
+            if "403" in err_msg or "rate limit" in err_msg.lower() or "forbidden" in err_msg.lower():
+                print(f"[S2] Rate limit hit, falling back to local embeddings: {e}")
+                break
+            else:
+                print(f"[Plagiarism] S2 search failed: {e}")
 
     # Fallback to OpenAlex if S2 returned 0 papers with abstracts
     if not papers:
