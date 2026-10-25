@@ -10,6 +10,7 @@ import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_brand_title.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'admin_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -283,8 +284,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Center(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onDoubleTap: () {
-                  Navigator.pushNamed(context, AppConstants.routeAdminLogin);
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminScreen()),
+                  );
                 },
                 child: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24, horizontal: 40),
@@ -1020,12 +1024,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         const Divider(),
         const SizedBox(height: 8),
-        const Center(
-          child: Text(
-            'Orbirag · v1.0',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+        Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminScreen()),
+              );
+            },
+            child: const Text(
+              'Orbirag · v1.0',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ),

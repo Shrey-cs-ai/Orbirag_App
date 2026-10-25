@@ -13,6 +13,7 @@ import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/saved_papers_screen.dart';
 import '../screens/gap_research_screen.dart';
+import '../screens/admin_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -142,6 +143,12 @@ class AppDrawer extends StatelessWidget {
                     icon: Icons.insights_outlined,
                     title: "Gap Analysis",
                     screen: const GapResearchScreen(),
+                  ),
+                  _item(
+                    context,
+                    icon: Icons.admin_panel_settings,
+                    title: "Admin Portal",
+                    screen: const AdminScreen(),
                   ),
                 ],
               ),
