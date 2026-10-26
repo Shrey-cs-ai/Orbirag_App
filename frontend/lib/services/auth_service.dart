@@ -158,7 +158,7 @@ class AuthService {
             body: jsonEncode({
               'email': email,
               'status': status,
-              if (photoUrl != null && photoUrl.isNotEmpty) 'photo_url': photoUrl,
+              'photo_url': photoUrl,
             }),
           )
           .timeout(const Duration(seconds: 5));

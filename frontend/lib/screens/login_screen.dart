@@ -77,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
             body: jsonEncode({
               'email': email,
               'status': 'success',
-              if (photoUrl != null && photoUrl.isNotEmpty) 'photo_url': photoUrl,
+              'photo_url': photoUrl,
             }),
           )
           .catchError((_) => http.Response('', 500));

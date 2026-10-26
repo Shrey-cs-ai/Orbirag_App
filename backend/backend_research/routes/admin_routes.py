@@ -259,13 +259,25 @@ def record_login(req: RecordLoginRequest, db: Session = Depends(get_db)):
     """Public endpoint: records login activity and updates student photo if provided."""
     email = req.email.strip().lower()
     student = db.query(Student).filter(Student.email == email).first()
-    if student:
+    if not student:
+        inst = db.query(Institution).first()
+        student = Student(
+            email=email,
+            name=email.split("@")[0],
+            institution_id=inst.id if inst else None,
+            photo_url=req.photo_url,
+            status="active",
+        )
+        db.add(student)
+        db.commit()
+        db.refresh(student)
+    else:
         if req.photo_url:
             student.photo_url = req.photo_url
         student.last_active_at = datetime.utcnow()
 
     log_entry = StudentLoginLog(
-        student_id=student.id if student else None,
+        student_id=student.id,
         email=email,
         login_time=datetime.utcnow(),
         status=req.status,
@@ -332,8 +344,19 @@ def record_usage(req: RecordUsageRequest, db: Session = Depends(get_db)):
         student = db.query(Student).filter(
             Student.external_uid == req.student_external_uid).first()
     if not student and req.student_email:
-        student = db.query(Student).filter(
-            Student.email == req.student_email.strip().lower()).first()
+        email = req.student_email.strip().lower()
+        student = db.query(Student).filter(Student.email == email).first()
+        if not student:
+            inst = db.query(Institution).first()
+            student = Student(
+                email=email,
+                name=email.split("@")[0],
+                institution_id=inst.id if inst else None,
+                status="active",
+            )
+            db.add(student)
+            db.commit()
+            db.refresh(student)
 
     ev = UsageEvent(
         student_id=student.id if student else None,

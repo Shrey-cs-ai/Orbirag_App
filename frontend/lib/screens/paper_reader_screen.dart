@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/app_colors.dart';
 import '../services/papers_service.dart';
+import '../services/usage_service.dart';
 
 class PaperReaderScreen extends StatefulWidget {
   final Paper paper;
@@ -19,6 +20,7 @@ class _PaperReaderScreenState extends State<PaperReaderScreen> {
   @override
   void initState() {
     super.initState();
+    UsageService.recordEvent('paper_analysis');
     _progress = widget.paper.progress;
     _status = widget.paper.status;
 

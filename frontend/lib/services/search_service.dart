@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
+import 'usage_service.dart';
 
 
 class SearchService {
@@ -104,6 +105,7 @@ class SearchService {
 
       debugPrint('[Search] save-paper status: ${response.statusCode}');
       if (response.statusCode == 200 || response.statusCode == 201) {
+        UsageService.recordEvent('paper_saved');
         return true;
       }
       debugPrint('[Search] save-paper error body: ${response.body}');
@@ -131,6 +133,7 @@ class SearchService {
 
       debugPrint('[Search] save-paper status: ${response.statusCode}');
       if (response.statusCode == 200 || response.statusCode == 201) {
+        UsageService.recordEvent('paper_saved');
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['id']?.toString();
       }

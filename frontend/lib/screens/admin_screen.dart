@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, curly_braces_in_flow_control_structures
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -13,10 +13,13 @@ class AdminApi {
 
   static String? get token => _token;
 
-  static Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body, {bool auth = true}) async {
+  static Future<Map<String, dynamic>> _post(
+      String path, Map<String, dynamic> body,
+      {bool auth = true}) async {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (auth && _token != null) headers['Authorization'] = 'Bearer $_token';
-    final r = await http.post(Uri.parse('$_base$path'), headers: headers, body: jsonEncode(body));
+    final r = await http.post(Uri.parse('$_base$path'),
+        headers: headers, body: jsonEncode(body));
     if (r.statusCode >= 400) throw Exception('HTTP ${r.statusCode}: ${r.body}');
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
@@ -29,17 +32,21 @@ class AdminApi {
     return jsonDecode(r.body);
   }
 
-  static Future<Map<String, dynamic>> _patch(String path, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> _patch(
+      String path, Map<String, dynamic> body) async {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_token != null) headers['Authorization'] = 'Bearer $_token';
-    final r = await http.patch(Uri.parse('$_base$path'), headers: headers, body: jsonEncode(body));
+    final r = await http.patch(Uri.parse('$_base$path'),
+        headers: headers, body: jsonEncode(body));
     if (r.statusCode >= 400) throw Exception('HTTP ${r.statusCode}: ${r.body}');
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
   // --- endpoints ---
   static Future<void> login(String email, String password) async {
-    final res = await _post('/api/admin/auth/login', {'email': email, 'password': password}, auth: false);
+    final res = await _post(
+        '/api/admin/auth/login', {'email': email, 'password': password},
+        auth: false);
     _token = res['token'] as String;
   }
 
@@ -49,17 +56,23 @@ class AdminApi {
       await _get('/api/admin/dashboard/summary') as Map<String, dynamic>;
   static Future<Map<String, dynamic>> institution() async =>
       await _get('/api/admin/institution') as Map<String, dynamic>;
-  static Future<Map<String, dynamic>> students({String? search, String? status, int page = 1}) async {
+  static Future<Map<String, dynamic>> students(
+      {String? search, String? status, int page = 1}) async {
     final qs = <String>['page=$page', 'page_size=20'];
-    if (search != null && search.isNotEmpty) qs.add('search=${Uri.encodeComponent(search)}');
+    if (search != null && search.isNotEmpty)
+      qs.add('search=${Uri.encodeComponent(search)}');
     if (status != null) qs.add('status=$status');
-    return await _get('/api/admin/students?${qs.join('&')}') as Map<String, dynamic>;
+    return await _get('/api/admin/students?${qs.join('&')}')
+        as Map<String, dynamic>;
   }
+
   static Future<Map<String, dynamic>> student(int id) async =>
       await _get('/api/admin/students/$id') as Map<String, dynamic>;
-  static Future<Map<String, dynamic>> changeStatus(int id, String status, {String? reason, int? days}) =>
+  static Future<Map<String, dynamic>> changeStatus(int id, String status,
+          {String? reason, int? days}) =>
       _patch('/api/admin/students/$id/status', {
-        'status': status, if (reason != null) 'reason': reason,
+        'status': status,
+        if (reason != null) 'reason': reason,
         if (days != null) 'suspend_days': days,
       });
   static Future<Map<String, dynamic>> resetPassword(int id) =>
@@ -118,7 +131,8 @@ class _LoginViewState extends State<_LoginView> {
       widget.onLogin();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Login failed: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -137,10 +151,12 @@ class _LoginViewState extends State<_LoginView> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.admin_panel_settings, size: 56, color: AppColors.primary),
+                  const Icon(Icons.admin_panel_settings,
+                      size: 56, color: AppColors.primary),
                   const SizedBox(height: 12),
                   const Text('Campus Admin Dashboard',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
                   TextField(
                     controller: _email,
@@ -164,7 +180,9 @@ class _LoginViewState extends State<_LoginView> {
                     child: ElevatedButton(
                       onPressed: _busy ? null : _submit,
                       child: _busy
-                          ? const SizedBox(height: 18, width: 18,
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2))
                           : const Text('Sign In'),
                     ),
@@ -194,11 +212,15 @@ class _DashboardView extends StatefulWidget {
   State<_DashboardView> createState() => _DashboardViewState();
 }
 
-class _DashboardViewState extends State<_DashboardView> with SingleTickerProviderStateMixin {
+class _DashboardViewState extends State<_DashboardView>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabs = TabController(length: 6, vsync: this);
 
   @override
-  void dispose() { _tabs.dispose(); super.dispose(); }
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -255,14 +277,21 @@ class _DashboardTabState extends State<_DashboardTab> {
   String? _err;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
       final s = await AdminApi.summary();
       final i = await AdminApi.institution();
       if (!mounted) return;
-      setState(() { _summary = s; _inst = i; _err = null; });
+      setState(() {
+        _summary = s;
+        _inst = i;
+        _err = null;
+      });
     } catch (e) {
       if (mounted) setState(() => _err = e.toString());
     }
@@ -271,7 +300,8 @@ class _DashboardTabState extends State<_DashboardTab> {
   @override
   Widget build(BuildContext context) {
     if (_err != null) return Center(child: Text('Error: $_err'));
-    if (_summary == null || _inst == null) return const Center(child: CircularProgressIndicator());
+    if (_summary == null || _inst == null)
+      return const Center(child: CircularProgressIndicator());
 
     final cards = [
       _stat('Licensed Students', '${_summary!['total_licensed_students']}'),
@@ -309,19 +339,24 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 
   Widget _stat(String label, String value) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        ],
-      ),
-    ),
-  );
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary)),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
+            ],
+          ),
+        ),
+      );
 
   Widget _institutionCard() {
     final i = _inst!;
@@ -335,7 +370,9 @@ class _DashboardTabState extends State<_DashboardTab> {
           Row(children: [
             const Icon(Icons.apartment, color: AppColors.primary),
             const SizedBox(width: 8),
-            Text(i['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(i['name'] ?? '',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -344,7 +381,10 @@ class _DashboardTabState extends State<_DashboardTab> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text('${i['subscription_status']}'.toUpperCase(),
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
+                  style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green)),
             ),
           ]),
           const SizedBox(height: 12),
@@ -352,12 +392,14 @@ class _DashboardTabState extends State<_DashboardTab> {
           const SizedBox(height: 8),
           LinearProgressIndicator(value: pct),
           const SizedBox(height: 6),
-          Text('$used / $limit licenses used (${(pct * 100).toStringAsFixed(0)}%)',
+          Text(
+              '$used / $limit licenses used (${(pct * 100).toStringAsFixed(0)}%)',
               style: const TextStyle(fontSize: 12, color: Colors.black54)),
           if (i['renewal_date'] != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('Renews: ${i['renewal_date'].toString().substring(0, 10)}',
+              child: Text(
+                  'Renews: ${i['renewal_date'].toString().substring(0, 10)}',
                   style: const TextStyle(fontSize: 12, color: Colors.black54)),
             ),
         ]),
@@ -382,12 +424,16 @@ class _StudentsTabState extends State<_StudentsTab> {
   bool _loading = false;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final r = await AdminApi.students(search: _search.text.trim(), status: _statusFilter);
+      final r = await AdminApi.students(
+          search: _search.text.trim(), status: _statusFilter);
       if (!mounted) return;
       setState(() => _items = r['items'] as List<dynamic>);
     } catch (e) {
@@ -426,7 +472,10 @@ class _StudentsTabState extends State<_StudentsTab> {
               DropdownMenuItem(value: 'suspended', child: Text('Suspended')),
               DropdownMenuItem(value: 'banned', child: Text('Banned')),
             ],
-            onChanged: (v) { setState(() => _statusFilter = v); _load(); },
+            onChanged: (v) {
+              setState(() => _statusFilter = v);
+              _load();
+            },
           ),
         ]),
       ),
@@ -439,22 +488,34 @@ class _StudentsTabState extends State<_StudentsTab> {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final s = _items[i];
-                  final statusColor = s['status'] == 'active' ? Colors.green
-                      : s['status'] == 'suspended' ? Colors.orange : Colors.red;
+                  final statusColor = s['status'] == 'active'
+                      ? Colors.green
+                      : s['status'] == 'suspended'
+                          ? Colors.orange
+                          : Colors.red;
                   return ListTile(
                     leading: CircleAvatar(
-                      child: Text((s['name'] ?? '?').toString().characters.first.toUpperCase()),
+                      child: Text((s['name'] ?? '?')
+                          .toString()
+                          .characters
+                          .first
+                          .toUpperCase()),
                     ),
                     title: Text(s['name'] ?? ''),
-                    subtitle: Text(s['email'] ?? '', style: const TextStyle(fontSize: 12)),
+                    subtitle: Text(s['email'] ?? '',
+                        style: const TextStyle(fontSize: 12)),
                     trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text('${s['status']}'.toUpperCase(),
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor)),
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor)),
                     ),
                     onTap: () => _openStudent(s['id'] as int),
                   );
@@ -480,13 +541,15 @@ class _StudentProfileSheet extends StatelessWidget {
   final VoidCallback onChanged;
   const _StudentProfileSheet({required this.detail, required this.onChanged});
 
-  Future<void> _changeStatus(BuildContext ctx, int id, String status, {String? reason}) async {
+  Future<void> _changeStatus(BuildContext ctx, int id, String status,
+      {String? reason}) async {
     try {
       await AdminApi.changeStatus(id, status, reason: reason);
       if (ctx.mounted) Navigator.pop(ctx);
       onChanged();
     } catch (e) {
-      if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('$e')));
+      if (ctx.mounted)
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -495,106 +558,150 @@ class _StudentProfileSheet extends StatelessWidget {
     final s = detail['student'] as Map<String, dynamic>;
     final u = detail['usage'] as Map<String, dynamic>;
     final counts = u['counts'] as Map<String, dynamic>? ?? {};
-    final statusColor = s['status'] == 'active' ? Colors.green
-        : s['status'] == 'suspended' ? Colors.orange : Colors.red;
+    final statusColor = s['status'] == 'active'
+        ? Colors.green
+        : s['status'] == 'suspended'
+            ? Colors.orange
+            : Colors.red;
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 16, right: 16, top: 16,
+        left: 16,
+        right: 16,
+        top: 16,
         bottom: MediaQuery.of(context).viewInsets.bottom + 16,
       ),
       child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: CircleAvatar(radius: 32,
-              child: Text((s['name'] ?? '?').toString().characters.first.toUpperCase(),
-                  style: const TextStyle(fontSize: 24)))),
-          const SizedBox(height: 8),
-          Center(child: Text(s['name'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-          Center(child: Text(s['email'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey))),
-          const SizedBox(height: 8),
-          Center(child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: statusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-            child: Text('${s['status']}'.toUpperCase(),
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor)),
-          )),
-          const Divider(height: 32),
-          _row('Joined', s['created_at']?.toString().substring(0, 10) ?? '—'),
-          _row('Last active', s['last_active_at']?.toString().substring(0, 10) ?? '—'),
-          if (s['ban_reason'] != null) _row('Reason', s['ban_reason']),
-          const Divider(height: 32),
-          const Text('Usage summary (aggregated only)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            _chip('Gap analyses', counts['gap_analysis'] ?? 0),
-            _chip('Citations', counts['citation_check'] ?? 0),
-            _chip('Plagiarism', counts['plagiarism_check'] ?? 0),
-            _chip('Papers', counts['paper_analysis'] ?? 0),
-          ]),
-          const SizedBox(height: 4),
-          const Text('Research content is not visible to admins.',
-              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.black54)),
-          const Divider(height: 32),
-          const Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            OutlinedButton.icon(
-              onPressed: () async {
-                try {
-                  await AdminApi.resetPassword(s['id'] as int);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Reset email queued for ${s['email']}')));
-                  }
-                } catch (e) {
-                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-                }
-              },
-              icon: const Icon(Icons.lock_reset, size: 16),
-              label: const Text('Send reset email'),
-            ),
-            if (s['status'] != 'active')
-              ElevatedButton.icon(
-                onPressed: () => _changeStatus(context, s['id'], 'active'),
-                icon: const Icon(Icons.check, size: 16),
-                label: const Text('Activate'),
-              ),
-            if (s['status'] == 'active') ...[
-              OutlinedButton.icon(
-                onPressed: () => _changeStatus(context, s['id'], 'suspended', reason: 'Temporary suspension'),
-                icon: const Icon(Icons.pause, size: 16),
-                label: const Text('Suspend (7d)'),
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                onPressed: () => _changeStatus(context, s['id'], 'banned', reason: 'Policy violation'),
-                icon: const Icon(Icons.block, size: 16),
-                label: const Text('Ban'),
-              ),
-            ],
-          ]),
-        ]),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: CircleAvatar(
+                      radius: 32,
+                      child: Text(
+                          (s['name'] ?? '?')
+                              .toString()
+                              .characters
+                              .first
+                              .toUpperCase(),
+                          style: const TextStyle(fontSize: 24)))),
+              const SizedBox(height: 8),
+              Center(
+                  child: Text(s['name'] ?? '',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold))),
+              Center(
+                  child: Text(s['email'] ?? '',
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.grey))),
+              const SizedBox(height: 8),
+              Center(
+                  child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text('${s['status']}'.toUpperCase(),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor)),
+              )),
+              const Divider(height: 32),
+              _row('Joined',
+                  s['created_at']?.toString().substring(0, 10) ?? '—'),
+              _row('Last active',
+                  s['last_active_at']?.toString().substring(0, 10) ?? '—'),
+              if (s['ban_reason'] != null) _row('Reason', s['ban_reason']),
+              const Divider(height: 32),
+              const Text('Usage summary (aggregated only)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _chip('Gap analyses', counts['gap_analysis'] ?? 0),
+                _chip('Citations', counts['citation_check'] ?? 0),
+                _chip('Plagiarism', counts['plagiarism_check'] ?? 0),
+                _chip('Papers', counts['paper_analysis'] ?? 0),
+              ]),
+              const SizedBox(height: 4),
+              const Text('Research content is not visible to admins.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black54)),
+              const Divider(height: 32),
+              const Text('Actions',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await AdminApi.resetPassword(s['id'] as int);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content:
+                                Text('Reset email queued for ${s['email']}')));
+                      }
+                    } catch (e) {
+                      if (context.mounted)
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text('$e')));
+                    }
+                  },
+                  icon: const Icon(Icons.lock_reset, size: 16),
+                  label: const Text('Send reset email'),
+                ),
+                if (s['status'] != 'active')
+                  ElevatedButton.icon(
+                    onPressed: () => _changeStatus(context, s['id'], 'active'),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Activate'),
+                  ),
+                if (s['status'] == 'active') ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _changeStatus(
+                        context, s['id'], 'suspended',
+                        reason: 'Temporary suspension'),
+                    icon: const Icon(Icons.pause, size: 16),
+                    label: const Text('Suspend (7d)'),
+                  ),
+                  OutlinedButton.icon(
+                    style:
+                        OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    onPressed: () => _changeStatus(context, s['id'], 'banned',
+                        reason: 'Policy violation'),
+                    icon: const Icon(Icons.block, size: 16),
+                    label: const Text('Ban'),
+                  ),
+                ],
+              ]),
+            ]),
       ),
     );
   }
 
   Widget _row(String k, String v) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(children: [
-      SizedBox(width: 100, child: Text(k, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-      Expanded(child: Text(v, style: const TextStyle(fontSize: 12))),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(children: [
+          SizedBox(
+              width: 100,
+              child: Text(k,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey))),
+          Expanded(child: Text(v, style: const TextStyle(fontSize: 12))),
+        ]),
+      );
 
   Widget _chip(String label, dynamic count) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: AppColors.primary.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text('$label: $count', style: const TextStyle(fontSize: 11)),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text('$label: $count', style: const TextStyle(fontSize: 11)),
+      );
 }
 
 // ============================================================
@@ -723,13 +830,16 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     return _featureNames[key] ?? _humanize(key);
   }
 
-  String _humanize(String key) => key.split('_').map((w) =>
-      w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+  String _humanize(String key) => key
+      .split('_')
+      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
 
   @override
   Widget build(BuildContext context) {
     if (_err != null) return Center(child: Text('Error: $_err'));
-    if (_features == null) return const Center(child: CircularProgressIndicator());
+    if (_features == null)
+      return const Center(child: CircularProgressIndicator());
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -746,7 +856,8 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
             ),
             child: const Row(
               children: [
-                Icon(Icons.privacy_tip_outlined, size: 18, color: AppColors.primary),
+                Icon(Icons.privacy_tip_outlined,
+                    size: 18, color: AppColors.primary),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -912,9 +1023,12 @@ class _LoginsTabState extends State<_LoginsTab> {
     if (dt == null) return isoString;
     final diff = DateTime.now().toUtc().difference(dt.toUtc());
     if (diff.isNegative || diff.inSeconds < 45) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} ${diff.inMinutes == 1 ? "min" : "mins"} ago';
-    if (diff.inHours < 24) return '${diff.inHours} ${diff.inHours == 1 ? "hr" : "hrs"} ago';
-    if (diff.inDays < 7) return '${diff.inDays} ${diff.inDays == 1 ? "day" : "days"} ago';
+    if (diff.inMinutes < 60)
+      return '${diff.inMinutes} ${diff.inMinutes == 1 ? "min" : "mins"} ago';
+    if (diff.inHours < 24)
+      return '${diff.inHours} ${diff.inHours == 1 ? "hr" : "hrs"} ago';
+    if (diff.inDays < 7)
+      return '${diff.inDays} ${diff.inDays == 1 ? "day" : "days"} ago';
     return isoString.length >= 10 ? isoString.substring(0, 10) : isoString;
   }
 
@@ -929,7 +1043,8 @@ class _LoginsTabState extends State<_LoginsTab> {
         onBackgroundImageError: (_, __) {},
         child: Text(
           initial,
-          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, color: AppColors.primary),
         ),
       );
     }
@@ -938,7 +1053,8 @@ class _LoginsTabState extends State<_LoginsTab> {
       backgroundColor: AppColors.primary.withOpacity(0.12),
       child: Text(
         initial,
-        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+        style: const TextStyle(
+            fontWeight: FontWeight.bold, color: AppColors.primary),
       ),
     );
   }
@@ -1032,7 +1148,8 @@ class _LoginsTabState extends State<_LoginsTab> {
           final status = (log['status'] ?? 'success').toString();
 
           return ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             leading: _buildAvatar(photoUrl, name),
             title: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1040,7 +1157,8 @@ class _LoginsTabState extends State<_LoginsTab> {
                 Flexible(
                   child: Text(
                     name,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1086,21 +1204,24 @@ class _PrivacyTab extends StatelessWidget {
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Row(children: [
-              Icon(Icons.shield_outlined, color: Colors.green),
-              SizedBox(width: 8),
-              Text('Student Privacy by Default',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ]),
-            SizedBox(height: 12),
-            Text(
-              'Orbirag is built so that institutional control is separated from '
-              'student research. Admins manage access and view aggregated usage — '
-              'not the student\'s intellectual work.',
-              style: TextStyle(fontSize: 13, height: 1.5),
-            ),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Row(children: [
+                  Icon(Icons.shield_outlined, color: Colors.green),
+                  SizedBox(width: 8),
+                  Text('Student Privacy by Default',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ]),
+                SizedBox(height: 12),
+                Text(
+                  'Orbirag is built so that institutional control is separated from '
+                  'student research. Admins manage access and view aggregated usage — '
+                  'not the student\'s intellectual work.',
+                  style: TextStyle(fontSize: 13, height: 1.5),
+                ),
+              ]),
         ),
       ),
       const SizedBox(height: 16),
@@ -1125,40 +1246,50 @@ class _PrivacyTab extends StatelessWidget {
         color: Colors.amber.withOpacity(0.15),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Text('AI-likelihood indicators',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 6),
-            Text(
-              'If AI-likelihood indicators are ever surfaced to admins, they are '
-              'aggregated across the institution and clearly labelled as '
-              'AI-likelihood — not proof of misconduct.',
-              style: TextStyle(fontSize: 12, height: 1.4),
-            ),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('AI-likelihood indicators',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                SizedBox(height: 6),
+                Text(
+                  'If AI-likelihood indicators are ever surfaced to admins, they are '
+                  'aggregated across the institution and clearly labelled as '
+                  'AI-likelihood — not proof of misconduct.',
+                  style: TextStyle(fontSize: 12, height: 1.4),
+                ),
+              ]),
         ),
       ),
     ]);
   }
 
-  Widget _section(BuildContext ctx, String title, Color color, List<String> items) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-        const SizedBox(height: 8),
-        for (final i in items) Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(title.contains('CANNOT') ? Icons.close : Icons.check,
-                color: color, size: 16),
-            const SizedBox(width: 6),
-            Expanded(child: Text(i, style: const TextStyle(fontSize: 13))),
+  Widget _section(
+          BuildContext ctx, String title, Color color, List<String> items) =>
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 8),
+            for (final i in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(title.contains('CANNOT') ? Icons.close : Icons.check,
+                          color: color, size: 16),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: Text(i, style: const TextStyle(fontSize: 13))),
+                    ]),
+              ),
           ]),
         ),
-      ]),
-    ),
-  );
+      );
 }
 
 // ============================================================
@@ -1175,12 +1306,19 @@ class _AuditTabState extends State<_AuditTab> {
   String? _err;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
       final r = await AdminApi.audit();
-      if (mounted) setState(() { _logs = r; _err = null; });
+      if (mounted)
+        setState(() {
+          _logs = r;
+          _err = null;
+        });
     } catch (e) {
       if (mounted) setState(() => _err = e.toString());
     }
@@ -1190,7 +1328,8 @@ class _AuditTabState extends State<_AuditTab> {
   Widget build(BuildContext context) {
     if (_err != null) return Center(child: Text('Error: $_err'));
     if (_logs == null) return const Center(child: CircularProgressIndicator());
-    if (_logs!.isEmpty) return const Center(child: Text('No audit entries yet'));
+    if (_logs!.isEmpty)
+      return const Center(child: Text('No audit entries yet'));
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -1201,24 +1340,37 @@ class _AuditTabState extends State<_AuditTab> {
         itemBuilder: (context, i) {
           final l = _logs![i];
           final action = l['action']?.toString() ?? '';
-          final icon = action.contains('ban') ? Icons.block
-              : action.contains('login') ? Icons.login
-              : action.contains('logout') ? Icons.logout
-              : action.contains('reset') ? Icons.lock_reset
-              : action.contains('unban') ? Icons.check_circle
-              : Icons.history;
-          final color = action.contains('ban') ? Colors.red
-              : action.contains('unban') || action.contains('login') ? Colors.green
-              : AppColors.primary;
+          final icon = action.contains('ban')
+              ? Icons.block
+              : action.contains('login')
+                  ? Icons.login
+                  : action.contains('logout')
+                      ? Icons.logout
+                      : action.contains('reset')
+                          ? Icons.lock_reset
+                          : action.contains('unban')
+                              ? Icons.check_circle
+                              : Icons.history;
+          final color = action.contains('ban')
+              ? Colors.red
+              : action.contains('unban') || action.contains('login')
+                  ? Colors.green
+                  : AppColors.primary;
           return ListTile(
             leading: Icon(icon, color: color),
             title: Text(action.replaceAll('_', ' ').toUpperCase(),
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            subtitle: Text([
-              if (l['target_student_id'] != null) 'Student #${l['target_student_id']}',
-              if (l['details'] != null && l['details'].toString().isNotEmpty) l['details'],
-              l['created_at']?.toString().substring(0, 16) ?? '',
-            ].join(' · '), style: const TextStyle(fontSize: 11)),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            subtitle: Text(
+                [
+                  if (l['target_student_id'] != null)
+                    'Student #${l['target_student_id']}',
+                  if (l['details'] != null &&
+                      l['details'].toString().isNotEmpty)
+                    l['details'],
+                  l['created_at']?.toString().substring(0, 16) ?? '',
+                ].join(' · '),
+                style: const TextStyle(fontSize: 11)),
           );
         },
       ),
