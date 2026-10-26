@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../utils/validators.dart';
@@ -62,6 +65,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // HANDLERS
 
+  void _recordLoginSilently() {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final email = user?.email ?? _emailController.text.trim();
+      final photoUrl = user?.photoURL;
+      http
+          .post(
+            Uri.parse('http://localhost:8001/api/admin/logins/record'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'status': 'success',
+              if (photoUrl != null && photoUrl.isNotEmpty) 'photo_url': photoUrl,
+            }),
+          )
+          .catchError((_) => http.Response('', 500));
+    } catch (_) {}
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -78,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
+      _recordLoginSilently();
       _navigateToHome();
     }
   }
@@ -93,6 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
+      _recordLoginSilently();
       _navigateToHome();
     }
   }
@@ -108,6 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error != null) {
       _showMessage(error);
     } else {
+      _recordLoginSilently();
       _navigateToHome();
     }
   }

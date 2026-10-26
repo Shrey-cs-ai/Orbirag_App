@@ -66,6 +66,8 @@ class AdminApi {
       _post('/api/admin/students/$id/reset-password', {});
   static Future<Map<String, dynamic>> features() async =>
       await _get('/api/admin/analytics/features') as Map<String, dynamic>;
+  static Future<List<dynamic>> getRecentLogins() async =>
+      await _get('/api/admin/logins/recent') as List<dynamic>;
   static Future<List<dynamic>> audit() async =>
       await _get('/api/admin/audit-logs') as List<dynamic>;
 }
@@ -193,7 +195,7 @@ class _DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<_DashboardView> with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 5, vsync: this);
+  late final TabController _tabs = TabController(length: 6, vsync: this);
 
   @override
   void dispose() { _tabs.dispose(); super.dispose(); }
@@ -217,6 +219,7 @@ class _DashboardViewState extends State<_DashboardView> with SingleTickerProvide
             Tab(icon: Icon(Icons.dashboard_outlined), text: 'Dashboard'),
             Tab(icon: Icon(Icons.people_outline), text: 'Students'),
             Tab(icon: Icon(Icons.insights_outlined), text: 'Analytics'),
+            Tab(icon: Icon(Icons.login), text: 'Logins'),
             Tab(icon: Icon(Icons.privacy_tip_outlined), text: 'Privacy'),
             Tab(icon: Icon(Icons.history), text: 'Audit'),
           ],
@@ -228,6 +231,7 @@ class _DashboardViewState extends State<_DashboardView> with SingleTickerProvide
           _DashboardTab(),
           _StudentsTab(),
           _AnalyticsTab(),
+          _LoginsTab(),
           _PrivacyTab(),
           _AuditTab(),
         ],
@@ -861,6 +865,214 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
   }
 }
 
+// ============================================================
+// Tab 3.5 — Logins
+// ============================================================
+class _LoginsTab extends StatefulWidget {
+  const _LoginsTab();
+  @override
+  State<_LoginsTab> createState() => _LoginsTabState();
+}
+
+class _LoginsTabState extends State<_LoginsTab> {
+  List<dynamic>? _logins;
+  String? _err;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final list = await AdminApi.getRecentLogins();
+      if (mounted) {
+        setState(() {
+          _logins = list;
+          _err = null;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _err = e.toString();
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  String _timeAgo(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '—';
+    final dt = DateTime.tryParse(isoString);
+    if (dt == null) return isoString;
+    final diff = DateTime.now().toUtc().difference(dt.toUtc());
+    if (diff.isNegative || diff.inSeconds < 45) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} ${diff.inMinutes == 1 ? "min" : "mins"} ago';
+    if (diff.inHours < 24) return '${diff.inHours} ${diff.inHours == 1 ? "hr" : "hrs"} ago';
+    if (diff.inDays < 7) return '${diff.inDays} ${diff.inDays == 1 ? "day" : "days"} ago';
+    return isoString.length >= 10 ? isoString.substring(0, 10) : isoString;
+  }
+
+  Widget _buildAvatar(String? photoUrl, String name) {
+    final cleanName = name.trim();
+    final initial = (cleanName.isNotEmpty ? cleanName[0] : '?').toUpperCase();
+    if (photoUrl != null && photoUrl.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: AppColors.primary.withOpacity(0.12),
+        backgroundImage: NetworkImage(photoUrl.trim()),
+        onBackgroundImageError: (_, __) {},
+        child: Text(
+          initial,
+          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+        ),
+      );
+    }
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: AppColors.primary.withOpacity(0.12),
+      child: Text(
+        initial,
+        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+      ),
+    );
+  }
+
+  Widget _buildRoleBadge(String role) {
+    final r = role.toLowerCase();
+    final isAdmin = r.contains('admin');
+    final color = isAdmin ? AppColors.coral : AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        role.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    final isSuccess = status.toLowerCase() == 'success';
+    final color = isSuccess ? Colors.green : Colors.red;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        isSuccess ? 'Success' : 'Blocked',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: isSuccess ? Colors.green.shade800 : Colors.red.shade800,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _logins == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_err != null && _logins == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Error: $_err', style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 8),
+            ElevatedButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    final items = _logins ?? [];
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: items.isEmpty ? 1 : items.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          if (items.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'No login activity recorded yet.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            );
+          }
+
+          final log = items[index] as Map<String, dynamic>;
+          final name = (log['student_name'] ?? 'Unknown').toString();
+          final email = (log['email'] ?? '').toString();
+          final role = (log['role'] ?? 'student').toString();
+          final photoUrl = log['photo_url']?.toString();
+          final time = log['login_time']?.toString();
+          final status = (log['status'] ?? 'success').toString();
+
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            leading: _buildAvatar(photoUrl, name),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildRoleBadge(role),
+              ],
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                email,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _timeAgo(time),
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                _buildStatusBadge(status),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
 // ============================================================
 // Tab 4 — Privacy Center

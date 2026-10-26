@@ -45,6 +45,7 @@ class Student(Base):
     external_uid = Column(String(255), unique=True, nullable=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     name = Column(String(255))
+    photo_url = Column(String(1024), nullable=True)
     role = Column(String(32), default="student")
     status = Column(String(32), default="active")  # active | suspended | banned
     ban_reason = Column(Text, nullable=True)
@@ -53,6 +54,15 @@ class Student(Base):
     suspended_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_active_at = Column(DateTime, nullable=True)
+
+
+class StudentLoginLog(Base):
+    __tablename__ = "student_login_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    login_time = Column(DateTime, default=datetime.utcnow, index=True)
+    status = Column(String(32), nullable=False)  # "success" or "blocked"
 
 
 class UsageEvent(Base):

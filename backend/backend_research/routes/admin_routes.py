@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.admin_models import (
-    Institution, AdminUser, AdminSession, Student, UsageEvent,
+    Institution, AdminUser, AdminSession, Student, UsageEvent, StudentLoginLog,
 )
 from services import admin_auth as auth
 from services import admin_service as svc
@@ -39,6 +39,12 @@ class RegisterStudentRequest(BaseModel):
     name: Optional[str] = None
 
 
+class RecordLoginRequest(BaseModel):
+    email: str
+    status: str = "success"  # "success" | "blocked"
+    photo_url: Optional[str] = None
+
+
 # ---------------- Serializers ----------------
 def _admin_dict(a: AdminUser) -> dict:
     return {
@@ -52,6 +58,7 @@ def _student_dict(s: Student) -> dict:
     # Deliberately excludes any research content.
     return {
         "id": s.id, "email": s.email, "name": s.name, "role": s.role,
+        "photo_url": s.photo_url,
         "status": s.status, "institution_id": s.institution_id,
         "ban_reason": s.ban_reason,
         "banned_at": s.banned_at.isoformat() if s.banned_at else None,
@@ -244,6 +251,75 @@ def audit_logs(limit: int = 50,
         "details": r.details,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     } for r in rows]
+
+
+# ---------------- Login Activity Tracking ----------------
+@router.post("/logins/record")
+def record_login(req: RecordLoginRequest, db: Session = Depends(get_db)):
+    """Public endpoint: records login activity and updates student photo if provided."""
+    email = req.email.strip().lower()
+    student = db.query(Student).filter(Student.email == email).first()
+    if student:
+        if req.photo_url:
+            student.photo_url = req.photo_url
+        student.last_active_at = datetime.utcnow()
+
+    log_entry = StudentLoginLog(
+        student_id=student.id if student else None,
+        email=email,
+        login_time=datetime.utcnow(),
+        status=req.status,
+    )
+    db.add(log_entry)
+    db.commit()
+    db.refresh(log_entry)
+    return {"ok": True, "id": log_entry.id}
+
+
+@router.get("/logins/recent")
+def recent_logins(limit: int = 50,
+                  admin: AdminUser = Depends(auth.current_admin),
+                  db: Session = Depends(get_db)):
+    """Protected endpoint: fetches last 50 login logs joined with Student table."""
+    logs = (
+        db.query(StudentLoginLog)
+        .order_by(StudentLoginLog.login_time.desc())
+        .limit(limit)
+        .all()
+    )
+
+    emails = {l.email.lower() for l in logs if l.email}
+    student_ids = {l.student_id for l in logs if l.student_id}
+
+    students_by_id = {}
+    students_by_email = {}
+    if emails or student_ids:
+        st_query = db.query(Student).filter(
+            (Student.id.in_(student_ids)) | (Student.email.in_(emails))
+        ).all()
+        for s in st_query:
+            students_by_id[s.id] = s
+            if s.email:
+                students_by_email[s.email.lower()] = s
+
+    results = []
+    for log_item in logs:
+        st = None
+        if log_item.student_id and log_item.student_id in students_by_id:
+            st = students_by_id[log_item.student_id]
+        elif log_item.email and log_item.email.lower() in students_by_email:
+            st = students_by_email[log_item.email.lower()]
+
+        results.append({
+            "id": log_item.id,
+            "student_name": st.name if (st and st.name) else (log_item.email.split("@")[0] if log_item.email else "Unknown"),
+            "email": log_item.email,
+            "role": st.role if (st and st.role) else "student",
+            "photo_url": st.photo_url if st else None,
+            "login_time": log_item.login_time.isoformat() if log_item.login_time else None,
+            "status": log_item.status,
+        })
+    return results
 
 
 # ---------------- Usage recording (called from the app, optional) --------
