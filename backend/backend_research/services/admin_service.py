@@ -10,14 +10,19 @@ from models.admin_models import (
 
 
 FEATURE_KEYS = [
-    "literature_search",
+    "topic_scoping",
+    "literature_retrieval",
     "gap_analysis",
-    "citation_check",
-    "plagiarism_check",
-    "methodology_builder",
-    "ai_writing",
     "paper_analysis",
-    "research_project",
+    "paper_orbit",
+    "ori_chatbot",
+    "methodology_builder",
+    "citation_generation",
+    "plagiarism_check",
+    "word_counter",
+    "notes_writing",
+    "paper_saved",
+    "library_access",
 ]
 
 

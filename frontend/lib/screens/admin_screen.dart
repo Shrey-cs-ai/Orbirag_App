@@ -1,8 +1,8 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../utils/app_colors.dart';
-import '../utils/app_constants.dart';
 
 // ============================================================
 // API Client
@@ -596,6 +596,20 @@ class _StudentProfileSheet extends StatelessWidget {
 // ============================================================
 // Tab 3 — Analytics
 // ============================================================
+class _FeatureCategory {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<String> featureKeys;
+
+  const _FeatureCategory({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.featureKeys,
+  });
+}
+
 class _AnalyticsTab extends StatefulWidget {
   const _AnalyticsTab();
   @override
@@ -606,62 +620,247 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
   Map<String, dynamic>? _features;
   String? _err;
 
+  static const List<_FeatureCategory> _categories = [
+    _FeatureCategory(
+      title: 'Research & Discovery',
+      icon: Icons.explore_outlined,
+      color: Color(0xFF2E5B88),
+      featureKeys: [
+        'topic_scoping',
+        'literature_retrieval',
+        'gap_analysis',
+      ],
+    ),
+    _FeatureCategory(
+      title: 'Reading & AI Assistance',
+      icon: Icons.auto_awesome_outlined,
+      color: AppColors.purple,
+      featureKeys: [
+        'paper_analysis',
+        'paper_orbit',
+        'ori_chatbot',
+      ],
+    ),
+    _FeatureCategory(
+      title: 'Writing & Integrity',
+      icon: Icons.edit_note_rounded,
+      color: AppColors.coral,
+      featureKeys: [
+        'methodology_builder',
+        'citation_generation',
+        'plagiarism_check',
+        'word_counter',
+        'notes_writing',
+      ],
+    ),
+    _FeatureCategory(
+      title: 'Organization',
+      icon: Icons.folder_outlined,
+      color: AppColors.sageDark,
+      featureKeys: [
+        'paper_saved',
+        'library_access',
+      ],
+    ),
+  ];
+
+  static const Map<String, String> _featureNames = {
+    'topic_scoping': 'Topic Scoping',
+    'literature_retrieval': 'Literature Retrieval',
+    'gap_analysis': 'Gap Analysis',
+    'paper_analysis': 'Paper Analysis',
+    'paper_orbit': 'Paper Orbit',
+    'ori_chatbot': 'Ori Chatbot',
+    'methodology_builder': 'Methodology Builder',
+    'citation_generation': 'Citation Generation',
+    'plagiarism_check': 'Plagiarism Check',
+    'word_counter': 'Word Counter',
+    'notes_writing': 'Notes Writing',
+    'paper_saved': 'Paper Saved',
+    'library_access': 'Library Access',
+  };
+
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
       final f = await AdminApi.features();
-      if (mounted) setState(() { _features = f; _err = null; });
+      if (mounted) {
+        setState(() {
+          _features = f;
+          _err = null;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _err = e.toString());
     }
   }
+
+  String _formatStudents(num count) {
+    final int val = count.toInt();
+    final String str = val.toString();
+    final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
+    final formatted = str.replaceAllMapped(reg, (match) => ',');
+    return '$formatted ${val == 1 ? "student" : "students"}';
+  }
+
+  String _formatPercentage(num pct) {
+    if (pct % 1 == 0) {
+      return '${pct.toInt()}%';
+    }
+    return '${pct.toStringAsFixed(1)}%';
+  }
+
+  String _formatFeatureName(String key) {
+    return _featureNames[key] ?? _humanize(key);
+  }
+
+  String _humanize(String key) => key.split('_').map((w) =>
+      w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
 
   @override
   Widget build(BuildContext context) {
     if (_err != null) return Center(child: Text('Error: $_err'));
     if (_features == null) return const Center(child: CircularProgressIndicator());
 
-    final entries = _features!.entries.toList()
-      ..sort((a, b) => (b.value['adoption_pct'] as num).compareTo(a.value['adoption_pct'] as num));
-
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Feature Adoption',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          const Text('Percentage of active students who used each feature',
-              style: TextStyle(fontSize: 12, color: Colors.black54)),
-          const SizedBox(height: 12),
-          for (final e in entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(child: Text(_humanize(e.key),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-                  Text('${e.value['adoption_pct']}%',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                ]),
-                const SizedBox(height: 4),
-                LinearProgressIndicator(value: (e.value['adoption_pct'] as num) / 100),
-                const SizedBox(height: 2),
-                Text('${e.value['unique_users']} unique users',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              ]),
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.primary.withOpacity(0.18)),
             ),
+            child: const Row(
+              children: [
+                Icon(Icons.privacy_tip_outlined, size: 18, color: AppColors.primary),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Aggregated feature usage across the institution (Privacy-Safe)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final cat in _categories) _buildCategoryCard(cat),
         ],
       ),
     );
   }
 
-  String _humanize(String key) => key.split('_').map((w) =>
-      w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+  Widget _buildCategoryCard(_FeatureCategory category) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withOpacity(0.18)),
+      ),
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: category.color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(category.icon, size: 18, color: category.color),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  category.title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            for (int i = 0; i < category.featureKeys.length; i++) ...[
+              if (i > 0) const SizedBox(height: 14),
+              _buildFeatureRow(category.featureKeys[i], category.color),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureRow(String key, Color accentColor) {
+    final data = _features?[key] as Map<String, dynamic>?;
+    final num pct = data != null ? (data['adoption_pct'] as num? ?? 0) : 0;
+    final num users = data != null ? (data['unique_users'] as num? ?? 0) : 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                _formatFeatureName(key),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              _formatPercentage(pct),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: accentColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: (pct / 100.0).clamp(0.0, 1.0),
+            minHeight: 6,
+            backgroundColor: Colors.grey.shade200,
+            valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _formatStudents(users),
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
 }
+
 
 // ============================================================
 // Tab 4 — Privacy Center
