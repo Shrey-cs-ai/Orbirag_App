@@ -3,6 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../utils/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../widgets/admin/activity_tile.dart';
+import '../widgets/admin/dashboard_skeleton.dart';
+import '../widgets/admin/license_usage_card.dart';
+import '../widgets/admin/stat_card.dart';
+import '../widgets/admin/trend_card.dart';
 
 // ============================================================
 // API Client
@@ -225,6 +231,7 @@ class _DashboardViewState extends State<_DashboardView>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Orbirag Admin'),
         actions: [
@@ -274,6 +281,8 @@ class _DashboardTab extends StatefulWidget {
 class _DashboardTabState extends State<_DashboardTab> {
   Map<String, dynamic>? _summary;
   Map<String, dynamic>? _inst;
+  List<dynamic> _auditLogs = [];
+  bool _loading = true;
   String? _err;
 
   @override
@@ -283,130 +292,675 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
     try {
       final s = await AdminApi.summary();
       final i = await AdminApi.institution();
+      List<dynamic> a = [];
+      try {
+        a = await AdminApi.audit();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _summary = s;
         _inst = i;
+        _auditLogs = a;
+        _loading = false;
         _err = null;
       });
     } catch (e) {
-      if (mounted) setState(() => _err = e.toString());
+      if (mounted) {
+        setState(() {
+          _err = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_err != null) return Center(child: Text('Error: $_err'));
-    if (_summary == null || _inst == null)
-      return const Center(child: CircularProgressIndicator());
+    if (_err != null) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: _buildErrorView(),
+      );
+    }
 
-    final cards = [
-      _stat('Licensed Students', '${_summary!['total_licensed_students']}'),
-      _stat('Active Students', '${_summary!['active_students']}'),
-      _stat('Active This Week', '${_summary!['active_this_week']}'),
-      _stat('New This Month', '${_summary!['new_users_this_month']}'),
-      _stat('Research Projects', '${_summary!['research_projects']}'),
-      _stat('Papers Analyzed', '${_summary!['papers_analyzed']}'),
-      _stat('Gap Analyses', '${_summary!['gap_analyses']}'),
-      _stat('AI / Citation Checks', '${_summary!['ai_citation_checks']}'),
-    ];
+    if (_loading || _summary == null || _inst == null) {
+      return const ColoredBox(
+        color: AppColors.background,
+        child: DashboardSkeleton(),
+      );
+    }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+    return ColoredBox(
+      color: AppColors.background,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        color: AppColors.primary,
+        backgroundColor: AppColors.cardBg,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // 1. Header
+            _buildHeader(),
+            const SizedBox(height: 16),
+
+            // 2. License Usage Card
+            LicenseUsageCard(
+              used: (_inst!['used'] as num?)?.toInt() ?? 0,
+              limit: (_inst!['license_limit'] as num?)?.toInt() ?? 0,
+            ),
+            const SizedBox(height: 16),
+
+            // 3. Row of two smaller cards (Active Students & Renewal)
+            _buildStatCardsRow(),
+            const SizedBox(height: 16),
+
+            // 4. Research Activity Card
+            _buildResearchActivityCard(),
+            const SizedBox(height: 16),
+
+            // 5. Trend Card
+            TrendCard(
+              activeThisWeek:
+                  (_summary!['active_this_week'] as num?)?.toInt() ?? 0,
+              totalActive: (_summary!['active_students'] as num?)?.toInt(),
+            ),
+
+            // 6. Needs attention strip
+            _buildNeedsAttentionSection(),
+
+            // 7. Quick actions row
+            _buildQuickActionsRow(),
+            const SizedBox(height: 16),
+
+            // 8. Recent Admin Activity
+            _buildRecentActivityCard(),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load dashboard',
+              style: GoogleFonts.manrope(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _err ?? 'An unexpected error occurred.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(
+                'Retry',
+                style: GoogleFonts.manrope(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.background,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    final institutionName = (_inst?['name'] ?? '').toString();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                'Good morning, Admin',
+                style: GoogleFonts.manrope(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            if (institutionName.isNotEmpty)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.apartment,
+                        size: 14, color: AppColors.primary),
+                    const SizedBox(width: 5),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 130),
+                      child: Text(
+                        institutionName,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.manrope(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Here's your Orbirag campus overview",
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCardsRow() {
+    final activeStudents =
+        (_summary?['active_students'] as num?)?.toInt() ?? 0;
+    final planRaw = (_inst?['plan'] ?? 'Standard').toString();
+    final planDisplayName = planRaw
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((w) =>
+            w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+        .join(' ');
+
+    final renewalDateStr = _inst?['renewal_date']?.toString();
+    DateTime? renewalDate;
+    if (renewalDateStr != null && renewalDateStr.isNotEmpty) {
+      renewalDate = DateTime.tryParse(renewalDateStr);
+    }
+    final int daysLeft = renewalDate != null
+        ? renewalDate.difference(DateTime.now()).inDays
+        : 0;
+
+    final renewalDateFormatted = renewalDate != null
+        ? '${renewalDate.year}-${renewalDate.month.toString().padLeft(2, '0')}-${renewalDate.day.toString().padLeft(2, '0')}'
+        : 'N/A';
+    final renewalHelper = renewalDate != null
+        ? 'Renews: $renewalDateFormatted'
+        : 'No renewal date';
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _institutionCard(),
-          const SizedBox(height: 16),
-          const Text('Campus Research Activity',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 1.6,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            children: cards,
+          Expanded(
+            child: StatCard(
+              title: 'Active Students',
+              value: '$activeStudents',
+              helperText: 'Used Orbirag in the last 30 days',
+              icon: Icons.people_outline,
+              iconColor: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: StatCard(
+              title: 'Renewal',
+              value: planDisplayName,
+              helperText: renewalHelper,
+              badgeText: renewalDate != null ? '$daysLeft days left' : null,
+              badgeColor:
+                  daysLeft < 60 ? AppColors.warning : AppColors.success,
+              icon: Icons.calendar_today_outlined,
+              iconColor: AppColors.oriColor,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _stat(String label, String value) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildResearchActivityCard() {
+    final litSearches = ((_summary?['literature_search'] ??
+            _summary?['papers_analyzed']) as num?)
+            ?.toInt() ??
+        0;
+    final gapAnalyses = ((_summary?['gap_analysis'] ??
+            _summary?['gap_analyses']) as num?)
+            ?.toInt() ??
+        0;
+    final citationChecks = ((_summary?['citation_checks'] ??
+            _summary?['ai_citation_checks']) as num?)
+            ?.toInt() ??
+        0;
+    final totalActions = litSearches + gapAnalyses + citationChecks;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(value,
-                  style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary)),
-              const SizedBox(height: 4),
-              Text(label,
-                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              Text(
+                'Research Activity',
+                style: GoogleFonts.manrope(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$totalActions total actions',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
-      );
-
-  Widget _institutionCard() {
-    final i = _inst!;
-    final used = i['used'] as int;
-    final limit = i['license_limit'] as int;
-    final pct = limit == 0 ? 0.0 : used / limit;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.apartment, color: AppColors.primary),
-            const SizedBox(width: 8),
-            Text(i['name'] ?? '',
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text('${i['subscription_status']}'.toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Text('Plan: ${i['plan']}', style: const TextStyle(fontSize: 13)),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: pct),
-          const SizedBox(height: 6),
-          Text(
-              '$used / $limit licenses used (${(pct * 100).toStringAsFixed(0)}%)',
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          if (i['renewal_date'] != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                  'Renews: ${i['renewal_date'].toString().substring(0, 10)}',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
-            ),
-        ]),
+          const SizedBox(height: 16),
+          _buildActivityRow(
+            icon: Icons.menu_book_outlined,
+            iconColor: AppColors.primary,
+            label: 'Literature searches',
+            count: litSearches,
+          ),
+          const Divider(color: AppColors.border, height: 16),
+          _buildActivityRow(
+            icon: Icons.insights_outlined,
+            iconColor: AppColors.oriColor,
+            label: 'Gap analyses',
+            count: gapAnalyses,
+          ),
+          const Divider(color: AppColors.border, height: 16),
+          _buildActivityRow(
+            icon: Icons.fact_check_outlined,
+            iconColor: AppColors.success,
+            label: 'Citation checks',
+            count: citationChecks,
+          ),
+        ],
       ),
     );
   }
+
+  Widget _buildActivityRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required int count,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: iconColor),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        Text(
+          '$count',
+          style: GoogleFonts.manrope(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNeedsAttentionSection() {
+    final used = (_inst?['used'] as num?)?.toInt() ?? 0;
+    final limit = (_inst?['license_limit'] as num?)?.toInt() ?? 0;
+    final ratio = limit > 0 ? (used / limit) : 0.0;
+    final usagePercent = ratio * 100.0;
+
+    final renewalDateStr = _inst?['renewal_date']?.toString();
+    DateTime? renewalDate;
+    if (renewalDateStr != null && renewalDateStr.isNotEmpty) {
+      renewalDate = DateTime.tryParse(renewalDateStr);
+    }
+    final int daysLeft = renewalDate != null
+        ? renewalDate.difference(DateTime.now()).inDays
+        : 999;
+
+    final isHighUsage = usagePercent > 90.0;
+    final isRenewalClose = renewalDate != null && daysLeft < 60;
+
+    if (!isHighUsage && !isRenewalClose) {
+      return const SizedBox.shrink();
+    }
+
+    final String message;
+    if (isHighUsage && isRenewalClose) {
+      message =
+          'High license usage (${usagePercent.toStringAsFixed(0)}%) and renewal due in $daysLeft days.';
+    } else if (isHighUsage) {
+      message =
+          'High license usage: ${usagePercent.toStringAsFixed(0)}% of seats are currently in use.';
+    } else {
+      message =
+          'Campus renewal is approaching: $daysLeft days remaining on your plan.';
+    }
+
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.warning.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border:
+                Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppColors.warning, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Needs Attention',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActionsRow() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildQuickActionButton(
+            icon: Icons.person_add_outlined,
+            label: 'Add students',
+            onTap: () => _showQuickActionSnackBar('Add students'),
+          ),
+          const SizedBox(width: 10),
+          _buildQuickActionButton(
+            icon: Icons.upload_file_outlined,
+            label: 'Bulk upload',
+            onTap: () => _showQuickActionSnackBar('Bulk upload'),
+          ),
+          const SizedBox(width: 10),
+          _buildQuickActionButton(
+            icon: Icons.mail_outline,
+            label: 'Send invite',
+            onTap: () => _showQuickActionSnackBar('Send invite'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: AppColors.primary),
+      label: Text(
+        label,
+        style: GoogleFonts.manrope(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: AppColors.cardBg,
+        side: const BorderSide(color: AppColors.border),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  void _showQuickActionSnackBar(String action) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$action action clicked',
+          style: GoogleFonts.inter(color: AppColors.cardBg),
+        ),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildRecentActivityCard() {
+    final recentLogs = _auditLogs.take(5).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recent Admin Activity',
+            style: GoogleFonts.manrope(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (recentLogs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'No recent admin activity recorded.',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            )
+          else
+            ...recentLogs.asMap().entries.map((entry) {
+              final index = entry.key;
+              final log = entry.value as Map<String, dynamic>;
+              final action = (log['action'] ?? '').toString();
+
+              final IconData icon;
+              final Color iconColor;
+              if (action.contains('ban') && !action.contains('unban')) {
+                icon = Icons.block;
+                iconColor = AppColors.error;
+              } else if (action.contains('unban')) {
+                icon = Icons.check_circle_outline;
+                iconColor = AppColors.success;
+              } else if (action.contains('login')) {
+                icon = Icons.login;
+                iconColor = AppColors.primary;
+              } else if (action.contains('logout')) {
+                icon = Icons.logout;
+                iconColor = AppColors.textSecondary;
+              } else if (action.contains('reset')) {
+                icon = Icons.lock_reset;
+                iconColor = AppColors.warning;
+              } else {
+                icon = Icons.history;
+                iconColor = AppColors.oriColor;
+              }
+
+              final title = action
+                  .replaceAll('_', ' ')
+                  .split(' ')
+                  .map((w) =>
+                      w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+                  .join(' ');
+
+              String? subtitle;
+              final targetStudentId = log['target_student_id'];
+              final details = log['details']?.toString();
+              if (targetStudentId != null &&
+                  details != null &&
+                  details.isNotEmpty) {
+                subtitle = 'Student #$targetStudentId · $details';
+              } else if (targetStudentId != null) {
+                subtitle = 'Student #$targetStudentId';
+              } else if (details != null && details.isNotEmpty) {
+                subtitle = details;
+              }
+
+              final createdAtStr = log['created_at']?.toString();
+              final time = _formatLogTime(createdAtStr);
+
+              return Column(
+                children: [
+                  if (index > 0)
+                    const Divider(color: AppColors.border, height: 12),
+                  ActivityTile(
+                    icon: icon,
+                    iconColor: iconColor,
+                    title: title,
+                    subtitle: subtitle,
+                    time: time,
+                  ),
+                ],
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  String _formatLogTime(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '';
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) {
+      return dateStr.length > 10 ? dateStr.substring(0, 10) : dateStr;
+    }
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.month}/${dt.day}';
+  }
 }
+
 
 // ============================================================
 // Tab 2 — Students
