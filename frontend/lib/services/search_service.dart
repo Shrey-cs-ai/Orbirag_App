@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
+import 'papers_service.dart';
 
 
 class SearchService {
@@ -88,30 +89,42 @@ class SearchService {
     }
   }
 
-  // 3. Save Paper → bool (true on success, false on failure)
+  // 3. Save Paper → bool
+  // Converts SearchResult → Paper and delegates to PapersService.addPaper().
+  // Returns true if newly added, false if already in library.
   Future<bool> savePaper(SearchResult paper) async {
-    final payload = _paperPayload(paper);
-    try {
-      debugPrint('[Search] POST $baseUrl/api/save-paper');
+    final service = PapersService();
 
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/save-paper'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 30));
-
-      debugPrint('[Search] save-paper status: ${response.statusCode}');
-      if (response.statusCode == 200 || response.statusCode == 201) {
+    // Check duplicate BEFORE adding
+    final isDuplicate = service.papers.any((p) {
+      if (paper.url.isNotEmpty &&
+          p.url != null &&
+          p.url!.trim().toLowerCase() == paper.url.trim().toLowerCase()) {
         return true;
       }
-      debugPrint('[Search] save-paper error body: ${response.body}');
-      return false;
-    } catch (e) {
-      debugPrint('[Search] savePaper exception: $e');
-      return false;
+      return p.title.trim().toLowerCase() == paper.title.trim().toLowerCase();
+    });
+
+    if (isDuplicate) {
+      debugPrint('[Search] savePaper: already in library "${paper.title}"');
+      return false; // caller shows "Already in your library"
     }
+
+    final p = Paper(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: paper.title,
+      authors: paper.authors,
+      category: paper.venue.isNotEmpty ? paper.venue : paper.source,
+      year: paper.year,
+      status: 'unread',
+      url: paper.url.isNotEmpty ? paper.url : null,
+      pdfUrl: paper.pdfUrl,
+      abstract: paper.abstract.isNotEmpty ? paper.abstract : null,
+      summary: paper.aiSummary.isNotEmpty ? paper.aiSummary : null,
+    );
+
+    await service.addPaper(p);
+    return true;
   }
 
   // 3b. Save Paper With Id → String? (returns the new paper's id)
@@ -150,6 +163,7 @@ class SearchService {
         'citations': paper.citations,
         'ai_summary': paper.aiSummary,
         'url': paper.url,
+        'pdf_url': paper.pdfUrl ?? '',
         'abstract': paper.abstract,
         'venue': paper.venue,
       };
@@ -178,6 +192,7 @@ class SearchResult {
   final String url;
   final String abstract;
   final String venue;
+  final String? pdfUrl; // ← NEW: open-access PDF URL from Semantic Scholar
 
   SearchResult({
     required this.title,
@@ -189,9 +204,19 @@ class SearchResult {
     this.url = '',
     this.abstract = '',
     this.venue = '',
+    this.pdfUrl,
   });
 
   factory SearchResult.fromJson(Map<String, dynamic> json) {
+    // Extract PDF URL from Semantic Scholar's openAccessPdf.url or direct pdf_url
+    String? pdfUrl;
+    final oap = json['openAccessPdf'];
+    if (oap is Map) {
+      pdfUrl = oap['url']?.toString();
+    }
+    pdfUrl ??= json['pdf_url']?.toString();
+    if (pdfUrl != null && pdfUrl.isEmpty) pdfUrl = null;
+
     return SearchResult(
       title: (json['title'] ?? 'Untitled') as String,
       authors: (json['authors'] ?? 'Unknown authors') as String,
@@ -203,6 +228,7 @@ class SearchResult {
       url: (json['url'] ?? '') as String,
       abstract: (json['abstract'] ?? '') as String,
       venue: (json['venue'] ?? '') as String,
+      pdfUrl: pdfUrl,
     );
   }
 
@@ -216,5 +242,6 @@ class SearchResult {
         'url': url,
         'abstract': abstract,
         'venue': venue,
+        'pdf_url': pdfUrl,
       };
 }

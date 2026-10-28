@@ -1,4 +1,6 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/papers_service.dart';
@@ -24,6 +26,9 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
   bool _isSearching = false;
   bool _isLoading = true;
 
+  // Sort: 'default' | 'recently_read'
+  String _sortMode = 'default';
+
   final List<String> _filters = ['All', 'Reading', 'Analyzed', 'Unread'];
 
   @override
@@ -43,20 +48,36 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
     await _papersService.initialize();
     if (!mounted) return;
     setState(() {
-      _filteredPapers = _applyFilter(_papersService.papers);
+      _filteredPapers = _applyFilterAndSort(_papersService.papers);
       _isLoading = false;
     });
   }
 
-  List<Paper> _applyFilter(List<Paper> all) {
-    if (_selectedFilter == 'All') return List.from(all);
-    return all.where((p) => p.status == _selectedFilter.toLowerCase()).toList();
+  List<Paper> _applyFilterAndSort(List<Paper> all) {
+    List<Paper> result;
+    if (_selectedFilter == 'All') {
+      result = List.from(all);
+    } else {
+      result = all
+          .where((p) => p.status == _selectedFilter.toLowerCase())
+          .toList();
+    }
+
+    if (_sortMode == 'recently_read') {
+      result.sort((a, b) {
+        if (a.lastReadAt == null && b.lastReadAt == null) return 0;
+        if (a.lastReadAt == null) return 1;
+        if (b.lastReadAt == null) return -1;
+        return b.lastReadAt!.compareTo(a.lastReadAt!);
+      });
+    }
+    return result;
   }
 
   void _filterPapers(String filter) {
     setState(() {
       _selectedFilter = filter;
-      _filteredPapers = _applyFilter(_papersService.papers);
+      _filteredPapers = _applyFilterAndSort(_papersService.papers);
     });
   }
 
@@ -71,8 +92,15 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
       _isSearching = !_isSearching;
       if (!_isSearching) {
         _searchController.clear();
-        _filteredPapers = _applyFilter(_papersService.papers);
+        _filteredPapers = _applyFilterAndSort(_papersService.papers);
       }
+    });
+  }
+
+  void _setSortMode(String mode) {
+    setState(() {
+      _sortMode = mode;
+      _filteredPapers = _applyFilterAndSort(_papersService.papers);
     });
   }
 
@@ -80,7 +108,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
     await _papersService.toggleFavorite(paper.id);
     if (!mounted) return;
     setState(() {
-      _filteredPapers = _applyFilter(_papersService.papers);
+      _filteredPapers = _applyFilterAndSort(_papersService.papers);
     });
   }
 
@@ -103,7 +131,7 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
               if (!mounted) return;
               nav.pop();
               setState(() {
-                _filteredPapers = _applyFilter(_papersService.papers);
+                _filteredPapers = _applyFilterAndSort(_papersService.papers);
               });
             },
             style: ElevatedButton.styleFrom(
@@ -122,6 +150,24 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
       context,
       MaterialPageRoute(builder: (_) => PaperReaderScreen(paper: paper)),
     ).then((_) => _loadPapers()); // refresh on return
+  }
+
+  // ── Export notes to clipboard ─────────────────────────────
+  void _exportNotes(Paper paper) {
+    final md = _papersService.exportNotes(paper.id);
+    if (md.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No notes to export for this paper.')),
+      );
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: md));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Notes for "${paper.title}" copied to clipboard!'),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   // ── Add Paper manually ────────────────────────────────────
@@ -149,7 +195,9 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
             Icon(Icons.add, color: AppColors.primary),
             SizedBox(width: 8),
             Text('Add Paper',
-                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary)),
           ],
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -160,14 +208,16 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _dialogField(_titleCtrl, 'Title', 'Paper title',
-                    validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null),
+                    validator: (v) =>
+                        (v?.isEmpty ?? true) ? 'Required' : null),
                 const SizedBox(height: 12),
                 _dialogField(_urlCtrl, 'URL', 'https://...',
                     keyboard: TextInputType.url),
                 const SizedBox(height: 12),
                 _dialogField(_authorsCtrl, 'Authors', 'Smith, J., et al.',
                     maxLines: 2,
-                    validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null),
+                    validator: (v) =>
+                        (v?.isEmpty ?? true) ? 'Required' : null),
                 const SizedBox(height: 12),
                 _dialogField(_categoryCtrl, 'Category', 'e.g. EDUCATION'),
                 const SizedBox(height: 12),
@@ -195,7 +245,9 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                   category: _categoryCtrl.text.trim().toUpperCase(),
                   year: _yearCtrl.text.trim(),
                   status: 'unread',
-                  url: _urlCtrl.text.trim().isNotEmpty ? _urlCtrl.text.trim() : null,
+                  url: _urlCtrl.text.trim().isNotEmpty
+                      ? _urlCtrl.text.trim()
+                      : null,
                 );
                 await _papersService.addPaper(paper);
                 if (!mounted) return;
@@ -211,14 +263,16 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white),
               child: _isAddingPaper
                   ? const SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white)),
                     )
                   : const Text('Add Paper'),
             ),
@@ -252,7 +306,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
           validator: validator,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.hintText, fontSize: 13),
+            hintStyle:
+                const TextStyle(color: AppColors.hintText, fontSize: 13),
             filled: true,
             fillColor: AppColors.inputFill,
             contentPadding:
@@ -265,7 +320,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 borderSide: const BorderSide(color: AppColors.border)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+                borderSide: const BorderSide(
+                    color: AppColors.primary, width: 1.5)),
           ),
         ),
       ],
@@ -293,8 +349,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style:
-                    const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                style: const TextStyle(
+                    fontSize: 16, color: AppColors.textPrimary),
                 decoration: const InputDecoration(
                   hintText: 'Search papers...',
                   hintStyle: TextStyle(color: AppColors.textSecondary),
@@ -305,6 +361,47 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
               )
             : const AppBrandTitle(),
         actions: [
+          // Sort menu
+          if (!_isSearching)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.sort, color: AppColors.textPrimary),
+              tooltip: 'Sort',
+              onSelected: _setSortMode,
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'default',
+                  child: Row(children: [
+                    Icon(Icons.star_outline,
+                        size: 18,
+                        color: _sortMode == 'default'
+                            ? AppColors.primary
+                            : AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text('Default (Favourites first)',
+                        style: TextStyle(
+                            color: _sortMode == 'default'
+                                ? AppColors.primary
+                                : AppColors.textPrimary)),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'recently_read',
+                  child: Row(children: [
+                    Icon(Icons.history,
+                        size: 18,
+                        color: _sortMode == 'recently_read'
+                            ? AppColors.primary
+                            : AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text('Recently Read',
+                        style: TextStyle(
+                            color: _sortMode == 'recently_read'
+                                ? AppColors.primary
+                                : AppColors.textPrimary)),
+                  ]),
+                ),
+              ],
+            ),
           IconButton(
             icon: Icon(
               _isSearching ? Icons.close : Icons.search,
@@ -315,7 +412,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
               onRefresh: _loadPapers,
               child: SingleChildScrollView(
@@ -335,10 +433,12 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                     const SizedBox(height: 4),
                     const Text(
                       'Your personal academic library.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 14),
                     ),
                     const SizedBox(height: 20),
 
+                    // Filter chips
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -354,11 +454,15 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                               selectedColor: AppColors.primary,
                               backgroundColor: AppColors.white,
                               labelStyle: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.textPrimary,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
                                 fontWeight: FontWeight.w500,
                               ),
                               side: BorderSide(
-                                color: isSelected ? AppColors.primary : AppColors.border,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.border,
                               ),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20)),
@@ -368,6 +472,32 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    // Sort badge
+                    if (_sortMode == 'recently_read')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.history,
+                                size: 14, color: AppColors.primary),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Sorted by: Recently Read',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => _setSortMode('default'),
+                              child: const Icon(Icons.close,
+                                  size: 14, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
 
                     // Paper list / empty state
                     if (_filteredPapers.isEmpty)
@@ -379,7 +509,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                               Icon(
                                 Icons.bookmark_border,
                                 size: 64,
-                                color: AppColors.textSecondary.withValues(alpha: 0.3),
+                                color: AppColors.textSecondary
+                                    .withValues(alpha: 0.3),
                               ),
                               const SizedBox(height: 16),
                               Text(
@@ -387,7 +518,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                                     ? 'No papers match your search'
                                     : 'No saved papers yet',
                                 style: const TextStyle(
-                                    fontSize: 18, color: AppColors.textSecondary),
+                                    fontSize: 18,
+                                    color: AppColors.textSecondary),
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -395,7 +527,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                                     ? 'Try a different search term'
                                     : 'Papers you save from Literature Retrieval appear here',
                                 style: const TextStyle(
-                                    fontSize: 13, color: AppColors.textSecondary),
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary),
                                 textAlign: TextAlign.center,
                               ),
                             ],
@@ -412,13 +545,15 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
         onPressed: _showAddPaperDialog,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Paper', style: TextStyle(color: Colors.white)),
+        label:
+            const Text('Add Paper', style: TextStyle(color: Colors.white)),
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() => _selectedIndex = index);
-          final route = AppConstants.bottomNavItems[index]['route'] as String;
+          final route =
+              AppConstants.bottomNavItems[index]['route'] as String;
           Navigator.of(context).pushReplacementNamed(route);
         },
       ),
@@ -426,6 +561,8 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
   }
 
   Widget _buildPaperCard(Paper paper) {
+    final hasBookmarks = paper.bookmarks.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -462,19 +599,48 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 icon: Icon(
                   paper.isFavorite ? Icons.favorite : Icons.favorite_border,
                   size: 20,
-                  color: paper.isFavorite ? AppColors.error : AppColors.textSecondary,
+                  color: paper.isFavorite
+                      ? AppColors.error
+                      : AppColors.textSecondary,
                 ),
                 onPressed: () => _toggleFavorite(paper),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
               const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.delete_outline,
+              // ── Kebab menu ────────────────────────────────
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert,
                     size: 20, color: AppColors.textSecondary),
-                onPressed: () => _confirmDelete(paper),
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                onSelected: (v) {
+                  if (v == 'delete') _confirmDelete(paper);
+                  if (v == 'export_notes') _exportNotes(paper);
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'export_notes',
+                    child: Row(children: [
+                      Icon(Icons.copy, size: 16,
+                          color: AppColors.textSecondary),
+                      SizedBox(width: 8),
+                      Text('Export Notes'),
+                    ]),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline, size: 16,
+                          color: AppColors.error),
+                      SizedBox(width: 8),
+                      Text('Remove',
+                          style: TextStyle(color: AppColors.error)),
+                    ]),
+                  ),
+                ],
               ),
             ],
           ),
@@ -501,8 +667,56 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 : paper.authors,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+            style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.4),
           ),
+
+          // ── Bookmark chip ──────────────────────────────
+          if (hasBookmarks) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.lightPurple,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: AppColors.purple.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.bookmarks,
+                          size: 12, color: AppColors.purple),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Bookmarks: ${paper.bookmarks.length}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.purple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Last read time
+                if (paper.lastReadAt != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    'Last read: ${_formatRelative(paper.lastReadAt!)}',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+          ],
+
           const SizedBox(height: 14),
 
           // ── Status-specific bottom row ─────────────────
@@ -511,9 +725,12 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 onPressed: () => _openReader(paper),
-                icon: const Icon(Icons.arrow_forward, size: 16, color: AppColors.primary),
+                icon: const Icon(Icons.arrow_forward,
+                    size: 16, color: AppColors.primary),
                 label: const Text('Read',
-                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600)),
               ),
             )
           else if (paper.status == 'reading') ...[
@@ -550,8 +767,10 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.lightPurple,
                   foregroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 ),
               ),
             ),
@@ -562,12 +781,15 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
               child: ElevatedButton.icon(
                 onPressed: () => _openReader(paper),
                 icon: const Icon(Icons.play_arrow, size: 16),
-                label: Text(paper.status == 'analyzed' ? 'Read Again' : 'Start Reading'),
+                label: Text(
+                    paper.status == 'analyzed' ? 'Read Again' : 'Start Reading'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 ),
               ),
             ),
@@ -575,5 +797,15 @@ class _SavedPapersScreenState extends State<SavedPapersScreen> {
         ],
       ),
     );
+  }
+
+  String _formatRelative(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'yesterday';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 }

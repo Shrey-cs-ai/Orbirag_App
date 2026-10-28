@@ -4,9 +4,11 @@ import '../utils/firebase_auth_service.dart';
 import '../services/user_state_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/search_service.dart';
+import '../services/papers_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'paper_orbit_screen.dart';
+import 'paper_reader_screen.dart';
 import 'voice_input_screen.dart';
 import 'ori_chatbot_screen.dart';
 import 'literature_retrieval_screen.dart';
@@ -44,11 +46,16 @@ class _HomeScreenState extends State<HomeScreen> {
   List<SearchResult> _recommendations = [];
   bool _loadingRecommendations = false;
 
+  // Continue reading
+  Paper? _continueReadingPaper;
+  final PapersService _papersService = PapersService();
+
   @override
   void initState() {
     super.initState();
     _loadUserState();
     _loadRecommendations();
+    _loadContinueReading();
   }
 
   @override
@@ -100,6 +107,18 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _loadingRecommendations = false);
       }
     }
+  }
+
+  // ---- CONTINUE READING ----
+  Future<void> _loadContinueReading() async {
+    try {
+      await _papersService.initialize();
+      if (mounted) {
+        setState(() {
+          _continueReadingPaper = _papersService.getMostRecentlyReading();
+        });
+      }
+    } catch (_) {}
   }
 
   // ---- MARK RESEARCH STARTED ----
@@ -574,6 +593,12 @@ class _HomeScreenState extends State<HomeScreen> {
         else
           _buildStartNewTopicCard(),
 
+        const SizedBox(height: 16),
+
+        // ── Continue Reading card ──────────────────────────
+        if (_continueReadingPaper != null)
+          _buildContinueReadingCard(_continueReadingPaper!),
+
         const SizedBox(height: 28),
 
         // Recommended
@@ -1047,6 +1072,98 @@ class _HomeScreenState extends State<HomeScreen> {
                 Icon(Icons.arrow_forward, size: 12, color: AppColors.primary),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContinueReadingCard(Paper paper) {
+    final pct = (paper.progress * 100).round();
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => PaperReaderScreen(paper: paper)),
+        ).then((_) => _loadContinueReading());
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.lightPurple,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.menu_book,
+                  color: AppColors.purple, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'CONTINUE READING',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.purple,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    paper.title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: paper.progress,
+                            backgroundColor: AppColors.border,
+                            color: AppColors.purple,
+                            minHeight: 4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$pct% done',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios,
+                size: 14, color: AppColors.textSecondary),
           ],
         ),
       ),
