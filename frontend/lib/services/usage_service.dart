@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class UsageService {
-  static const String _endpoint = 'http://localhost:8001/api/admin/usage/record';
+  static const String _endpoint =
+      'http://localhost:8001/api/admin/usage/record';
 
   /// Records an aggregated usage event for the current logged-in student.
   /// Fire-and-forget: does not block the UI and silently catches any errors.

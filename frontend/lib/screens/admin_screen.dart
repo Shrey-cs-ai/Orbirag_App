@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import '../utils/app_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/admin/activity_tile.dart';
+import '../widgets/admin/admin_empty_state.dart';
+import '../widgets/admin/admin_loading_state.dart';
 import '../widgets/admin/dashboard_skeleton.dart';
 import '../widgets/admin/license_usage_card.dart';
 import '../widgets/admin/stat_card.dart';
@@ -233,10 +235,22 @@ class _DashboardViewState extends State<_DashboardView>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Orbirag Admin'),
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        title: Text(
+          'Orbirag Admin',
+          style: GoogleFonts.manrope(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: AppColors.textPrimary),
             tooltip: 'Log out',
             onPressed: widget.onLogout,
           ),
@@ -244,6 +258,21 @@ class _DashboardViewState extends State<_DashboardView>
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.label,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          labelStyle: GoogleFonts.manrope(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: GoogleFonts.manrope(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          dividerColor: AppColors.border,
           tabs: const [
             Tab(icon: Icon(Icons.dashboard_outlined), text: 'Dashboard'),
             Tab(icon: Icon(Icons.people_outline), text: 'Students'),
@@ -504,14 +533,13 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 
   Widget _buildStatCardsRow() {
-    final activeStudents =
-        (_summary?['active_students'] as num?)?.toInt() ?? 0;
+    final activeStudents = (_summary?['active_students'] as num?)?.toInt() ?? 0;
     final planRaw = (_inst?['plan'] ?? 'Standard').toString();
     final planDisplayName = planRaw
         .replaceAll('_', ' ')
         .split(' ')
-        .map((w) =>
-            w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+        .map(
+            (w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
         .join(' ');
 
     final renewalDateStr = _inst?['renewal_date']?.toString();
@@ -519,9 +547,8 @@ class _DashboardTabState extends State<_DashboardTab> {
     if (renewalDateStr != null && renewalDateStr.isNotEmpty) {
       renewalDate = DateTime.tryParse(renewalDateStr);
     }
-    final int daysLeft = renewalDate != null
-        ? renewalDate.difference(DateTime.now()).inDays
-        : 0;
+    final int daysLeft =
+        renewalDate != null ? renewalDate.difference(DateTime.now()).inDays : 0;
 
     final renewalDateFormatted = renewalDate != null
         ? '${renewalDate.year}-${renewalDate.month.toString().padLeft(2, '0')}-${renewalDate.day.toString().padLeft(2, '0')}'
@@ -550,8 +577,7 @@ class _DashboardTabState extends State<_DashboardTab> {
               value: planDisplayName,
               helperText: renewalHelper,
               badgeText: renewalDate != null ? '$daysLeft days left' : null,
-              badgeColor:
-                  daysLeft < 60 ? AppColors.warning : AppColors.success,
+              badgeColor: daysLeft < 60 ? AppColors.warning : AppColors.success,
               icon: Icons.calendar_today_outlined,
               iconColor: AppColors.oriColor,
             ),
@@ -563,15 +589,15 @@ class _DashboardTabState extends State<_DashboardTab> {
 
   Widget _buildResearchActivityCard() {
     final litSearches = ((_summary?['literature_search'] ??
-            _summary?['papers_analyzed']) as num?)
+                _summary?['papers_analyzed']) as num?)
             ?.toInt() ??
         0;
-    final gapAnalyses = ((_summary?['gap_analysis'] ??
-            _summary?['gap_analyses']) as num?)
-            ?.toInt() ??
-        0;
+    final gapAnalyses =
+        ((_summary?['gap_analysis'] ?? _summary?['gap_analyses']) as num?)
+                ?.toInt() ??
+            0;
     final citationChecks = ((_summary?['citation_checks'] ??
-            _summary?['ai_citation_checks']) as num?)
+                _summary?['ai_citation_checks']) as num?)
             ?.toInt() ??
         0;
     final totalActions = litSearches + gapAnalyses + citationChecks;
@@ -729,8 +755,7 @@ class _DashboardTabState extends State<_DashboardTab> {
           decoration: BoxDecoration(
             color: AppColors.warning.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(16),
-            border:
-                Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
+            border: Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
@@ -907,8 +932,9 @@ class _DashboardTabState extends State<_DashboardTab> {
               final title = action
                   .replaceAll('_', ' ')
                   .split(' ')
-                  .map((w) =>
-                      w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+                  .map((w) => w.isNotEmpty
+                      ? '${w[0].toUpperCase()}${w.substring(1)}'
+                      : '')
                   .join(' ');
 
               String? subtitle;
@@ -961,7 +987,6 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 }
 
-
 // ============================================================
 // Tab 2 — Students
 // ============================================================
@@ -998,85 +1023,233 @@ class _StudentsTabState extends State<_StudentsTab> {
     }
   }
 
+  Color _statusColor(String? status) {
+    if (status == 'active') return AppColors.success;
+    if (status == 'suspended') return AppColors.warning;
+    return AppColors.error;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _search,
-              decoration: const InputDecoration(
-                hintText: 'Search by name or email',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
+    return ColoredBox(
+      color: AppColors.background,
+      child: Column(
+        children: [
+          // ── Search bar card ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.textPrimary.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              onSubmitted: (_) => _load(),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _search,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Search by name or email…',
+                        hintStyle: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: AppColors.textSecondary,
+                          size: 20,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 6),
+                      ),
+                      onSubmitted: (_) => _load(),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _statusFilter,
+                        isDense: true,
+                        hint: Text(
+                          'All',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        icon: const Icon(Icons.expand_more,
+                            size: 16, color: AppColors.primary),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: null, child: Text('All')),
+                          DropdownMenuItem(
+                              value: 'active', child: Text('Active')),
+                          DropdownMenuItem(
+                              value: 'suspended', child: Text('Suspended')),
+                          DropdownMenuItem(
+                              value: 'banned', child: Text('Banned')),
+                        ],
+                        onChanged: (v) {
+                          setState(() => _statusFilter = v);
+                          _load();
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-          DropdownButton<String?>(
-            value: _statusFilter,
-            hint: const Text('All'),
-            items: const [
-              DropdownMenuItem(value: null, child: Text('All')),
-              DropdownMenuItem(value: 'active', child: Text('Active')),
-              DropdownMenuItem(value: 'suspended', child: Text('Suspended')),
-              DropdownMenuItem(value: 'banned', child: Text('Banned')),
-            ],
-            onChanged: (v) {
-              setState(() => _statusFilter = v);
-              _load();
-            },
-          ),
-        ]),
-      ),
-      if (_loading) const LinearProgressIndicator(),
-      Expanded(
-        child: _items.isEmpty && !_loading
-            ? const Center(child: Text('No students'))
-            : ListView.separated(
-                itemCount: _items.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final s = _items[i];
-                  final statusColor = s['status'] == 'active'
-                      ? Colors.green
-                      : s['status'] == 'suspended'
-                          ? Colors.orange
-                          : Colors.red;
-                  return ListTile(
-                    leading: CircleAvatar(
-                      child: Text((s['name'] ?? '?')
-                          .toString()
-                          .characters
-                          .first
-                          .toUpperCase()),
-                    ),
-                    title: Text(s['name'] ?? ''),
-                    subtitle: Text(s['email'] ?? '',
-                        style: const TextStyle(fontSize: 12)),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
+
+          // ── Loading bar ──────────────────────────────────────────────
+          if (_loading)
+            const LinearProgressIndicator(
+              color: AppColors.primary,
+              backgroundColor: AppColors.border,
+              minHeight: 2,
+            ),
+
+          // ── List ─────────────────────────────────────────────────────
+          Expanded(
+            child: _loading && _items.isEmpty
+                ? const AdminLoadingList()
+                : _items.isEmpty
+                    ? AdminEmptyState(
+                        icon: Icons.people_outline,
+                        title: 'No students found',
+                        subtitle: _statusFilter != null
+                            ? 'Try clearing the filter or search'
+                            : 'Add students via the Dashboard quick actions',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        color: AppColors.primary,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                          itemCount: _items.length,
+                          itemBuilder: (context, i) {
+                            final s = _items[i];
+                            final sc = _statusColor(s['status']?.toString());
+                            final initial = (s['name'] ?? '?')
+                                .toString()
+                                .characters
+                                .first
+                                .toUpperCase();
+                            return GestureDetector(
+                              onTap: () => _openStudent(s['id'] as int),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cardBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border:
+                                      Border.all(color: AppColors.border),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.textPrimary
+                                          .withValues(alpha: 0.03),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 22,
+                                      backgroundColor:
+                                          AppColors.primary.withValues(alpha: 0.12),
+                                      child: Text(
+                                        initial,
+                                        style: GoogleFonts.manrope(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            s['name'] ?? '',
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            s['email'] ?? '',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: sc.withValues(alpha: 0.12),
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${s['status']}'.toUpperCase(),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: sc,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                      child: Text('${s['status']}'.toUpperCase(),
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: statusColor)),
-                    ),
-                    onTap: () => _openStudent(s['id'] as int),
-                  );
-                },
-              ),
+          ),
+        ],
       ),
-    ]);
+    );
   }
 
   Future<void> _openStudent(int id) async {
@@ -1113,84 +1286,142 @@ class _StudentProfileSheet extends StatelessWidget {
     final u = detail['usage'] as Map<String, dynamic>;
     final counts = u['counts'] as Map<String, dynamic>? ?? {};
     final statusColor = s['status'] == 'active'
-        ? Colors.green
+        ? AppColors.success
         : s['status'] == 'suspended'
-            ? Colors.orange
-            : Colors.red;
+            ? AppColors.warning
+            : AppColors.error;
 
-    return Padding(
+    return Container(
+      color: AppColors.background,
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: SingleChildScrollView(
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Drag handle
               Center(
-                  child: CircleAvatar(
-                      radius: 32,
-                      child: Text(
-                          (s['name'] ?? '?')
-                              .toString()
-                              .characters
-                              .first
-                              .toUpperCase(),
-                          style: const TextStyle(fontSize: 24)))),
-              const SizedBox(height: 8),
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Center(
-                  child: Text(s['name'] ?? '',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold))),
+                child: CircleAvatar(
+                  radius: 32,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                  child: Text(
+                    (s['name'] ?? '?')
+                        .toString()
+                        .characters
+                        .first
+                        .toUpperCase(),
+                    style: GoogleFonts.manrope(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
               Center(
-                  child: Text(s['email'] ?? '',
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey))),
-              const SizedBox(height: 8),
+                child: Text(
+                  s['name'] ?? '',
+                  style: GoogleFonts.manrope(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
               Center(
-                  child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Text('${s['status']}'.toUpperCase(),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: statusColor)),
-              )),
-              const Divider(height: 32),
+                child: Text(
+                  s['email'] ?? '',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    '${s['status']}'.toUpperCase(),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ),
+              Divider(color: AppColors.border, height: 32),
               _row('Joined',
                   s['created_at']?.toString().substring(0, 10) ?? '—'),
               _row('Last active',
                   s['last_active_at']?.toString().substring(0, 10) ?? '—'),
               if (s['ban_reason'] != null) _row('Reason', s['ban_reason']),
-              const Divider(height: 32),
-              const Text('Usage summary (aggregated only)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 8),
+              Divider(color: AppColors.border, height: 32),
+              Text(
+                'Usage summary (aggregated only)',
+                style: GoogleFonts.manrope(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _chip('Gap analyses', counts['gap_analysis'] ?? 0),
                 _chip('Citations', counts['citation_check'] ?? 0),
                 _chip('Plagiarism', counts['plagiarism_check'] ?? 0),
                 _chip('Papers', counts['paper_analysis'] ?? 0),
               ]),
-              const SizedBox(height: 4),
-              const Text('Research content is not visible to admins.',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.black54)),
-              const Divider(height: 32),
-              const Text('Actions',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+              Text(
+                'Research content is not visible to admins.',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Divider(color: AppColors.border, height: 32),
+              Text(
+                'Actions',
+                style: GoogleFonts.manrope(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.border),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
                   onPressed: () async {
                     try {
                       await AdminApi.resetPassword(s['id'] as int);
@@ -1210,12 +1441,24 @@ class _StudentProfileSheet extends StatelessWidget {
                 ),
                 if (s['status'] != 'active')
                   ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: AppColors.cardBg,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: () => _changeStatus(context, s['id'], 'active'),
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Activate'),
                   ),
                 if (s['status'] == 'active') ...[
                   OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.warning,
+                      side: BorderSide(color: AppColors.warning),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: () => _changeStatus(
                         context, s['id'], 'suspended',
                         reason: 'Temporary suspension'),
@@ -1223,8 +1466,12 @@ class _StudentProfileSheet extends StatelessWidget {
                     label: const Text('Suspend (7d)'),
                   ),
                   OutlinedButton.icon(
-                    style:
-                        OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: BorderSide(color: AppColors.error),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: () => _changeStatus(context, s['id'], 'banned',
                         reason: 'Policy violation'),
                     icon: const Icon(Icons.block, size: 16),
@@ -1232,29 +1479,45 @@ class _StudentProfileSheet extends StatelessWidget {
                   ),
                 ],
               ]),
+              const SizedBox(height: 8),
             ]),
       ),
     );
   }
 
   Widget _row(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
           SizedBox(
-              width: 100,
-              child: Text(k,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey))),
-          Expanded(child: Text(v, style: const TextStyle(fontSize: 12))),
+            width: 100,
+            child: Text(
+              k,
+              style: GoogleFonts.inter(
+                  fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              v,
+              style: GoogleFonts.inter(
+                  fontSize: 12, color: AppColors.textPrimary),
+            ),
+          ),
         ]),
       );
 
   Widget _chip(String label, dynamic count) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
         ),
-        child: Text('$label: $count', style: const TextStyle(fontSize: 11)),
+        child: Text(
+          '$label: $count',
+          style: GoogleFonts.inter(
+              fontSize: 11, color: AppColors.textPrimary),
+        ),
       );
 }
 
@@ -1289,7 +1552,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     _FeatureCategory(
       title: 'Research & Discovery',
       icon: Icons.explore_outlined,
-      color: Color(0xFF2E5B88),
+      color: AppColors.primary,
       featureKeys: [
         'topic_scoping',
         'literature_retrieval',
@@ -1391,56 +1654,115 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_err != null) return Center(child: Text('Error: $_err'));
-    if (_features == null)
-      return const Center(child: CircularProgressIndicator());
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primary.withOpacity(0.18)),
-            ),
-            child: const Row(
+    if (_err != null) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.privacy_tip_outlined,
-                    size: 18, color: AppColors.primary),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Aggregated feature usage across the institution (Privacy-Safe)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
+                Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  'Failed to load analytics',
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _err!,
+                  style: GoogleFonts.inter(
+                      fontSize: 12, color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.cardBg,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Retry'),
                 ),
               ],
             ),
           ),
-          for (final cat in _categories) _buildCategoryCard(cat),
-        ],
+        ),
+      );
+    }
+    if (_features == null) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: const AdminLoadingList(),
+      );
+    }
+
+    return ColoredBox(
+      color: AppColors.background,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Privacy-safe info banner
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.privacy_tip_outlined,
+                      size: 18, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Aggregated feature usage across the institution (Privacy-Safe)',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            for (final cat in _categories) _buildCategoryCard(cat),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCategoryCard(_FeatureCategory category) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.withOpacity(0.18)),
-      ),
-      color: Colors.white,
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1449,19 +1771,21 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: category.color.withOpacity(0.12),
+                    color: category.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(category.icon, size: 18, color: category.color),
+                  child:
+                      Icon(category.icon, size: 18, color: category.color),
                 ),
                 const SizedBox(width: 10),
                 Text(
                   category.title,
-                  style: const TextStyle(
+                  style: GoogleFonts.manrope(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -1491,15 +1815,16 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
             Expanded(
               child: Text(
                 _formatFeatureName(key),
-                style: const TextStyle(
+                style: GoogleFonts.manrope(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
             Text(
               _formatPercentage(pct),
-              style: TextStyle(
+              style: GoogleFonts.manrope(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
                 color: accentColor,
@@ -1513,16 +1838,16 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
           child: LinearProgressIndicator(
             value: (pct / 100.0).clamp(0.0, 1.0),
             minHeight: 6,
-            backgroundColor: Colors.grey.shade200,
+            backgroundColor: AppColors.border,
             valueColor: AlwaysStoppedAnimation<Color>(accentColor),
           ),
         ),
         const SizedBox(height: 4),
         Text(
           _formatStudents(users),
-          style: TextStyle(
+          style: GoogleFonts.inter(
             fontSize: 11,
-            color: Colors.grey.shade600,
+            color: AppColors.textSecondary,
           ),
         ),
       ],
@@ -1636,19 +1961,20 @@ class _LoginsTabState extends State<_LoginsTab> {
 
   Widget _buildStatusBadge(String status) {
     final isSuccess = status.toLowerCase() == 'success';
-    final color = isSuccess ? Colors.green : Colors.red;
+    final color = isSuccess ? AppColors.success : AppColors.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         isSuccess ? 'Success' : 'Blocked',
-        style: TextStyle(
+        style: GoogleFonts.inter(
           fontSize: 11,
           fontWeight: FontWeight.bold,
-          color: isSuccess ? Colors.green.shade800 : Colors.red.shade800,
+          color: color,
         ),
       ),
     );
@@ -1657,90 +1983,159 @@ class _LoginsTabState extends State<_LoginsTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading && _logins == null) {
-      return const Center(child: CircularProgressIndicator());
+      return ColoredBox(
+        color: AppColors.background,
+        child: const AdminLoadingList(),
+      );
     }
     if (_err != null && _logins == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Error: $_err', style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 8),
-            ElevatedButton(onPressed: _load, child: const Text('Retry')),
-          ],
+      return ColoredBox(
+        color: AppColors.background,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.wifi_off_outlined, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  'Failed to load logins',
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _err!,
+                  style: GoogleFonts.inter(
+                      fontSize: 12, color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.cardBg,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
 
     final items = _logins ?? [];
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: items.isEmpty ? 1 : items.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          if (items.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No login activity recorded yet.',
-                  style: TextStyle(color: Colors.grey),
+    if (items.isEmpty) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: const AdminEmptyState(
+          icon: Icons.login_outlined,
+          title: 'No login activity yet',
+          subtitle: 'Recent logins will appear here',
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: AppColors.background,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final log = items[index] as Map<String, dynamic>;
+            final name = (log['student_name'] ?? 'Unknown').toString();
+            final email = (log['email'] ?? '').toString();
+            final role = (log['role'] ?? 'student').toString();
+            final photoUrl = log['photo_url']?.toString();
+            final time = log['login_time']?.toString();
+            final status = (log['status'] ?? 'success').toString();
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.textPrimary.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    _buildAvatar(photoUrl, name),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  style: GoogleFonts.manrope(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              _buildRoleBadge(role),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            email,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _timeAgo(time),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        _buildStatusBadge(status),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             );
-          }
-
-          final log = items[index] as Map<String, dynamic>;
-          final name = (log['student_name'] ?? 'Unknown').toString();
-          final email = (log['email'] ?? '').toString();
-          final role = (log['role'] ?? 'student').toString();
-          final photoUrl = log['photo_url']?.toString();
-          final time = log['login_time']?.toString();
-          final status = (log['status'] ?? 'success').toString();
-
-          return ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            leading: _buildAvatar(photoUrl, name),
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _buildRoleBadge(role),
-              ],
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                email,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _timeAgo(time),
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-                const SizedBox(height: 4),
-                _buildStatusBadge(status),
-              ],
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -1754,96 +2149,169 @@ class _PrivacyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(padding: const EdgeInsets.all(16), children: [
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+    return ColoredBox(
+      color: AppColors.background,
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        // Header card
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.textPrimary.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Row(children: [
-                  Icon(Icons.shield_outlined, color: Colors.green),
-                  SizedBox(width: 8),
-                  Text('Student Privacy by Default',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Icon(Icons.shield_outlined,
+                      color: AppColors.success, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Student Privacy by Default',
+                    style: GoogleFonts.manrope(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                 ]),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 Text(
                   'Orbirag is built so that institutional control is separated from '
                   'student research. Admins manage access and view aggregated usage — '
                   'not the student\'s intellectual work.',
-                  style: TextStyle(fontSize: 13, height: 1.5),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    height: 1.5,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ]),
+              ],
+            ),
+          ),
         ),
-      ),
-      const SizedBox(height: 16),
-      _section(context, 'Admins CAN access', Colors.green, [
-        'Account information (name, email, role)',
-        'Account status (active / suspended / banned)',
-        'Aggregated usage counts per student',
-        'Institution-wide analytics',
-        'Audit logs of admin actions',
-      ]),
-      const SizedBox(height: 16),
-      _section(context, 'Admins CANNOT access', Colors.red, [
-        'Private research projects or topics',
-        'Chat conversations with the AI',
-        'AI prompts or responses',
-        'Draft papers or uploaded PDFs',
-        'Personal research notes',
-        'Full plagiarism reports containing student text',
-      ]),
-      const SizedBox(height: 16),
-      Card(
-        color: Colors.amber.withOpacity(0.15),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+        const SizedBox(height: 16),
+        _section(context, 'Admins CAN access', AppColors.success, [
+          'Account information (name, email, role)',
+          'Account status (active / suspended / banned)',
+          'Aggregated usage counts per student',
+          'Institution-wide analytics',
+          'Audit logs of admin actions',
+        ]),
+        const SizedBox(height: 16),
+        _section(context, 'Admins CANNOT access', AppColors.error, [
+          'Private research projects or topics',
+          'Chat conversations with the AI',
+          'AI prompts or responses',
+          'Draft papers or uploaded PDFs',
+          'Personal research notes',
+          'Full plagiarism reports containing student text',
+        ]),
+        const SizedBox(height: 16),
+        // AI-likelihood card
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.warning.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.35)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('AI-likelihood indicators',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(height: 6),
+              children: [
+                Row(children: [
+                  Icon(Icons.info_outline,
+                      color: AppColors.warning, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'AI-likelihood indicators',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 8),
                 Text(
                   'If AI-likelihood indicators are ever surfaced to admins, they are '
                   'aggregated across the institution and clearly labelled as '
                   'AI-likelihood — not proof of misconduct.',
-                  style: TextStyle(fontSize: 12, height: 1.4),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ]),
+              ],
+            ),
+          ),
         ),
-      ),
-    ]);
+      ]),
+    );
   }
 
   Widget _section(
-          BuildContext ctx, String title, Color color, List<String> items) =>
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-            const SizedBox(height: 8),
-            for (final i in items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(title.contains('CANNOT') ? Icons.close : Icons.check,
-                          color: color, size: 16),
-                      const SizedBox(width: 6),
-                      Expanded(
-                          child: Text(i, style: const TextStyle(fontSize: 13))),
-                    ]),
+      BuildContext ctx, String title, Color color, List<String> items) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            title,
+            style: GoogleFonts.manrope(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final i in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    title.contains('CANNOT')
+                        ? Icons.cancel_outlined
+                        : Icons.check_circle_outline,
+                    color: color,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      i,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-          ]),
-        ),
-      );
+            ),
+        ]),
+      ),
+    );
+  }
 }
 
 // ============================================================
@@ -1880,53 +2348,164 @@ class _AuditTabState extends State<_AuditTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_err != null) return Center(child: Text('Error: $_err'));
-    if (_logs == null) return const Center(child: CircularProgressIndicator());
-    if (_logs!.isEmpty)
-      return const Center(child: Text('No audit entries yet'));
+    if (_err != null) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  'Failed to load audit logs',
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _err!,
+                  style: GoogleFonts.inter(
+                      fontSize: 12, color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.cardBg,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (_logs == null) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: const AdminLoadingList(),
+      );
+    }
+    if (_logs!.isEmpty) {
+      return ColoredBox(
+        color: AppColors.background,
+        child: const AdminEmptyState(
+          icon: Icons.history_outlined,
+          title: 'No audit entries yet',
+          subtitle: 'Admin actions will appear here',
+        ),
+      );
+    }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: _logs!.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, i) {
-          final l = _logs![i];
-          final action = l['action']?.toString() ?? '';
-          final icon = action.contains('ban')
-              ? Icons.block
-              : action.contains('login')
-                  ? Icons.login
-                  : action.contains('logout')
-                      ? Icons.logout
-                      : action.contains('reset')
-                          ? Icons.lock_reset
-                          : action.contains('unban')
-                              ? Icons.check_circle
-                              : Icons.history;
-          final color = action.contains('ban')
-              ? Colors.red
-              : action.contains('unban') || action.contains('login')
-                  ? Colors.green
-                  : AppColors.primary;
-          return ListTile(
-            leading: Icon(icon, color: color),
-            title: Text(action.replaceAll('_', ' ').toUpperCase(),
-                style:
-                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            subtitle: Text(
-                [
-                  if (l['target_student_id'] != null)
-                    'Student #${l['target_student_id']}',
-                  if (l['details'] != null &&
-                      l['details'].toString().isNotEmpty)
-                    l['details'],
-                  l['created_at']?.toString().substring(0, 16) ?? '',
-                ].join(' · '),
-                style: const TextStyle(fontSize: 11)),
-          );
-        },
+    return ColoredBox(
+      color: AppColors.background,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: _logs!.length,
+          itemBuilder: (context, i) {
+            final l = _logs![i];
+            final action = l['action']?.toString() ?? '';
+            final icon = action.contains('ban')
+                ? Icons.block
+                : action.contains('login')
+                    ? Icons.login
+                    : action.contains('logout')
+                        ? Icons.logout
+                        : action.contains('reset')
+                            ? Icons.lock_reset
+                            : action.contains('unban')
+                                ? Icons.check_circle_outline
+                                : Icons.history_outlined;
+            final iconColor = action.contains('ban')
+                ? AppColors.error
+                : action.contains('unban') || action.contains('login')
+                    ? AppColors.success
+                    : AppColors.primary;
+
+            final subtitle = [
+              if (l['target_student_id'] != null)
+                'Student #${l['target_student_id']}',
+              if (l['details'] != null &&
+                  l['details'].toString().isNotEmpty)
+                l['details'],
+              l['created_at']?.toString().substring(0, 16) ?? '',
+            ].join(' · ');
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.textPrimary.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    // Icon bubble
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: iconColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, size: 20, color: iconColor),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            action.replaceAll('_', ' ').toUpperCase(),
+                            style: GoogleFonts.manrope(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
