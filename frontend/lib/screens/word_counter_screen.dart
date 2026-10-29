@@ -8,6 +8,7 @@ import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
 import '../models/analysis_result.dart';
 import '../services/word_counter_api.dart';
+import '../services/usage_service.dart';
 
 class WordCounterScreen extends StatefulWidget {
   const WordCounterScreen({super.key});
@@ -33,6 +34,7 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
   @override
   void initState() {
     super.initState();
+    UsageService.recordEvent('word_counter');
     _controller.addListener(_onTextChanged);
   }
 
@@ -79,6 +81,8 @@ class _WordCounterScreenState extends State<WordCounterScreen> {
       );
 
       if (!mounted || requestId != _requestId) return; // Drop stale request
+
+      UsageService.recordEvent('word_counter');
 
       setState(() {
         _stats = result.stats;

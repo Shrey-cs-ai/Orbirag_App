@@ -5,6 +5,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../services/plagiarism_service.dart';
 import '../services/library_service.dart';
+import '../services/usage_service.dart';
 import 'paper_orbit_screen.dart';
 import 'home_screen.dart';
 import 'ori_chatbot_screen.dart';
@@ -95,6 +96,7 @@ class _PlagiarismCheckScreenState extends State<PlagiarismCheckScreen> {
     try {
       final result = await _service.check(text);
       if (!mounted) return;
+      UsageService.recordEvent('plagiarism_check');
       setState(() {
         _similarityScore = result.similarityScore;
         _aiLikelihoodScore = result.aiLikelihoodScore;

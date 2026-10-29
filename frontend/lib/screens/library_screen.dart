@@ -5,6 +5,7 @@ import '../services/library_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
+import '../services/usage_service.dart';
 import 'new_library_item_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
+    UsageService.recordEvent('library_access');
     _loadItems();
   }
 
@@ -140,6 +142,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       MaterialPageRoute(builder: (_) => const NewLibraryItemScreen()),
     );
     if (result == true) {
+      UsageService.recordEvent('paper_saved');
       await _loadItems();
     }
   }

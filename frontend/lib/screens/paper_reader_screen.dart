@@ -33,6 +33,7 @@ class _PaperReaderScreenState extends State<PaperReaderScreen> {
   @override
   void initState() {
     super.initState();
+    UsageService.recordEventStatic('paper_analysis');
     _progress = widget.paper.progress;
     _status = widget.paper.status;
     _bookmarks = List.from(widget.paper.bookmarks);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/ai_service.dart';
+import '../services/usage_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/chat_bubble.dart';
@@ -56,6 +57,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isTyping) return;
+
+    UsageService.recordEvent('ori_chatbot');
 
     // 1. Add user message to UI immediately
     setState(() {

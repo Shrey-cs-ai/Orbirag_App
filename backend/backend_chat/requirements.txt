@@ -6,3 +6,5 @@ httpx
 pypdf
 deepgram-sdk
 firebase-admin
+groq
+google-genai

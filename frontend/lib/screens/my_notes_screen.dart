@@ -5,6 +5,7 @@ import '../services/notes_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
+import '../services/usage_service.dart';
 import 'new_notes_screen.dart';
 
 class MyNotesScreen extends StatefulWidget {
@@ -80,6 +81,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       ),
     );
     if (result == true) {
+      UsageService.recordEvent('notes_writing');
       await _loadNotes();
     }
   }

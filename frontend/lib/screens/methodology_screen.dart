@@ -3,6 +3,7 @@ import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/methodology_service.dart';
 import '../services/library_service.dart';
+import '../services/usage_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/methodology_form.dart';
@@ -68,6 +69,7 @@ class _MethodologyScreenState extends State<MethodologyScreen> {
     if (result == null) {
       _showMessage('Could not auto-extract. Please fill in manually.');
     } else {
+      UsageService.recordEvent('methodology_builder');
       _showMessage('✅ Fields extracted successfully');
     }
   }

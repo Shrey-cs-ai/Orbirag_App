@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:orbirag/screens/admin_login_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/firebase_auth_service.dart';
 import '../screens/home_screen.dart';
@@ -14,7 +13,7 @@ import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/saved_papers_screen.dart';
 import '../screens/gap_research_screen.dart';
-import '../screens/admin_login_screen.dart';
+import '../screens/admin_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -145,11 +144,13 @@ class AppDrawer extends StatelessWidget {
                     title: "Gap Analysis",
                     screen: const GapResearchScreen(),
                   ),
+                  const Divider(height: 16),
+                  // ── Admin Portal ────────────────────────────
                   _item(
                     context,
-                    icon: Icons.admin_panel_settings,
-                    title: "Admin login",
-                    screen: const AdminLoginScreen(),
+                    icon: Icons.admin_panel_settings_outlined,
+                    title: "Admin Portal",
+                    screen: const AdminScreen(),
                   ),
                 ],
               ),

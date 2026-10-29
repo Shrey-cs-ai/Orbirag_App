@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/pdf_service.dart';
+import '../services/usage_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
@@ -481,6 +482,7 @@ class _PaperOrbitScreenState extends State<PaperOrbitScreen> {
       return;
     }
 
+    UsageService.recordEvent('paper_orbit');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatWithPdfScreen(

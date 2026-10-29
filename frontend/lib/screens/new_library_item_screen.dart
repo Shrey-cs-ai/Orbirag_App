@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/library_service.dart';
+import '../services/usage_service.dart';
 import '../utils/app_colors.dart';
 
 class NewLibraryItemScreen extends StatefulWidget {
@@ -47,6 +48,7 @@ class _NewLibraryItemScreenState extends State<NewLibraryItemScreen> {
       );
 
       await _libraryService.addItem(item);
+      UsageService.recordEvent('paper_saved');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

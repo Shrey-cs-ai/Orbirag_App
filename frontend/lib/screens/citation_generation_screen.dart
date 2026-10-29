@@ -10,6 +10,7 @@ import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
 import '../services/citation_service.dart';
 import '../services/library_service.dart';
+import '../services/usage_service.dart';
 
 class CitationGeneratorScreen extends StatefulWidget {
   const CitationGeneratorScreen({super.key});
@@ -150,6 +151,8 @@ class _CitationGeneratorScreenState extends State<CitationGeneratorScreen>
         setState(() => _isGenerating = false);
         return;
       }
+
+      UsageService.recordEvent('citation_generation');
 
       // Extract BEFORE setState so Dart sees non-nullable values inside the closure
       final inText = (res['in_text'] ?? '').toString();

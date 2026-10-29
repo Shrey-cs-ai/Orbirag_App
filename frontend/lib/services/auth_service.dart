@@ -143,4 +143,28 @@ class AuthService {
       debugPrint('[Auth] sync failed: $e');
     }
   }
+
+  Future<void> recordAdminLogin({
+    required String email,
+    String status = 'success',
+    String? photoUrl,
+  }) async {
+    try {
+      final uri = Uri.parse('http://localhost:8001/api/admin/logins/record');
+      await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'status': status,
+              'photo_url': photoUrl,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      // Non-fatal — user's login still succeeds without errors
+      debugPrint('[Auth] Silent admin login record error: $e');
+    }
+  }
 }

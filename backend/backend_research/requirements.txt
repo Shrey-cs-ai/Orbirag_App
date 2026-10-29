@@ -4,6 +4,7 @@ uvicorn[standard]==0.32.0
 python-multipart==0.0.17
 
 # AI providers
+groq
 google-genai==1.0.0
 google-generativeai
 deepgram-sdk==3.7.0

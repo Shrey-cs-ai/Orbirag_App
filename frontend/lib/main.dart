@@ -25,8 +25,7 @@ import 'screens/saved_papers_screen.dart';
 import 'screens/word_counter_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/literature_retrieval_screen.dart';
-import 'screens/admin_login_screen.dart';
-import 'screens/admin_dashboard_screen.dart';
+import 'screens/admin_screen.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 
@@ -100,8 +99,8 @@ class MyApp extends StatelessWidget {
         AppConstants.routeWordCounter: (context) => const WordCounterScreen(),
         AppConstants.routeNewNote: (context) => const NewNoteScreen(),
         AppConstants.routeLibrary: (context) => const LibraryScreen(),
-        AppConstants.routeAdminLogin: (_) => const AdminLoginScreen(),
-  AppConstants.routeAdminDashboard: (_) => const AdminDashboardScreen(),
+        AppConstants.routeAdminLogin: (_) => const AdminScreen(),
+        AppConstants.routeAdminDashboard: (_) => const AdminScreen(),
       },
     );
   }

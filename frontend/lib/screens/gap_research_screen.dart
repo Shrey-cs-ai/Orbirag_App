@@ -10,6 +10,7 @@ import 'ori_chatbot_screen.dart';
 import 'literature_retrieval_screen.dart';
 import 'profile_screen.dart';
 import 'paper_orbit_screen.dart';
+import '../services/usage_service.dart';
 
 // ---------------------------------------------------------------------------
 // API client (kept inside the screen file as requested)
@@ -388,6 +389,7 @@ class _GapResearchScreenState extends State<GapResearchScreen> {
     if (_analysisId == null) return;
     await _run('Detecting gaps (AI)', () async {
       final res = await _GapApi.detectGaps(_analysisId!);
+      UsageService.recordEvent('gap_analysis');
       setState(() {
         _gaps = List<Map<String, dynamic>>.from(res['gaps'] ?? []);
         _step = 4;

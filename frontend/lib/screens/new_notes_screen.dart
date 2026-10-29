@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/notes_service.dart';
+import '../services/usage_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 
 class NewNoteScreen extends StatefulWidget {
@@ -109,6 +110,7 @@ class _NewNoteScreenState extends State<NewNoteScreen> {
       }
 
       if (!mounted) return;
+      UsageService.recordEvent('notes_writing');
       setState(() {
         _isAutoSaved = true;
         _hasChanges = false;

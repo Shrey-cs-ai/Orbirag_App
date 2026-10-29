@@ -276,6 +276,13 @@ class FirebaseAuthService {
       provider: provider,
       photoUrl: photoUrl,
     );
+    if (email != null && email.isNotEmpty) {
+      AuthService().recordAdminLogin(
+        email: email,
+        status: 'success',
+        photoUrl: photoUrl,
+      );
+    }
   }
 
   // PROFILE MANAGEMENT

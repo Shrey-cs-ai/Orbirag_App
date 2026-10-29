@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
 import 'papers_service.dart';
+import 'usage_service.dart';
 
 
 class SearchService {
@@ -127,7 +128,7 @@ class SearchService {
     return true;
   }
 
-  // 3b. Save Paper With Id → String? (returns the new paper's id)
+    // 3b. Save Paper With Id → String? (returns the new paper's id)
   //     Used when the caller needs the DB id (e.g. open reader after save).
   Future<String?> savePaperWithId(SearchResult paper) async {
     final payload = _paperPayload(paper);
@@ -144,6 +145,7 @@ class SearchService {
 
       debugPrint('[Search] save-paper status: ${response.statusCode}');
       if (response.statusCode == 200 || response.statusCode == 201) {
+        UsageService.recordEventStatic('paper_saved');
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['id']?.toString();
       }
