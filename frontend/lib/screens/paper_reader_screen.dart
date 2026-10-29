@@ -73,7 +73,7 @@ class _PaperReaderScreenState extends State<PaperReaderScreen> {
 
     // Hook: paper_completed event
     if (_status == 'read' && _progress >= 1.0) {
-      UsageService().recordEvent('paper_completed',
+      UsageService.recordEvent('paper_completed',
           extra: {'paperId': widget.paper.id, 'title': widget.paper.title});
     }
   }

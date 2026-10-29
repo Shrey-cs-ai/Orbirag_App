@@ -17,7 +17,7 @@ class UsageService {
 
   // ── Instance API (used by paper_reader_screen, etc.) ──────
   /// Record a named usage event. Also POSTs to the admin usage endpoint.
-  Future<void> recordEvent(String event,
+  static Future<void> recordEvent(String event,
       {Map<String, dynamic>? extra}) async {
     debugPrint('[UsageService] event=$event extra=$extra');
     _postToBackend(event);
