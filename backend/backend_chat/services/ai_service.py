@@ -3,11 +3,35 @@
 import asyncio
 import os
 import json
+import re
 import httpx
 from pathlib import Path
 from typing import List, Optional
 
 from google import genai
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove common Markdown syntax so the UI always receives plain text."""
+    if not text:
+        return ""
+    # Links: keep the label, drop the URL
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    # Bullet markers at line start (before italic stripping)
+    text = re.sub(r"^\s*[-*•]\s+", "", text, flags=re.MULTILINE)
+    # Headers at line start
+    text = re.sub(r"^\s*#{1,6}\s*", "", text, flags=re.MULTILINE)
+    # Horizontal rules
+    text = re.sub(r"^\s*[-*_]\s*([-*_]\s*){2,}$", "", text, flags=re.MULTILINE)
+    # Bold, then italic
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    # Inline code
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    # Collapse 3+ blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
 
 try:
     from groq import AsyncGroq
@@ -81,11 +105,13 @@ GEMINI_MODELS = [
 
 # 4. SYSTEM PROMPTS
 ORI_SYSTEM = """You are Ori, a friendly AI research assistant for students.
-Be concise, warm, and cite sources when relevant. Never invent citations. Keep answers under 150 words."""
+Be concise, warm, and helpful. Use plain text only. Do not use markdown formatting.
+Politely decline questions unrelated to research, studying, or academic work.
+Never invent citations."""
 
-PAPER_SYSTEM = """You are analyzing a research paper. Answer based ONLY on
-the provided context. Cite page numbers when possible. Keep answers
-under 150 words."""
+PAPER_SYSTEM = """You are analyzing a research paper. Answer based ONLY on the
+provided context. Use plain text only. Do not use markdown formatting.
+Keep answers under 150 words."""
 
 
 # 5. RETRY + FALLBACK HELPERS
@@ -181,7 +207,7 @@ async def get_chat_response(message: str, history: list) -> str:
         parts.append("Ori:")
         prompt = "\n".join(parts)
 
-        return await _generate_with_fallback(prompt)
+        return _strip_markdown(await _generate_with_fallback(prompt))
     except Exception as e:
         print(f"[AI] chat error: {type(e).__name__}: {e}")
         return "I'm having trouble responding right now. Please try again."
@@ -215,7 +241,7 @@ async def get_paper_response(
         prompt = "\n".join(parts)
 
         print(f"[AI] paper prompt length: {len(prompt)} chars")
-        return await _generate_with_fallback(prompt)
+        return _strip_markdown(await _generate_with_fallback(prompt))
     except Exception as e:
         print(f"[AI] paper error: {type(e).__name__}: {e}")
         return "I'm having trouble responding right now. Please try again."

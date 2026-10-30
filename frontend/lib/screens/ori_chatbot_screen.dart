@@ -6,6 +6,7 @@ import '../services/usage_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/safe_chat_text.dart';
 import 'voice_input_screen.dart';
 
 class OriChatScreen extends StatefulWidget {
@@ -140,6 +141,67 @@ class _OriChatScreenState extends State<OriChatScreen> {
     }
   }
 
+  Widget _buildAiMessage(String message, String? time) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              gradient: AppColors.oriGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Text(
+                'O',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: SafeChatText(
+                    message,
+                    style: AppTextStyles.chatMessage.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (time != null) ...[
+                  const SizedBox(height: 4),
+                  Text(time, style: AppTextStyles.chatTime),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool showSuggestions = _messages.length <= 2;
@@ -259,12 +321,17 @@ class _OriChatScreenState extends State<OriChatScreen> {
                   );
                 }
                 final msg = _messages[index];
-                return ChatBubble(
-                  message: msg['text'],
-                  isUser: msg['isUser'],
-                  time: msg['time'],
-                  showAvatar: true,
-                );
+                final message = msg['text'] as String;
+                final isUser = msg['isUser'] as bool;
+                if (isUser) {
+                  return ChatBubble(
+                    message: message,
+                    isUser: true,
+                    time: msg['time'] as String?,
+                    showAvatar: true,
+                  );
+                }
+                return _buildAiMessage(message, msg['time'] as String?);
               },
             ),
           ),
