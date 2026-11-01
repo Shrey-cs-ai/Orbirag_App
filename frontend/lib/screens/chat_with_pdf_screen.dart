@@ -7,6 +7,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/safe_chat_text.dart';
 import 'voice_input_screen.dart';
 
 class ChatWithPdfScreen extends StatefulWidget {
@@ -368,11 +369,10 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: AppColors.textPrimary)),
+                SafeChatText(
+                  text,
+                  style: const TextStyle(fontSize: 15, height: 1.4),
+                ),
                 if (source != null) ...[
                   const SizedBox(height: 12),
                   const Divider(height: 1),
