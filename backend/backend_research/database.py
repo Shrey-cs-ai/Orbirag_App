@@ -59,4 +59,8 @@ def get_db():
     """
 def init_db():
     import models  # noqa: F401
+    try:
+        from models import admin_models  # noqa: F401
+    except Exception:
+        pass
     Base.metadata.create_all(bind=engine)

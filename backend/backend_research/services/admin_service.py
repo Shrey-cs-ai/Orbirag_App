@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.admin_models import (
-    Institution, Student, UsageEvent, AuditLog,
+    Institution, Student, UsageEvent, AuditLog, Invitation,
 )
 
 
@@ -36,7 +36,17 @@ def dashboard_summary(db: Session, institution_id: Optional[int]) -> dict:
     since_7 = datetime.utcnow() - timedelta(days=7)
     since_30 = datetime.utcnow() - timedelta(days=30)
     active_week = q.filter(Student.last_active_at >= since_7).count()
+    active_30 = q.filter(Student.last_active_at >= since_30).count()
     new_month = q.filter(Student.created_at >= since_30).count()
+
+    now = datetime.utcnow()
+    inv_q = db.query(Invitation).filter(
+        Invitation.status == "pending",
+        Invitation.expires_at > now,
+    )
+    if institution_id:
+        inv_q = inv_q.filter(Invitation.institution_id == institution_id)
+    pending_invites = inv_q.count()
 
     uq = db.query(UsageEvent)
     if institution_id:
@@ -46,19 +56,56 @@ def dashboard_summary(db: Session, institution_id: Optional[int]) -> dict:
     checks = uq.filter(UsageEvent.event_type.in_(
         ["citation_check", "plagiarism_check"])).count()
     projects = uq.filter(UsageEvent.event_type == "research_project").count()
+    lit_searches = uq.filter(UsageEvent.event_type == "literature_search").count()
+
+    # Calculate weekly trend points (last 4 weeks) for real-time graph
+    weekly_trend = []
+    for i in range(3, -1, -1):
+        w_start = now - timedelta(days=(i + 1) * 7)
+        w_end = now - timedelta(days=i * 7)
+        uq_w = db.query(func.count(func.distinct(UsageEvent.student_id))).filter(
+            UsageEvent.created_at >= w_start,
+            UsageEvent.created_at < w_end,
+        )
+        if institution_id:
+            uq_w = uq_w.filter(UsageEvent.institution_id == institution_id)
+        cnt = uq_w.scalar() or 0
+        weekly_trend.append(float(cnt))
+
+    if weekly_trend[-1] == 0 and active_week > 0:
+        weekly_trend[-1] = float(active_week)
+
+    # Top 3 real research activities
+    top_rows = (
+        db.query(UsageEvent.event_type, func.count(UsageEvent.id).label("cnt"))
+        .filter(UsageEvent.institution_id == institution_id if institution_id else True)
+        .group_by(UsageEvent.event_type)
+        .order_by(func.count(UsageEvent.id).desc())
+        .limit(3)
+        .all()
+    )
+    top_activities = [
+        {"event_type": r[0], "count": int(r[1])}
+        for r in top_rows
+    ]
 
     return {
         "total_licensed_students": total,
+        "total_licenses_used": active,
         "active_students": active,
+        "active_students_last_30_days": active_30,
         "active_this_week": active_week,
         "new_users_this_month": new_month,
+        "pending_invitations_count": pending_invites,
+        "weekly_trend": weekly_trend,
+        "top_activities": top_activities,
         "research_projects": projects,
         "papers_analyzed": papers,
         "gap_analyses": gaps,
         "ai_citation_checks": checks,
+        "literature_search": lit_searches,
+        "citation_checks": checks,
     }
-
-
 def feature_adoption(db: Session, institution_id: Optional[int]) -> dict:
     """Return % of active students who used each feature at least once."""
     sq = db.query(Student).filter(Student.status == "active")

@@ -91,6 +91,27 @@ class AdminApi {
       await _get('/api/admin/logins/recent') as List<dynamic>;
   static Future<List<dynamic>> audit() async =>
       await _get('/api/admin/audit-logs') as List<dynamic>;
+
+  static Future<Map<String, dynamic>> sendInvitation(String email,
+      {String role = 'student', String plan = 'student_pro'}) =>
+      _post('/api/admin/invitations',
+          {'email': email, 'role': role, 'plan': plan});
+
+  static Future<Map<String, dynamic>> sendBulkInvitations(List<String> emails,
+      {String role = 'student', String plan = 'student_pro'}) =>
+      _post('/api/admin/invitations/bulk',
+          {'emails': emails, 'role': role, 'plan': plan});
+
+  static Future<List<dynamic>> getInvitations({String? status}) async {
+    final qs = status != null ? '?status=$status' : '';
+    return await _get('/api/admin/invitations$qs') as List<dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> resendInvitation(String id) async =>
+      await _post('/api/admin/invitations/$id/resend', {});
+
+  static Future<Map<String, dynamic>> revokeInvitation(String id) async =>
+      await _post('/api/admin/invitations/$id/revoke', {});
 }
 
 // ============================================================
@@ -285,9 +306,9 @@ class _DashboardViewState extends State<_DashboardView>
       ),
       body: TabBarView(
         controller: _tabs,
-        children: const [
-          _DashboardTab(),
-          _StudentsTab(),
+        children: [
+          _DashboardTab(onNavigateToAudit: () => _tabs.animateTo(5)),
+          const _StudentsTab(),
           _AnalyticsTab(),
           _LoginsTab(),
           _PrivacyTab(),
@@ -302,7 +323,8 @@ class _DashboardViewState extends State<_DashboardView>
 // Tab 1 — Dashboard
 // ============================================================
 class _DashboardTab extends StatefulWidget {
-  const _DashboardTab();
+  final VoidCallback? onNavigateToAudit;
+  const _DashboardTab({this.onNavigateToAudit});
   @override
   State<_DashboardTab> createState() => _DashboardTabState();
 }
@@ -379,36 +401,39 @@ class _DashboardTabState extends State<_DashboardTab> {
             _buildHeader(),
             const SizedBox(height: 16),
 
-            // 2. License Usage Card
+            // 2. License Usage Card (Real-time data)
             LicenseUsageCard(
               used: (_inst!['used'] as num?)?.toInt() ?? 0,
               limit: (_inst!['license_limit'] as num?)?.toInt() ?? 0,
             ),
             const SizedBox(height: 16),
 
-            // 3. Row of two smaller cards (Active Students & Renewal)
+            // 3. Real-time Cards: Active Students, Pending Invites, Renewal, Plan
             _buildStatCardsRow(),
             const SizedBox(height: 16),
 
-            // 4. Research Activity Card
+            // 4. Research Activity Card (Top 3 real activities from DB)
             _buildResearchActivityCard(),
             const SizedBox(height: 16),
 
-            // 5. Trend Card
+            // 5. Real-time Trend Card
             TrendCard(
               activeThisWeek:
                   (_summary!['active_this_week'] as num?)?.toInt() ?? 0,
               totalActive: (_summary!['active_students'] as num?)?.toInt(),
+              weeklyPoints: (_summary!['weekly_trend'] as List<dynamic>?)
+                  ?.map((e) => (e as num).toDouble())
+                  .toList(),
             ),
 
             // 6. Needs attention strip
             _buildNeedsAttentionSection(),
 
-            // 7. Quick actions row
+            // 7. Quick actions row (Wired to dialogs)
             _buildQuickActionsRow(),
             const SizedBox(height: 16),
 
-            // 8. Recent Admin Activity
+            // 8. Recent Admin Activity (Clickable -> redirects to Audit Tab)
             _buildRecentActivityCard(),
             const SizedBox(height: 24),
           ],
@@ -534,12 +559,16 @@ class _DashboardTabState extends State<_DashboardTab> {
 
   Widget _buildStatCardsRow() {
     final activeStudents = (_summary?['active_students'] as num?)?.toInt() ?? 0;
-    final planRaw = (_inst?['plan'] ?? 'Standard').toString();
+    final pendingInvites = ((_inst?['pending'] ??
+            _summary?['pending_invitations_count']) as num?)
+            ?.toInt() ??
+        0;
+
+    final planRaw = (_inst?['plan'] ?? 'Campus Pro').toString();
     final planDisplayName = planRaw
         .replaceAll('_', ' ')
         .split(' ')
-        .map(
-            (w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
         .join(' ');
 
     final renewalDateStr = _inst?['renewal_date']?.toString();
@@ -557,50 +586,168 @@ class _DashboardTabState extends State<_DashboardTab> {
         ? 'Renews: $renewalDateFormatted'
         : 'No renewal date';
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: StatCard(
-              title: 'Active Students',
-              value: '$activeStudents',
-              helperText: 'Used Orbirag in the last 30 days',
-              icon: Icons.people_outline,
-              iconColor: AppColors.primary,
-            ),
+    return Column(
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: StatCard(
+                  title: 'Active Students',
+                  value: '$activeStudents',
+                  helperText: 'Used Orbirag in last 30 days',
+                  icon: Icons.people_outline,
+                  iconColor: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: StatCard(
+                  title: 'Pending Invites',
+                  value: '$pendingInvites',
+                  helperText: 'Awaiting student signup',
+                  badgeText: pendingInvites > 0 ? 'Pending' : null,
+                  badgeColor: AppColors.warning,
+                  icon: Icons.mark_email_unread_outlined,
+                  iconColor: AppColors.warning,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: StatCard(
-              title: 'Renewal',
-              value: planDisplayName,
-              helperText: renewalHelper,
-              badgeText: renewalDate != null ? '$daysLeft days left' : null,
-              badgeColor: daysLeft < 60 ? AppColors.warning : AppColors.success,
-              icon: Icons.calendar_today_outlined,
-              iconColor: AppColors.oriColor,
-            ),
+        ),
+        const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: StatCard(
+                  title: 'Campus Plan',
+                  value: planDisplayName,
+                  helperText: 'Institutional tier',
+                  icon: Icons.workspace_premium_outlined,
+                  iconColor: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: StatCard(
+                  title: 'Renewal Date',
+                  value: renewalDateFormatted,
+                  helperText: renewalHelper,
+                  badgeText: renewalDate != null ? '$daysLeft days left' : null,
+                  badgeColor: daysLeft < 60 ? AppColors.warning : AppColors.success,
+                  icon: Icons.calendar_today_outlined,
+                  iconColor: AppColors.oriColor,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildResearchActivityCard() {
-    final litSearches = ((_summary?['literature_search'] ??
-                _summary?['papers_analyzed']) as num?)
-            ?.toInt() ??
-        0;
-    final gapAnalyses =
-        ((_summary?['gap_analysis'] ?? _summary?['gap_analyses']) as num?)
-                ?.toInt() ??
-            0;
-    final citationChecks = ((_summary?['citation_checks'] ??
-                _summary?['ai_citation_checks']) as num?)
-            ?.toInt() ??
-        0;
-    final totalActions = litSearches + gapAnalyses + citationChecks;
+    final topList = (_summary?['top_activities'] as List<dynamic>?) ?? [];
+    int totalActions = 0;
+
+    final List<Map<String, dynamic>> displayRows = [];
+    if (topList.isNotEmpty) {
+      for (final item in topList) {
+        final rawType = (item['event_type'] ?? '').toString();
+        final count = (item['count'] as num?)?.toInt() ?? 0;
+        totalActions += count;
+
+        final IconData icon;
+        final Color iconColor;
+        final String label;
+
+        switch (rawType) {
+          case 'literature_search':
+          case 'literature_retrieval':
+            icon = Icons.menu_book_outlined;
+            iconColor = AppColors.primary;
+            label = 'Literature searches';
+            break;
+          case 'gap_analysis':
+            icon = Icons.insights_outlined;
+            iconColor = AppColors.oriColor;
+            label = 'Gap analyses';
+            break;
+          case 'citation_checks':
+          case 'citation_check':
+          case 'citation_generation':
+            icon = Icons.fact_check_outlined;
+            iconColor = AppColors.success;
+            label = 'Citation checks';
+            break;
+          case 'paper_analysis':
+            icon = Icons.auto_stories_outlined;
+            iconColor = AppColors.primary;
+            label = 'Paper analyses';
+            break;
+          case 'plagiarism_check':
+            icon = Icons.verified_user_outlined;
+            iconColor = AppColors.warning;
+            label = 'Plagiarism checks';
+            break;
+          default:
+            icon = Icons.analytics_outlined;
+            iconColor = AppColors.primary;
+            label = rawType
+                .replaceAll('_', ' ')
+                .split(' ')
+                .map((w) => w.isNotEmpty
+                    ? '${w[0].toUpperCase()}${w.substring(1)}'
+                    : '')
+                .join(' ');
+        }
+
+        displayRows.add({
+          'icon': icon,
+          'iconColor': iconColor,
+          'label': label,
+          'count': count,
+        });
+      }
+    } else {
+      final litSearches = ((_summary?['literature_search'] ??
+                  _summary?['papers_analyzed']) as num?)
+              ?.toInt() ??
+          0;
+      final gapAnalyses =
+          ((_summary?['gap_analysis'] ?? _summary?['gap_analyses']) as num?)
+                  ?.toInt() ??
+              0;
+      final citationChecks = ((_summary?['citation_checks'] ??
+                  _summary?['ai_citation_checks']) as num?)
+              ?.toInt() ??
+          0;
+      totalActions = litSearches + gapAnalyses + citationChecks;
+
+      displayRows.addAll([
+        {
+          'icon': Icons.menu_book_outlined,
+          'iconColor': AppColors.primary,
+          'label': 'Literature searches',
+          'count': litSearches,
+        },
+        {
+          'icon': Icons.insights_outlined,
+          'iconColor': AppColors.oriColor,
+          'label': 'Gap analyses',
+          'count': gapAnalyses,
+        },
+        {
+          'icon': Icons.fact_check_outlined,
+          'iconColor': AppColors.success,
+          'label': 'Citation checks',
+          'count': citationChecks,
+        },
+      ]);
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -649,26 +796,30 @@ class _DashboardTabState extends State<_DashboardTab> {
             ],
           ),
           const SizedBox(height: 16),
-          _buildActivityRow(
-            icon: Icons.menu_book_outlined,
-            iconColor: AppColors.primary,
-            label: 'Literature searches',
-            count: litSearches,
-          ),
-          const Divider(color: AppColors.border, height: 16),
-          _buildActivityRow(
-            icon: Icons.insights_outlined,
-            iconColor: AppColors.oriColor,
-            label: 'Gap analyses',
-            count: gapAnalyses,
-          ),
-          const Divider(color: AppColors.border, height: 16),
-          _buildActivityRow(
-            icon: Icons.fact_check_outlined,
-            iconColor: AppColors.success,
-            label: 'Citation checks',
-            count: citationChecks,
-          ),
+          if (displayRows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No research activity recorded yet.',
+                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            )
+          else
+            ...displayRows.asMap().entries.map((e) {
+              final idx = e.key;
+              final row = e.value;
+              return Column(
+                children: [
+                  if (idx > 0) const Divider(color: AppColors.border, height: 16),
+                  _buildActivityRow(
+                    icon: row['icon'] as IconData,
+                    iconColor: row['iconColor'] as Color,
+                    label: row['label'] as String,
+                    count: row['count'] as int,
+                  ),
+                ],
+              );
+            }),
         ],
       ),
     );
@@ -799,20 +950,20 @@ class _DashboardTabState extends State<_DashboardTab> {
         children: [
           _buildQuickActionButton(
             icon: Icons.person_add_outlined,
-            label: 'Add students',
-            onTap: () => _showQuickActionSnackBar('Add students'),
+            label: 'Add student',
+            onTap: _showInviteDialog,
           ),
           const SizedBox(width: 10),
           _buildQuickActionButton(
             icon: Icons.upload_file_outlined,
-            label: 'Bulk upload',
-            onTap: () => _showQuickActionSnackBar('Bulk upload'),
+            label: 'Bulk upload CSV',
+            onTap: _showBulkInviteDialog,
           ),
           const SizedBox(width: 10),
           _buildQuickActionButton(
             icon: Icons.mail_outline,
             label: 'Send invite',
-            onTap: () => _showQuickActionSnackBar('Send invite'),
+            onTap: _showInviteDialog,
           ),
         ],
       ),
@@ -846,18 +997,378 @@ class _DashboardTabState extends State<_DashboardTab> {
     );
   }
 
-  void _showQuickActionSnackBar(String action) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$action action clicked',
-          style: GoogleFonts.inter(color: AppColors.cardBg),
-        ),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 2),
-      ),
+  Future<void> _showInviteDialog() async {
+    final emailController = TextEditingController();
+    bool submitting = false;
+    String? dialogErr;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.cardBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              title: Text(
+                'Invite Student',
+                style: GoogleFonts.manrope(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Enter the student's campus email to send an access invitation.",
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: GoogleFonts.inter(
+                          fontSize: 14, color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Student Email',
+                        hintText: 'student@college.edu',
+                        labelStyle:
+                            GoogleFonts.inter(color: AppColors.textSecondary),
+                        hintStyle: GoogleFonts.inter(
+                            color: AppColors.textSecondary.withValues(alpha: 0.6)),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: AppColors.primary, width: 1.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.verified,
+                              size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Assigned Plan: Student Pro (Locked)',
+                              style: GoogleFonts.manrope(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (dialogErr != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          dialogErr!,
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.manrope(color: AppColors.textSecondary),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.background,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final email = emailController.text.trim().toLowerCase();
+                          if (email.isEmpty || !email.contains('@')) {
+                            setDialogState(() =>
+                                dialogErr = 'Please enter a valid email address');
+                            return;
+                          }
+                          setDialogState(() {
+                            submitting = true;
+                            dialogErr = null;
+                          });
+                          try {
+                            final messenger = ScaffoldMessenger.of(context);
+                            await AdminApi.sendInvitation(email);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (!mounted) return;
+                            _load();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Invitation created for $email!',
+                                  style: GoogleFonts.inter(),
+                                ),
+                                backgroundColor: AppColors.success,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } catch (e) {
+                            final errStr = e.toString();
+                            setDialogState(() {
+                              submitting = false;
+                              if (errStr.contains('No available licenses')) {
+                                dialogErr =
+                                    'License Limit Exceeded: You have reached your institution license limit. Please revoke pending invites or upgrade.';
+                              } else if (errStr.contains('already pending')) {
+                                dialogErr =
+                                    'An active invitation is already pending for this email. Check Students tab to resend.';
+                              } else {
+                                dialogErr = errStr
+                                    .replaceAll('Exception:', '')
+                                    .trim();
+                              }
+                            });
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.cardBg),
+                        )
+                      : Text('Send Invite',
+                          style: GoogleFonts.manrope(
+                              fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showBulkInviteDialog() async {
+    final emailsController = TextEditingController();
+    bool submitting = false;
+    String? dialogErr;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.cardBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              title: Text(
+                'Bulk Invite Students',
+                style: GoogleFonts.manrope(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Paste student email addresses separated by commas or new lines.',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: emailsController,
+                      maxLines: 5,
+                      keyboardType: TextInputType.multiline,
+                      style: GoogleFonts.inter(
+                          fontSize: 13, color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'student1@college.edu, student2@college.edu...',
+                        hintStyle: GoogleFonts.inter(
+                            color: AppColors.textSecondary
+                                .withValues(alpha: 0.5)),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        contentPadding: const EdgeInsets.all(12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: AppColors.primary, width: 1.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'All accounts will receive Student Pro access.',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    if (dialogErr != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          dialogErr!,
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Cancel',
+                      style:
+                          GoogleFonts.manrope(color: AppColors.textSecondary)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.background,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final text = emailsController.text;
+                          final emails = text
+                              .split(RegExp(r'[,\s]+'))
+                              .map((e) => e.trim().toLowerCase())
+                              .where((e) => e.contains('@'))
+                              .toSet()
+                              .toList();
+                          if (emails.isEmpty) {
+                            setDialogState(() => dialogErr =
+                                'Please enter at least one valid email address.');
+                            return;
+                          }
+                          setDialogState(() {
+                            submitting = true;
+                            dialogErr = null;
+                          });
+                          try {
+                            final messenger = ScaffoldMessenger.of(context);
+                            final res =
+                                await AdminApi.sendBulkInvitations(emails);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (!mounted) return;
+                            _load();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Bulk invites: ${res['sent']} sent, ${res['failed']} failed/skipped.',
+                                  style: GoogleFonts.inter(),
+                                ),
+                                backgroundColor: AppColors.primary,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } catch (e) {
+                            setDialogState(() {
+                              submitting = false;
+                              dialogErr = e
+                                  .toString()
+                                  .replaceAll('Exception:', '')
+                                  .trim();
+                            });
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.cardBg),
+                        )
+                      : Text('Send Batch',
+                          style: GoogleFonts.manrope(
+                              fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -881,13 +1392,31 @@ class _DashboardTabState extends State<_DashboardTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Recent Admin Activity',
-            style: GoogleFonts.manrope(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recent Admin Activity',
+                style: GoogleFonts.manrope(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (widget.onNavigateToAudit != null)
+                TextButton.icon(
+                  onPressed: widget.onNavigateToAudit,
+                  icon: const Icon(Icons.arrow_forward, size: 14, color: AppColors.primary),
+                  label: Text(
+                    'View Audit',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           if (recentLogs.isEmpty)
@@ -924,6 +1453,9 @@ class _DashboardTabState extends State<_DashboardTab> {
               } else if (action.contains('reset')) {
                 icon = Icons.lock_reset;
                 iconColor = AppColors.warning;
+              } else if (action.contains('invite')) {
+                icon = Icons.person_add_alt_1;
+                iconColor = AppColors.oriColor;
               } else {
                 icon = Icons.history;
                 iconColor = AppColors.oriColor;
@@ -957,12 +1489,19 @@ class _DashboardTabState extends State<_DashboardTab> {
                 children: [
                   if (index > 0)
                     const Divider(color: AppColors.border, height: 12),
-                  ActivityTile(
-                    icon: icon,
-                    iconColor: iconColor,
-                    title: title,
-                    subtitle: subtitle,
-                    time: time,
+                  InkWell(
+                    onTap: widget.onNavigateToAudit,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: ActivityTile(
+                        icon: icon,
+                        iconColor: iconColor,
+                        title: title,
+                        subtitle: subtitle,
+                        time: time,
+                      ),
+                    ),
                   ),
                 ],
               );
@@ -999,7 +1538,7 @@ class _StudentsTab extends StatefulWidget {
 class _StudentsTabState extends State<_StudentsTab> {
   final _search = TextEditingController();
   String? _statusFilter;
-  List<dynamic> _items = [];
+  List<Map<String, dynamic>> _items = [];
   bool _loading = false;
 
   @override
@@ -1012,12 +1551,57 @@ class _StudentsTabState extends State<_StudentsTab> {
     setState(() => _loading = true);
     try {
       final r = await AdminApi.students(
-          search: _search.text.trim(), status: _statusFilter);
+        search: _search.text.trim(),
+        status: (_statusFilter != null && _statusFilter != 'pending')
+            ? _statusFilter
+            : null,
+      );
+      final studentsList = ((r['items'] as List<dynamic>?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      List<dynamic> invites = [];
+      try {
+        invites = await AdminApi.getInvitations(status: 'pending');
+      } catch (_) {}
+
+      List<Map<String, dynamic>> combined = [];
+      if (_statusFilter == 'pending') {
+        combined = invites.map((inv) {
+          final m = Map<String, dynamic>.from(inv as Map);
+          m['is_invitation'] = true;
+          m['status'] = 'pending';
+          m['name'] = (m['email'] ?? '').toString().split('@')[0];
+          return m;
+        }).toList();
+      } else if (_statusFilter != null) {
+        combined = studentsList;
+      } else {
+        final pendingItems = invites.map((inv) {
+          final m = Map<String, dynamic>.from(inv as Map);
+          m['is_invitation'] = true;
+          m['status'] = 'pending';
+          m['name'] = (m['email'] ?? '').toString().split('@')[0];
+          return m;
+        }).toList();
+        combined = [...pendingItems, ...studentsList];
+      }
+
+      if (_search.text.trim().isNotEmpty) {
+        final q = _search.text.trim().toLowerCase();
+        combined = combined.where((item) {
+          final name = (item['name'] ?? '').toString().toLowerCase();
+          final email = (item['email'] ?? '').toString().toLowerCase();
+          return name.contains(q) || email.contains(q);
+        }).toList();
+      }
+
       if (!mounted) return;
-      setState(() => _items = r['items'] as List<dynamic>);
+      setState(() => _items = combined);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1026,7 +1610,91 @@ class _StudentsTabState extends State<_StudentsTab> {
   Color _statusColor(String? status) {
     if (status == 'active') return AppColors.success;
     if (status == 'suspended') return AppColors.warning;
+    if (status == 'pending') return AppColors.oriColor;
     return AppColors.error;
+  }
+
+  String _timeAgo(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '—';
+    final dt = DateTime.tryParse(isoString);
+    if (dt == null) return isoString;
+    final diff = DateTime.now().toUtc().difference(dt.toUtc());
+    if (diff.isNegative || diff.inSeconds < 45) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.month}/${dt.day}';
+  }
+
+  String _formatExpiry(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '7 days';
+    final dt = DateTime.tryParse(isoString);
+    if (dt == null) return '7 days';
+    final diff = dt.toUtc().difference(DateTime.now().toUtc());
+    if (diff.inDays > 0) return '${diff.inDays}d';
+    if (diff.inHours > 0) return '${diff.inHours}h';
+    return 'soon';
+  }
+
+  Future<void> _resendInvite(String id) async {
+    try {
+      await AdminApi.resendInvitation(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invitation resent successfully!'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _revokeInvite(String id) async {
+    try {
+      await AdminApi.revokeInvitation(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invitation revoked'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _toggleStudentBan(Map<String, dynamic> student) async {
+    final id = student['id'] as int;
+    final isBanned = student['status'] == 'banned';
+    final newStatus = isBanned ? 'active' : 'banned';
+    final reason = isBanned ? null : 'Institutional policy violation';
+    try {
+      await AdminApi.changeStatus(id, newStatus, reason: reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isBanned ? 'Student unbanned' : 'Student banned'),
+          backgroundColor: isBanned ? AppColors.success : AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   @override
@@ -1035,7 +1703,7 @@ class _StudentsTabState extends State<_StudentsTab> {
       color: AppColors.background,
       child: Column(
         children: [
-          // ── Search bar card ──────────────────────────────────────────
+          // ── Search & Filter bar card ─────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Container(
@@ -1112,6 +1780,8 @@ class _StudentsTabState extends State<_StudentsTab> {
                           DropdownMenuItem(
                               value: 'active', child: Text('Active')),
                           DropdownMenuItem(
+                              value: 'pending', child: Text('Pending')),
+                          DropdownMenuItem(
                               value: 'suspended', child: Text('Suspended')),
                           DropdownMenuItem(
                               value: 'banned', child: Text('Banned')),
@@ -1136,7 +1806,7 @@ class _StudentsTabState extends State<_StudentsTab> {
               minHeight: 2,
             ),
 
-          // ── List ─────────────────────────────────────────────────────
+          // ── Students & Invitations List ─────────────────────────────
           Expanded(
             child: _loading && _items.isEmpty
                 ? const AdminLoadingList()
@@ -1146,7 +1816,7 @@ class _StudentsTabState extends State<_StudentsTab> {
                         title: 'No students found',
                         subtitle: _statusFilter != null
                             ? 'Try clearing the filter or search'
-                            : 'Add students via the Dashboard quick actions',
+                            : 'Invite students from the Dashboard quick actions',
                       )
                     : RefreshIndicator(
                         onRefresh: _load,
@@ -1156,90 +1826,258 @@ class _StudentsTabState extends State<_StudentsTab> {
                           itemCount: _items.length,
                           itemBuilder: (context, i) {
                             final s = _items[i];
+                            final isInvite = s['is_invitation'] == true;
                             final sc = _statusColor(s['status']?.toString());
-                            final initial = (s['name'] ?? '?')
+                            final initial = (s['name'] ?? s['email'] ?? '?')
                                 .toString()
                                 .characters
                                 .first
                                 .toUpperCase();
-                            return GestureDetector(
-                              onTap: () => _openStudent(s['id'] as int),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.cardBg,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border:
-                                      Border.all(color: AppColors.border),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.textPrimary
-                                          .withValues(alpha: 0.03),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 22,
-                                      backgroundColor:
-                                          AppColors.primary.withValues(alpha: 0.12),
-                                      child: Text(
-                                        initial,
-                                        style: GoogleFonts.manrope(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+
+                            final lastLoginText = isInvite
+                                ? 'Invited · Expires in ${_formatExpiry(s['expires_at']?.toString())}'
+                                : (s['last_active_at'] != null
+                                    ? 'Last active: ${_timeAgo(s['last_active_at']?.toString())}'
+                                    : 'Never logged in');
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.cardBg,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.border),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.textPrimary
+                                        .withValues(alpha: 0.03),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: isInvite
+                                    ? null
+                                    : () => _openStudent(s['id'] as int),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 12),
+                                  child: Column(
+                                    children: [
+                                      Row(
                                         children: [
-                                          Text(
-                                            s['name'] ?? '',
-                                            style: GoogleFonts.manrope(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.textPrimary,
+                                          CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor: isInvite
+                                                ? AppColors.oriColor
+                                                    .withValues(alpha: 0.12)
+                                                : AppColors.primary
+                                                    .withValues(alpha: 0.12),
+                                            child: isInvite
+                                                ? const Icon(
+                                                    Icons.mail_outline,
+                                                    size: 18,
+                                                    color: AppColors.oriColor,
+                                                  )
+                                                : Text(
+                                                    initial,
+                                                    style: GoogleFonts.manrope(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: AppColors.primary,
+                                                    ),
+                                                  ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  (s['name'] ?? s['email'] ?? '')
+                                                      .toString(),
+                                                  style: GoogleFonts.manrope(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w700,
+                                                    color:
+                                                        AppColors.textPrimary,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  (s['email'] ?? '').toString(),
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: AppColors
+                                                        .textSecondary,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  lastLoginText,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    color: AppColors
+                                                        .textSecondary
+                                                        .withValues(alpha: 0.8),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            s['email'] ?? '',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12,
-                                              color: AppColors.textSecondary,
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: sc.withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: sc
+                                                      .withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              '${s['status']}'.toUpperCase(),
+                                              style: GoogleFonts.inter(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: sc,
+                                              ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: sc.withValues(alpha: 0.12),
-                                        borderRadius:
-                                            BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '${s['status']}'.toUpperCase(),
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: sc,
+                                      // Action buttons row
+                                      if (isInvite) ...[
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor:
+                                                    AppColors.primary,
+                                                side: const BorderSide(
+                                                    color: AppColors.border),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8)),
+                                              ),
+                                              onPressed: () => _resendInvite(
+                                                  s['id'].toString()),
+                                              icon: const Icon(Icons.refresh,
+                                                  size: 14),
+                                              label: Text('Resend',
+                                                  style: GoogleFonts.manrope(
+                                                      fontSize: 11)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: AppColors.error,
+                                                side: BorderSide(
+                                                    color: AppColors.error
+                                                        .withValues(alpha: 0.4)),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8)),
+                                              ),
+                                              onPressed: () => _revokeInvite(
+                                                  s['id'].toString()),
+                                              icon: const Icon(Icons.close,
+                                                  size: 14),
+                                              label: Text('Revoke',
+                                                  style: GoogleFonts.manrope(
+                                                      fontSize: 11)),
+                                            ),
+                                          ],
                                         ),
-                                      ),
-                                    ),
-                                  ],
+                                      ] else ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            if (s['status'] == 'banned')
+                                              ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.success,
+                                                  foregroundColor:
+                                                      AppColors.cardBg,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4),
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8)),
+                                                ),
+                                                onPressed: () =>
+                                                    _toggleStudentBan(s),
+                                                icon: const Icon(Icons.check,
+                                                    size: 14),
+                                                label: Text('Unban',
+                                                    style: GoogleFonts.manrope(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.bold)),
+                                              )
+                                            else if (s['status'] == 'active')
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor:
+                                                      AppColors.error,
+                                                  side: BorderSide(
+                                                      color: AppColors.error
+                                                          .withValues(
+                                                              alpha: 0.5)),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4),
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8)),
+                                                ),
+                                                onPressed: () =>
+                                                    _toggleStudentBan(s),
+                                                icon: const Icon(Icons.block,
+                                                    size: 14),
+                                                label: Text('Ban',
+                                                    style: GoogleFonts.manrope(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.bold)),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
@@ -1866,8 +2704,11 @@ class _LoginsTab extends StatefulWidget {
 
 class _LoginsTabState extends State<_LoginsTab> {
   List<dynamic>? _logins;
+  Map<String, dynamic>? _summary;
   String? _err;
   bool _loading = false;
+  String _dateFilter = 'all'; // all | today | 7days | 30days
+  String _statusFilter = 'all'; // all | success | blocked
 
   @override
   void initState() {
@@ -1879,9 +2720,15 @@ class _LoginsTabState extends State<_LoginsTab> {
     setState(() => _loading = true);
     try {
       final list = await AdminApi.getRecentLogins();
+      Map<String, dynamic>? summary;
+      try {
+        summary = await AdminApi.summary();
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _logins = list;
+          _summary = summary;
           _err = null;
           _loading = false;
         });
@@ -1902,13 +2749,29 @@ class _LoginsTabState extends State<_LoginsTab> {
     if (dt == null) return isoString;
     final diff = DateTime.now().toUtc().difference(dt.toUtc());
     if (diff.isNegative || diff.inSeconds < 45) return 'just now';
-    if (diff.inMinutes < 60)
+    if (diff.inMinutes < 60) {
       return '${diff.inMinutes} ${diff.inMinutes == 1 ? "min" : "mins"} ago';
-    if (diff.inHours < 24)
+    }
+    if (diff.inHours < 24) {
       return '${diff.inHours} ${diff.inHours == 1 ? "hr" : "hrs"} ago';
-    if (diff.inDays < 7)
+    }
+    if (diff.inDays < 7) {
       return '${diff.inDays} ${diff.inDays == 1 ? "day" : "days"} ago';
-    return isoString.length >= 10 ? isoString.substring(0, 10) : isoString;
+    }
+    return '${dt.month}/${dt.day}';
+  }
+
+  String _formatDateTime(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '—';
+    final dt = DateTime.tryParse(isoString);
+    if (dt == null) return isoString;
+    final local = dt.toLocal();
+    final y = local.year;
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
   }
 
   Widget _buildAvatar(String? photoUrl, String name) {
@@ -1917,7 +2780,7 @@ class _LoginsTabState extends State<_LoginsTab> {
     if (photoUrl != null && photoUrl.trim().isNotEmpty) {
       return CircleAvatar(
         radius: 20,
-        backgroundColor: AppColors.primary.withOpacity(0.12),
+        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
         backgroundImage: NetworkImage(photoUrl.trim()),
         onBackgroundImageError: (_, __) {},
         child: Text(
@@ -1929,7 +2792,7 @@ class _LoginsTabState extends State<_LoginsTab> {
     }
     return CircleAvatar(
       radius: 20,
-      backgroundColor: AppColors.primary.withOpacity(0.12),
+      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
       child: Text(
         initial,
         style: const TextStyle(
@@ -1945,7 +2808,7 @@ class _LoginsTabState extends State<_LoginsTab> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -1980,12 +2843,39 @@ class _LoginsTabState extends State<_LoginsTab> {
     );
   }
 
+  List<dynamic> _getFilteredLogins() {
+    final raw = _logins ?? [];
+    final now = DateTime.now().toUtc();
+
+    return raw.where((item) {
+      final log = item as Map<String, dynamic>;
+      final status = (log['status'] ?? 'success').toString().toLowerCase();
+
+      // Status filter
+      if (_statusFilter == 'success' && status != 'success') return false;
+      if (_statusFilter == 'blocked' && status == 'success') return false;
+
+      // Date filter
+      final timeStr = log['login_time']?.toString();
+      if (_dateFilter != 'all' && timeStr != null) {
+        final dt = DateTime.tryParse(timeStr);
+        if (dt != null) {
+          final diff = now.difference(dt.toUtc());
+          if (_dateFilter == 'today' && diff.inHours > 24) return false;
+          if (_dateFilter == '7days' && diff.inDays > 7) return false;
+          if (_dateFilter == '30days' && diff.inDays > 30) return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading && _logins == null) {
-      return ColoredBox(
+      return const ColoredBox(
         color: AppColors.background,
-        child: const AdminLoadingList(),
+        child: AdminLoadingList(),
       );
     }
     if (_err != null && _logins == null) {
@@ -1997,7 +2887,8 @@ class _LoginsTabState extends State<_LoginsTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.wifi_off_outlined, size: 48, color: AppColors.error),
+                const Icon(Icons.wifi_off_outlined,
+                    size: 48, color: AppColors.error),
                 const SizedBox(height: 12),
                 Text(
                   'Failed to load logins',
@@ -2033,117 +2924,334 @@ class _LoginsTabState extends State<_LoginsTab> {
       );
     }
 
-    final items = _logins ?? [];
+    final allLogins = _logins ?? [];
+    final filteredLogins = _getFilteredLogins();
 
-    if (items.isEmpty) {
-      return ColoredBox(
-        color: AppColors.background,
-        child: const AdminEmptyState(
-          icon: Icons.login_outlined,
-          title: 'No login activity yet',
-          subtitle: 'Recent logins will appear here',
-        ),
-      );
+    // Top Cards calculations
+    final activeStudents = (_summary?['active_students'] ??
+            _summary?['active_students_last_30_days'] ??
+            0) as int;
+    final totalLicensesUsed = (_summary?['total_licenses_used'] ??
+            _summary?['total_licensed_students'] ??
+            0) as int;
+
+    final now = DateTime.now().toUtc();
+    final uniqueEmailsThisMonth = <String>{};
+    final uniqueEmailsAllTime = <String>{};
+
+    for (final l in allLogins) {
+      final email = (l['email'] ?? '').toString().toLowerCase();
+      if (email.isEmpty) continue;
+      uniqueEmailsAllTime.add(email);
+      final t = l['login_time']?.toString();
+      if (t != null) {
+        final dt = DateTime.tryParse(t);
+        if (dt != null && now.difference(dt.toUtc()).inDays <= 30) {
+          uniqueEmailsThisMonth.add(email);
+        }
+      }
     }
+
+    final loggedInThisMonth = uniqueEmailsThisMonth.isNotEmpty
+        ? uniqueEmailsThisMonth.length
+        : activeStudents;
+    final neverLoggedIn = (totalLicensesUsed > uniqueEmailsAllTime.length)
+        ? (totalLicensesUsed - uniqueEmailsAllTime.length)
+        : 0;
 
     return ColoredBox(
       color: AppColors.background,
       child: RefreshIndicator(
         onRefresh: _load,
-        child: ListView.builder(
+        color: AppColors.primary,
+        child: ListView(
           padding: const EdgeInsets.all(16),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final log = items[index] as Map<String, dynamic>;
-            final name = (log['student_name'] ?? 'Unknown').toString();
-            final email = (log['email'] ?? '').toString();
-            final role = (log['role'] ?? 'student').toString();
-            final photoUrl = log['photo_url']?.toString();
-            final time = log['login_time']?.toString();
-            final status = (log['status'] ?? 'success').toString();
+          children: [
+            // ── 1. Top Stat Cards ──────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: StatCard(
+                    title: 'Active Students',
+                    value: '$activeStudents',
+                    helperText: 'Enrolled & active',
+                    icon: Icons.people_outline,
+                    iconColor: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: StatCard(
+                    title: 'Logged in Month',
+                    value: '$loggedInThisMonth',
+                    helperText: 'Past 30 days',
+                    icon: Icons.login,
+                    iconColor: AppColors.success,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: StatCard(
+                    title: 'Never Logged In',
+                    value: '$neverLoggedIn',
+                    helperText: 'Awaiting first login',
+                    icon: Icons.person_off_outlined,
+                    iconColor: AppColors.warning,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
+            // ── 2. Privacy Notice Banner ──────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.cardBg,
+                color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.textPrimary.withValues(alpha: 0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.lock_outline,
+                      color: AppColors.primary, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '🔒 Login activity shown here is limited to members of your institution. Private student research and content are not included.',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                        height: 1.35,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
-                child: Row(
-                  children: [
-                    _buildAvatar(photoUrl, name),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  name,
-                                  style: GoogleFonts.manrope(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              _buildRoleBadge(role),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            email,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── 3. Filter Bar ──────────────────────────────────────────
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterChip('All Time', _dateFilter == 'all', () {
+                    setState(() => _dateFilter = 'all');
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Today', _dateFilter == 'today', () {
+                    setState(() => _dateFilter = 'today');
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Last 7 days', _dateFilter == '7days', () {
+                    setState(() => _dateFilter = '7days');
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Last 30 days', _dateFilter == '30days', () {
+                    setState(() => _dateFilter = '30days');
+                  }),
+                  const SizedBox(width: 16),
+                  Container(
+                    height: 20,
+                    width: 1,
+                    color: AppColors.border,
+                  ),
+                  const SizedBox(width: 16),
+                  _buildFilterChip('All Status', _statusFilter == 'all', () {
+                    setState(() => _statusFilter = 'all');
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Success', _statusFilter == 'success', () {
+                    setState(() => _statusFilter = 'success');
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Blocked', _statusFilter == 'blocked', () {
+                    setState(() => _statusFilter = 'blocked');
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── 4. Log Events Table / Cards ────────────────────────────
+            if (filteredLogins.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: AdminEmptyState(
+                  icon: Icons.login_outlined,
+                  title: 'No login activity matching filters',
+                  subtitle: 'Try adjusting the date range or status filter',
+                ),
+              )
+            else
+              ...filteredLogins.map((item) {
+                final log = item as Map<String, dynamic>;
+                final name = (log['student_name'] ?? 'Unknown').toString();
+                final email = (log['email'] ?? '').toString();
+                final role = (log['role'] ?? 'student').toString();
+                final photoUrl = log['photo_url']?.toString();
+                final time = log['login_time']?.toString();
+                final status = (log['status'] ?? 'success').toString();
+                final device = (log['device'] ?? 'Mobile App').toString();
+                final method = (log['method'] ?? 'Firebase Auth').toString();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.textPrimary.withValues(alpha: 0.03),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _timeAgo(time),
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                          ),
+                        Row(
+                          children: [
+                            _buildAvatar(photoUrl, name),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          name,
+                                          style: GoogleFonts.manrope(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildRoleBadge(role),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    email,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _timeAgo(time),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                _buildStatusBadge(status),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        _buildStatusBadge(status),
+                        const SizedBox(height: 8),
+                        const Divider(color: AppColors.border, height: 1),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _formatDateTime(time),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  device,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text('•',
+                                    style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  method,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            );
-          },
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.primary.withValues(alpha: 0.15),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+            color: isSelected ? AppColors.cardBg : AppColors.primary,
+          ),
         ),
       ),
     );
   }
 }
 
-// ============================================================
-// Tab 4 — Privacy Center
-// ============================================================
 class _PrivacyTab extends StatelessWidget {
   const _PrivacyTab();
 

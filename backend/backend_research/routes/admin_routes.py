@@ -1,4 +1,5 @@
 """Admin API — /api/admin/*. All routes require Bearer token except /login."""
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.admin_models import (
-    Institution, AdminUser, AdminSession, Student, UsageEvent, StudentLoginLog,
+    Institution, AdminUser, AdminSession, Student, UsageEvent, StudentLoginLog, Invitation,
 )
 from services import admin_auth as auth
 from services import admin_service as svc
@@ -39,6 +40,25 @@ class RegisterStudentRequest(BaseModel):
     name: Optional[str] = None
 
 
+
+class InviteStudentRequest(BaseModel):
+    email: str
+    role: str = "student"
+    plan: str = "student_pro"
+
+
+class BulkInviteRequest(BaseModel):
+    emails: list[str]
+    role: str = "student"
+    plan: str = "student_pro"
+
+
+class AcceptInviteRequest(BaseModel):
+    token: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = "Student123!"
+    name: Optional[str] = None
+
 class RecordLoginRequest(BaseModel):
     email: str
     status: str = "success"  # "success" | "blocked"
@@ -53,6 +73,21 @@ def _admin_dict(a: AdminUser) -> dict:
         "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
     }
 
+
+
+def _invitation_dict(inv: Invitation) -> dict:
+    return {
+        "id": inv.id,
+        "email": inv.email,
+        "institution_id": inv.institution_id,
+        "role": inv.role,
+        "plan": inv.plan,
+        "status": inv.status,
+        "invited_by": inv.invited_by,
+        "created_at": inv.created_at.isoformat() if inv.created_at else None,
+        "expires_at": inv.expires_at.isoformat() if inv.expires_at else None,
+        "accepted_at": inv.accepted_at.isoformat() if inv.accepted_at else None,
+    }
 
 def _student_dict(s: Student) -> dict:
     # Deliberately excludes any research content.
@@ -112,12 +147,19 @@ def get_institution(admin: AdminUser = Depends(auth.current_admin),
     inst = db.query(Institution).filter(Institution.id == admin.institution_id).first()
     if not inst:
         raise HTTPException(404, "No institution")
-    used = db.query(Student).filter(Student.institution_id == inst.id).count()
+    used = db.query(Student).filter(Student.institution_id == inst.id, Student.status != "banned").count()
+    now = datetime.utcnow()
+    pending = db.query(Invitation).filter(
+        Invitation.institution_id == inst.id,
+        Invitation.status == "pending",
+        Invitation.expires_at > now,
+    ).count()
     return {
         "id": inst.id, "name": inst.name, "plan": inst.plan,
         "license_limit": inst.license_limit,
         "used": used,
-        "available": max(0, inst.license_limit - used),
+        "pending": pending,
+        "available": max(0, inst.license_limit - (used + pending)),
         "subscription_status": inst.subscription_status,
         "renewal_date": inst.renewal_date.isoformat() if inst.renewal_date else None,
     }
@@ -292,27 +334,31 @@ def record_login(req: RecordLoginRequest, db: Session = Depends(get_db)):
 def recent_logins(limit: int = 50,
                   admin: AdminUser = Depends(auth.current_admin),
                   db: Session = Depends(get_db)):
-    """Protected endpoint: fetches last 50 login logs joined with Student table."""
+    """Protected endpoint: STRICTLY filtered to students of the admin's institution."""
+    if not admin.institution_id:
+        return []
+
+    # Get all students belonging to the admin's institution
+    inst_students = db.query(Student).filter(Student.institution_id == admin.institution_id).all()
+    inst_student_ids = {s.id for s in inst_students}
+    inst_emails = {s.email.lower() for s in inst_students if s.email}
+    students_by_id = {s.id: s for s in inst_students}
+    students_by_email = {s.email.lower(): s for s in inst_students if s.email}
+
+    if not inst_student_ids and not inst_emails:
+        return []
+
+    # Fetch login logs matching students in this institution
     logs = (
         db.query(StudentLoginLog)
+        .filter(
+            (StudentLoginLog.student_id.in_(inst_student_ids)) |
+            (StudentLoginLog.email.in_(inst_emails))
+        )
         .order_by(StudentLoginLog.login_time.desc())
         .limit(limit)
         .all()
     )
-
-    emails = {l.email.lower() for l in logs if l.email}
-    student_ids = {l.student_id for l in logs if l.student_id}
-
-    students_by_id = {}
-    students_by_email = {}
-    if emails or student_ids:
-        st_query = db.query(Student).filter(
-            (Student.id.in_(student_ids)) | (Student.email.in_(emails))
-        ).all()
-        for s in st_query:
-            students_by_id[s.id] = s
-            if s.email:
-                students_by_email[s.email.lower()] = s
 
     results = []
     for log_item in logs:
@@ -322,6 +368,10 @@ def recent_logins(limit: int = 50,
         elif log_item.email and log_item.email.lower() in students_by_email:
             st = students_by_email[log_item.email.lower()]
 
+        # Strictly skip any log whose student is not confirmed in this institution
+        if not st or st.institution_id != admin.institution_id:
+            continue
+
         results.append({
             "id": log_item.id,
             "student_name": st.name if (st and st.name) else (log_item.email.split("@")[0] if log_item.email else "Unknown"),
@@ -330,6 +380,8 @@ def recent_logins(limit: int = 50,
             "photo_url": st.photo_url if st else None,
             "login_time": log_item.login_time.isoformat() if log_item.login_time else None,
             "status": log_item.status,
+            "device": "Mobile App",
+            "method": "Firebase Auth",
         })
     return results
 
@@ -392,3 +444,302 @@ def register_student(req: RegisterStudentRequest, db: Session = Depends(get_db))
     )
     db.add(s); db.commit(); db.refresh(s)
     return {"id": s.id, "created": True}
+
+# ---------------- SaaS Invitation System ----------------
+@router.post("/invitations")
+def invite_student(
+    req: InviteStudentRequest,
+    admin: AdminUser = Depends(auth.current_admin),
+    db: Session = Depends(get_db),
+):
+    inst = db.query(Institution).filter(Institution.id == admin.institution_id).first()
+    if not inst:
+        raise HTTPException(404, "Institution not found")
+
+    email = req.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(400, "Invalid email address")
+
+    # Check license limit
+    current_students = db.query(Student).filter(
+        Student.institution_id == inst.id,
+        Student.status != "banned",
+    ).count()
+
+    now = datetime.utcnow()
+    pending_invites = db.query(Invitation).filter(
+        Invitation.institution_id == inst.id,
+        Invitation.status == "pending",
+        Invitation.expires_at > now,
+    ).count()
+
+    if (current_students + pending_invites) >= inst.license_limit:
+        raise HTTPException(400, "No available licenses.")
+
+    # Check if student is already active in this institution
+    existing_student = db.query(Student).filter(
+        Student.email == email,
+        Student.institution_id == inst.id,
+    ).first()
+    if existing_student and existing_student.status != "banned":
+        raise HTTPException(400, "Student is already enrolled in your institution.")
+
+    # Check if pending invite already exists
+    existing_invite = db.query(Invitation).filter(
+        Invitation.email == email,
+        Invitation.institution_id == inst.id,
+        Invitation.status == "pending",
+        Invitation.expires_at > now,
+    ).first()
+    if existing_invite:
+        raise HTTPException(
+            400,
+            "An active invitation is already pending for this email. You can resend it.",
+        )
+
+    invitation = Invitation(
+        id=str(uuid.uuid4()),
+        email=email,
+        institution_id=inst.id,
+        role=req.role,
+        plan=req.plan,
+        status="pending",
+        invited_by=admin.id,
+        created_at=now,
+        expires_at=now + timedelta(days=7),
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    svc.log_action(db, admin.id, inst.id, "invite_student", details=f"Invited {email}")
+
+    # For MVP, print invite link to console
+    invite_link = f"http://localhost:8001/api/admin/auth/accept-invite?token={invitation.id}"
+    print(f"\n[INVITATION LINK GENERATED]\nTo: {email}\nLink: {invite_link}\nExpires: {invitation.expires_at}\n")
+
+    return {
+        "ok": True,
+        "invitation": _invitation_dict(invitation),
+        "invite_link": invite_link,
+    }
+
+
+@router.post("/invitations/bulk")
+def bulk_invite(
+    req: BulkInviteRequest,
+    admin: AdminUser = Depends(auth.current_admin),
+    db: Session = Depends(get_db),
+):
+    inst = db.query(Institution).filter(Institution.id == admin.institution_id).first()
+    if not inst:
+        raise HTTPException(404, "Institution not found")
+
+    current_students = db.query(Student).filter(
+        Student.institution_id == inst.id,
+        Student.status != "banned",
+    ).count()
+
+    now = datetime.utcnow()
+    pending_invites = db.query(Invitation).filter(
+        Invitation.institution_id == inst.id,
+        Invitation.status == "pending",
+        Invitation.expires_at > now,
+    ).count()
+
+    available_licenses = max(0, inst.license_limit - (current_students + pending_invites))
+    if available_licenses <= 0:
+        raise HTTPException(400, "No available licenses.")
+
+    sent = 0
+    failed = 0
+    results = []
+
+    cleaned_emails = []
+    seen = set()
+    for raw in req.emails:
+        e = raw.strip().lower()
+        if e and "@" in e and e not in seen:
+            seen.add(e)
+            cleaned_emails.append(e)
+
+    for email in cleaned_emails:
+        if available_licenses <= 0:
+            failed += 1
+            results.append({"email": email, "status": "failed", "reason": "No licenses left"})
+            continue
+
+        existing_student = db.query(Student).filter(
+            Student.email == email,
+            Student.institution_id == inst.id,
+        ).first()
+        if existing_student and existing_student.status != "banned":
+            failed += 1
+            results.append({"email": email, "status": "failed", "reason": "Already enrolled"})
+            continue
+
+        existing_invite = db.query(Invitation).filter(
+            Invitation.email == email,
+            Invitation.institution_id == inst.id,
+            Invitation.status == "pending",
+            Invitation.expires_at > now,
+        ).first()
+        if existing_invite:
+            failed += 1
+            results.append({"email": email, "status": "failed", "reason": "Already pending"})
+            continue
+
+        invitation = Invitation(
+            id=str(uuid.uuid4()),
+            email=email,
+            institution_id=inst.id,
+            role=req.role,
+            plan=req.plan,
+            status="pending",
+            invited_by=admin.id,
+            created_at=now,
+            expires_at=now + timedelta(days=7),
+        )
+        db.add(invitation)
+        available_licenses -= 1
+        sent += 1
+        results.append({"email": email, "status": "sent", "id": invitation.id})
+
+    db.commit()
+    svc.log_action(db, admin.id, inst.id, "bulk_invite", details=f"Sent {sent}, Failed {failed}")
+    return {"sent": sent, "failed": failed, "results": results}
+
+
+@router.get("/invitations")
+def list_invitations(
+    status: Optional[str] = None,
+    admin: AdminUser = Depends(auth.current_admin),
+    db: Session = Depends(get_db),
+):
+    q = db.query(Invitation).filter(Invitation.institution_id == admin.institution_id)
+    if status:
+        q = q.filter(Invitation.status == status)
+    invites = q.order_by(Invitation.created_at.desc()).all()
+    now = datetime.utcnow()
+    for inv in invites:
+        if inv.status == "pending" and inv.expires_at < now:
+            inv.status = "expired"
+    db.commit()
+    return [_invitation_dict(inv) for inv in invites]
+
+
+@router.post("/invitations/{invite_id}/resend")
+def resend_invitation(
+    invite_id: str,
+    admin: AdminUser = Depends(auth.current_admin),
+    db: Session = Depends(get_db),
+):
+    inv = db.query(Invitation).filter(
+        Invitation.id == invite_id,
+        Invitation.institution_id == admin.institution_id,
+    ).first()
+    if not inv:
+        raise HTTPException(404, "Invitation not found")
+
+    now = datetime.utcnow()
+    inv.status = "pending"
+    inv.expires_at = now + timedelta(days=7)
+    db.commit()
+
+    svc.log_action(db, admin.id, admin.institution_id, "resend_invite", details=f"Resent to {inv.email}")
+    link = f"http://localhost:8001/api/admin/auth/accept-invite?token={inv.id}"
+    print(f"\n[INVITATION RESENT]\nTo: {inv.email}\nLink: {link}\n")
+    return {"ok": True, "invitation": _invitation_dict(inv), "invite_link": link}
+
+
+@router.post("/invitations/{invite_id}/revoke")
+def revoke_invitation(
+    invite_id: str,
+    admin: AdminUser = Depends(auth.current_admin),
+    db: Session = Depends(get_db),
+):
+    inv = db.query(Invitation).filter(
+        Invitation.id == invite_id,
+        Invitation.institution_id == admin.institution_id,
+    ).first()
+    if not inv:
+        raise HTTPException(404, "Invitation not found")
+
+    inv.status = "revoked"
+    db.commit()
+    svc.log_action(db, admin.id, admin.institution_id, "revoke_invite", details=f"Revoked for {inv.email}")
+    return {"ok": True, "invitation": _invitation_dict(inv)}
+
+
+@router.post("/auth/accept-invite")
+def accept_invite(req: AcceptInviteRequest, db: Session = Depends(get_db)):
+    """Public endpoint: Student accepts campus invite, links account to institution."""
+    inv = None
+    if req.token:
+        inv = db.query(Invitation).filter(Invitation.id == req.token.strip()).first()
+    elif req.email:
+        inv = (
+            db.query(Invitation)
+            .filter(
+                Invitation.email == req.email.strip().lower(),
+                Invitation.status == "pending",
+            )
+            .order_by(Invitation.created_at.desc())
+            .first()
+        )
+
+    if not inv:
+        raise HTTPException(404, "Invitation not found.")
+
+    now = datetime.utcnow()
+    if inv.status != "pending":
+        raise HTTPException(400, f"Invitation cannot be accepted because it is {inv.status}.")
+    if inv.expires_at < now:
+        inv.status = "expired"
+        db.commit()
+        raise HTTPException(400, "Invitation has expired.")
+
+    email = inv.email.strip().lower()
+    student = db.query(Student).filter(Student.email == email).first()
+    pwd_hash = auth.hash_password(req.password or "Student123!")
+
+    if student:
+        student.institution_id = inv.institution_id
+        student.status = "active"
+        student.role = inv.role
+        student.password_hash = pwd_hash
+        if req.name and req.name.strip():
+            student.name = req.name.strip()
+        student.last_active_at = now
+    else:
+        student = Student(
+            email=email,
+            name=req.name.strip() if req.name else email.split("@")[0],
+            institution_id=inv.institution_id,
+            role=inv.role,
+            status="active",
+            password_hash=pwd_hash,
+            created_at=now,
+            last_active_at=now,
+        )
+        db.add(student)
+        db.flush()
+
+    inv.status = "accepted"
+    inv.accepted_at = now
+
+    login_log = StudentLoginLog(
+        student_id=student.id,
+        email=student.email,
+        login_time=now,
+        status="success",
+    )
+    db.add(login_log)
+    db.commit()
+    db.refresh(student)
+
+    return {
+        "ok": True,
+        "message": "Invitation accepted successfully",
+        "student": _student_dict(student),
+    }

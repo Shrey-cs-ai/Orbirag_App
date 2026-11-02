@@ -9,7 +9,8 @@ class UsageService {
 
   /// Records an aggregated usage event for the current logged-in student.
   /// Fire-and-forget: does not block the UI and silently catches any errors.
-  static void recordEvent(String eventType) {
+  static Future<void> recordEvent(String eventType,
+      {Map<String, dynamic>? extra}) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final email = user?.email;
@@ -39,5 +40,10 @@ class UsageService {
     } catch (e) {
       debugPrint('[UsageService] Error recording event $eventType: $e');
     }
+  }
+
+  // Also support static alias if needed
+  static void recordEventStatic(String eventType) {
+    recordEvent(eventType);
   }
 }
