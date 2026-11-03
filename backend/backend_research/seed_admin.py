@@ -62,20 +62,7 @@ try:
         db.add(s); students.append(s)
     db.commit()
 
-    # Sample usage events over the last 6 months
-    now = datetime.utcnow()
-    for _ in range(400):
-        s = random.choice(students)
-        if s.status == "banned":
-            continue
-        ev = UsageEvent(
-            student_id=s.id,
-            institution_id=inst.id,
-            event_type=random.choice(features),
-            created_at=now - timedelta(days=random.randint(0, 180)),
-        )
-        db.add(ev)
-    db.commit()
+    # No mock usage events — only real student activity is tracked
 
     print("✅ Seed complete")
     print(f"   Institution: {inst.name} (id={inst.id})")

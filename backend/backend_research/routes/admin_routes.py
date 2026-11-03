@@ -7,6 +7,10 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from database import get_db
+try:
+    from models import User
+except Exception:
+    User = None
 from models.admin_models import (
     Institution, AdminUser, AdminSession, Student, UsageEvent, StudentLoginLog, Invitation,
 )
@@ -63,6 +67,7 @@ class RecordLoginRequest(BaseModel):
     email: str
     status: str = "success"  # "success" | "blocked"
     photo_url: Optional[str] = None
+    avatar_base64: Optional[str] = None
 
 
 # ---------------- Serializers ----------------
@@ -94,6 +99,7 @@ def _student_dict(s: Student) -> dict:
     return {
         "id": s.id, "email": s.email, "name": s.name, "role": s.role,
         "photo_url": s.photo_url,
+        "avatar_base64": getattr(s, "avatar_base64", None) or s.photo_url,
         "status": s.status, "institution_id": s.institution_id,
         "ban_reason": s.ban_reason,
         "banned_at": s.banned_at.isoformat() if s.banned_at else None,
@@ -187,6 +193,16 @@ def list_students(
     rows = (q.order_by(Student.created_at.desc())
               .offset((page - 1) * page_size)
               .limit(page_size).all())
+    if User is not None:
+        for s in rows:
+            if not getattr(s, "avatar_base64", None) and s.email:
+                try:
+                    u = db.query(User).filter(User.email == s.email.strip().lower()).first()
+                    if u and u.avatar_base64:
+                        s.avatar_base64 = u.avatar_base64
+                        db.commit()
+                except Exception:
+                    pass
     return {
         "total": total, "page": page, "page_size": page_size,
         "items": [_student_dict(s) for s in rows],
@@ -316,6 +332,8 @@ def record_login(req: RecordLoginRequest, db: Session = Depends(get_db)):
     else:
         if req.photo_url:
             student.photo_url = req.photo_url
+        if req.avatar_base64:
+            student.avatar_base64 = req.avatar_base64
         student.last_active_at = datetime.utcnow()
 
     log_entry = StudentLoginLog(
@@ -372,12 +390,25 @@ def recent_logins(limit: int = 50,
         if not st or st.institution_id != admin.institution_id:
             continue
 
+        avatar_b64 = getattr(st, "avatar_base64", None) if st else None
+        if not avatar_b64 and log_item.email and User is not None:
+            try:
+                u = db.query(User).filter(User.email == log_item.email.strip().lower()).first()
+                if u and u.avatar_base64:
+                    avatar_b64 = u.avatar_base64
+                    if st:
+                        st.avatar_base64 = avatar_b64
+                        db.commit()
+            except Exception:
+                pass
+
         results.append({
             "id": log_item.id,
             "student_name": st.name if (st and st.name) else (log_item.email.split("@")[0] if log_item.email else "Unknown"),
             "email": log_item.email,
             "role": st.role if (st and st.role) else "student",
             "photo_url": st.photo_url if st else None,
+            "avatar_base64": avatar_b64 or (st.photo_url if st else None),
             "login_time": log_item.login_time.isoformat() if log_item.login_time else None,
             "status": log_item.status,
             "device": "Mobile App",

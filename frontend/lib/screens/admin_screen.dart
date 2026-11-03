@@ -1527,6 +1527,61 @@ class _DashboardTabState extends State<_DashboardTab> {
 }
 
 // ============================================================
+// ============================================================
+// Shared Avatar Helper
+// ============================================================
+Widget _buildAvatarImage({
+  String? avatarBase64,
+  String? photoUrl,
+  required String initial,
+  double radius = 20,
+}) {
+  if (avatarBase64 != null && avatarBase64.trim().isNotEmpty) {
+    try {
+      final raw = avatarBase64.trim();
+      final clean = raw.contains(',') ? raw.split(',').last : raw;
+      final bytes = base64Decode(clean);
+      if (bytes.isNotEmpty) {
+        return CircleAvatar(
+          radius: radius,
+          backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+          backgroundImage: MemoryImage(bytes),
+        );
+      }
+    } catch (_) {}
+  }
+
+  if (photoUrl != null && photoUrl.trim().isNotEmpty && photoUrl.startsWith('http')) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+      backgroundImage: NetworkImage(photoUrl.trim()),
+      onBackgroundImageError: (_, __) {},
+      child: Text(
+        initial,
+        style: GoogleFonts.manrope(
+          fontSize: radius * 0.75,
+          fontWeight: FontWeight.bold,
+          color: AppColors.primary,
+        ),
+      ),
+    );
+  }
+
+  return CircleAvatar(
+    radius: radius,
+    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+    child: Text(
+      initial,
+      style: GoogleFonts.manrope(
+        fontSize: radius * 0.75,
+        fontWeight: FontWeight.bold,
+        color: AppColors.primary,
+      ),
+    ),
+  );
+}
+
 // Tab 2 — Students
 // ============================================================
 class _StudentsTab extends StatefulWidget {
@@ -1867,29 +1922,26 @@ class _StudentsTabState extends State<_StudentsTab> {
                                     children: [
                                       Row(
                                         children: [
-                                          CircleAvatar(
-                                            radius: 20,
-                                            backgroundColor: isInvite
-                                                ? AppColors.oriColor
-                                                    .withValues(alpha: 0.12)
-                                                : AppColors.primary
-                                                    .withValues(alpha: 0.12),
-                                            child: isInvite
-                                                ? const Icon(
+                                          isInvite
+                                              ? CircleAvatar(
+                                                  radius: 20,
+                                                  backgroundColor: AppColors
+                                                      .oriColor
+                                                      .withValues(alpha: 0.12),
+                                                  child: const Icon(
                                                     Icons.mail_outline,
                                                     size: 18,
                                                     color: AppColors.oriColor,
-                                                  )
-                                                : Text(
-                                                    initial,
-                                                    style: GoogleFonts.manrope(
-                                                      fontSize: 15,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: AppColors.primary,
-                                                    ),
                                                   ),
-                                          ),
+                                                )
+                                              : _buildAvatarImage(
+                                                  avatarBase64: s['avatar_base64']
+                                                      ?.toString(),
+                                                  photoUrl:
+                                                      s['photo_url']?.toString(),
+                                                  initial: initial,
+                                                  radius: 20,
+                                                ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Column(
@@ -2155,21 +2207,15 @@ class _StudentProfileSheet extends StatelessWidget {
                 ),
               ),
               Center(
-                child: CircleAvatar(
+                child: _buildAvatarImage(
+                  avatarBase64: s['avatar_base64']?.toString(),
+                  photoUrl: s['photo_url']?.toString(),
+                  initial: (s['name'] ?? '?')
+                      .toString()
+                      .characters
+                      .first
+                      .toUpperCase(),
                   radius: 32,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                  child: Text(
-                    (s['name'] ?? '?')
-                        .toString()
-                        .characters
-                        .first
-                        .toUpperCase(),
-                    style: GoogleFonts.manrope(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                    ),
-                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -2579,6 +2625,42 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                 ],
               ),
             ),
+            if ((_features?.values.fold<num>(
+                      0,
+                      (sum, val) =>
+                          sum +
+                          ((val as Map<String, dynamic>?)?['unique_users']
+                                  as num? ??
+                              0),
+                    ) ??
+                    0) ==
+                0)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline,
+                        size: 20, color: AppColors.textSecondary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No usage data recorded yet. Adoption percentages reflect live student activity and will update as features are used.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             for (final cat in _categories) _buildCategoryCard(cat),
           ],
         ),
@@ -2774,30 +2856,15 @@ class _LoginsTabState extends State<_LoginsTab> {
     return '$y-$m-$d $hh:$mm';
   }
 
-  Widget _buildAvatar(String? photoUrl, String name) {
+  Widget _buildAvatar(
+      String? avatarBase64, String? photoUrl, String name) {
     final cleanName = name.trim();
     final initial = (cleanName.isNotEmpty ? cleanName[0] : '?').toUpperCase();
-    if (photoUrl != null && photoUrl.trim().isNotEmpty) {
-      return CircleAvatar(
-        radius: 20,
-        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-        backgroundImage: NetworkImage(photoUrl.trim()),
-        onBackgroundImageError: (_, __) {},
-        child: Text(
-          initial,
-          style: const TextStyle(
-              fontWeight: FontWeight.bold, color: AppColors.primary),
-        ),
-      );
-    }
-    return CircleAvatar(
+    return _buildAvatarImage(
+      avatarBase64: avatarBase64,
+      photoUrl: photoUrl,
+      initial: initial,
       radius: 20,
-      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-      child: Text(
-        initial,
-        style: const TextStyle(
-            fontWeight: FontWeight.bold, color: AppColors.primary),
-      ),
     );
   }
 
@@ -3094,6 +3161,7 @@ class _LoginsTabState extends State<_LoginsTab> {
                 final email = (log['email'] ?? '').toString();
                 final role = (log['role'] ?? 'student').toString();
                 final photoUrl = log['photo_url']?.toString();
+                final avatarBase64 = log['avatar_base64']?.toString();
                 final time = log['login_time']?.toString();
                 final status = (log['status'] ?? 'success').toString();
                 final device = (log['device'] ?? 'Mobile App').toString();
@@ -3121,7 +3189,7 @@ class _LoginsTabState extends State<_LoginsTab> {
                       children: [
                         Row(
                           children: [
-                            _buildAvatar(photoUrl, name),
+                            _buildAvatar(avatarBase64, photoUrl, name),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(

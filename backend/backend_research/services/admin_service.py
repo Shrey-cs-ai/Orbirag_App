@@ -107,27 +107,49 @@ def dashboard_summary(db: Session, institution_id: Optional[int]) -> dict:
         "citation_checks": checks,
     }
 def feature_adoption(db: Session, institution_id: Optional[int]) -> dict:
-    """Return % of active students who used each feature at least once."""
+    """Return real % of active students who used each feature at least once."""
     sq = db.query(Student).filter(Student.status == "active")
     if institution_id:
         sq = sq.filter(Student.institution_id == institution_id)
-    total_active = sq.count() or 1
+    total_active = sq.count()
+
+    alias_map = {
+        "literature_retrieval": ["literature_retrieval", "literature_search"],
+        "citation_generation": ["citation_generation", "citation_check", "ai_citation_checks"],
+        "gap_analysis": ["gap_analysis", "gap_analyses"],
+        "paper_analysis": ["paper_analysis"],
+        "paper_orbit": ["paper_orbit", "chat_with_pdf"],
+        "notes_writing": ["notes_writing", "my_notes"],
+        "topic_scoping": ["topic_scoping", "guided_topic_scoping"],
+        "methodology_builder": ["methodology_builder", "methodology"],
+        "plagiarism_check": ["plagiarism_check"],
+        "word_counter": ["word_counter"],
+        "paper_saved": ["paper_saved"],
+        "library_access": ["library_access"],
+        "ori_chatbot": ["ori_chatbot"],
+    }
 
     result = {}
     for key in FEATURE_KEYS:
-        uq = db.query(func.count(func.distinct(UsageEvent.student_id))).filter(
-            UsageEvent.event_type == key
+        keys = alias_map.get(key, [key])
+        uq = (
+            db.query(func.count(func.distinct(UsageEvent.student_id)))
+            .join(Student, UsageEvent.student_id == Student.id)
+            .filter(
+                UsageEvent.event_type.in_(keys),
+                Student.status == "active",
+            )
         )
         if institution_id:
-            uq = uq.filter(UsageEvent.institution_id == institution_id)
+            uq = uq.filter(Student.institution_id == institution_id)
         used = uq.scalar() or 0
+        adoption_pct = round((used / total_active) * 100.0, 1) if total_active > 0 else 0.0
         result[key] = {
             "unique_users": used,
-            "adoption_pct": round(100.0 * used / total_active, 1),
+            "total_active": total_active,
+            "adoption_pct": adoption_pct,
         }
     return result
-
-
 def monthly_active(db: Session, institution_id: Optional[int], months: int = 6) -> list:
     """Monthly active users for the last N months."""
     out = []

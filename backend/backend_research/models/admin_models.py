@@ -47,6 +47,7 @@ class Student(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     name = Column(String(255))
     photo_url = Column(String(1024), nullable=True)
+    avatar_base64 = Column(Text, nullable=True)
     password_hash = Column(String(255), nullable=True)
     role = Column(String(32), default="student")
     status = Column(String(32), default="active")  # active | suspended | banned

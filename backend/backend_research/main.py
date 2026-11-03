@@ -706,6 +706,66 @@ def update_my_avatar(
     return user
 
 
+class UpdateUserAvatarRequest(BaseModel):
+    email: Optional[str] = None
+    firebase_uid: Optional[str] = None
+    avatar_base64: str
+
+@app.post("/api/users/update-avatar", tags=["Users"])
+def update_user_avatar(
+    payload: UpdateUserAvatarRequest,
+    db: Session = Depends(get_db),
+):
+    clean_email = (payload.email or "").strip().lower()
+    firebase_uid = (payload.firebase_uid or "").strip()
+    avatar = payload.avatar_base64
+
+    # 1. Update in User table
+    u = None
+    if firebase_uid:
+        u = db.query(User).filter(User.username == firebase_uid).first()
+    if not u and clean_email:
+        u = db.query(User).filter(User.email == clean_email).first()
+
+    if u:
+        u.avatar_base64 = avatar
+    elif clean_email:
+        u = User(
+            username=firebase_uid or clean_email,
+            email=clean_email,
+            password_hash="firebase-managed",
+            role="user",
+            is_active=True,
+            avatar_base64=avatar,
+        )
+        db.add(u)
+
+    # 2. Update in Student table
+    from models.admin_models import Student, Institution
+    st = None
+    if firebase_uid:
+        st = db.query(Student).filter(Student.external_uid == firebase_uid).first()
+    if not st and clean_email:
+        st = db.query(Student).filter(Student.email == clean_email).first()
+
+    if st:
+        st.avatar_base64 = avatar
+    elif clean_email:
+        inst = db.query(Institution).first()
+        st = Student(
+            email=clean_email,
+            name=clean_email.split("@")[0],
+            institution_id=inst.id if inst else None,
+            external_uid=firebase_uid or None,
+            avatar_base64=avatar,
+            status="active",
+        )
+        db.add(st)
+
+    db.commit()
+    return {"ok": True, "message": "Avatar updated successfully", "email": clean_email}
+
+
 class UserSyncRequest(BaseModel):
     firebase_uid: str
     email: Optional[str] = None
