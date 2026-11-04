@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:http/http.dart' as http;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -80,6 +81,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isPrivacyExpanded = false;
   bool _isAboutExpanded = false;
 
+  ImageProvider? get _avatarImageProvider {
+    if (_profileImageBytes != null && _profileImageBytes!.isNotEmpty) {
+      return MemoryImage(_profileImageBytes!);
+    }
+    if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      if (_profileImageUrl!.startsWith('http')) {
+        return NetworkImage(_profileImageUrl!);
+      }
+      try {
+        final clean = _profileImageUrl!.contains(',')
+            ? _profileImageUrl!.split(',').last
+            : _profileImageUrl!;
+        final bytes = base64Decode(clean);
+        if (bytes.isNotEmpty) {
+          return MemoryImage(bytes);
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   // ---- INIT ----
 
   @override
@@ -128,22 +150,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final user = _auth.currentUser;
       if (user == null) throw Exception('No signed-in user found.');
 
-      final bytes = await File(pickedFile.path).readAsBytes();
+      // Cross-platform byte reading — works on Web, Mobile, and Desktop
+      // (Fixes the Unsupported operation: _Namespace error)
+      final bytes = await pickedFile.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      // Firestore field limit ~1MB
       if (base64Image.length > 900000) {
         throw Exception('Image too large. Please choose a smaller photo.');
       }
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set({'photoBase64': base64Image}, SetOptions(merge: true));
+      // 1. Sync to Firestore (for existing Firebase listeners)
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({'photoBase64': base64Image}, SetOptions(merge: true));
+      } catch (fe) {
+        debugPrint('[Profile] Firestore avatar sync warning: $fe');
+      }
+
+      // 2. POST to PostgreSQL backend /api/users/update-avatar
+      final baseUrl = kIsWeb
+          ? 'http://localhost:8001'
+          : (defaultTargetPlatform == TargetPlatform.android
+              ? 'http://10.0.2.2:8001'
+              : 'http://localhost:8001');
+
+      try {
+        final res = await http
+            .post(
+              Uri.parse('$baseUrl/api/users/update-avatar'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'email': user.email,
+                'firebase_uid': user.uid,
+                'avatar_base64': base64Image,
+              }),
+            )
+            .timeout(const Duration(seconds: 15));
+        debugPrint('[Profile] Backend avatar update status: ${res.statusCode}');
+      } catch (be) {
+        debugPrint('[Profile] Backend avatar update warning: $be');
+      }
 
       if (!mounted) return;
       setState(() {
-        _profileImageBytes = bytes; // show the actual uploaded image
+        _profileImageBytes = bytes;
         _isLoading = false;
       });
 
@@ -336,16 +388,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               CircleAvatar(
                 radius: 48,
                 backgroundColor: AppColors.primary,
-                backgroundImage: _profileImageBytes != null
-                    ? MemoryImage(_profileImageBytes!) as ImageProvider
-                    : _profileImageUrl != null &&
-                            _profileImageUrl!.startsWith('http')
-                        ? NetworkImage(_profileImageUrl!)
-                        : _profileImageUrl != null
-                            ? FileImage(File(_profileImageUrl!))
-                                as ImageProvider
-                            : null,
-                child: _profileImageBytes == null && _profileImageUrl == null
+                backgroundImage: _avatarImageProvider,
+                child: _avatarImageProvider == null
                     ? Text(
                         _name.isNotEmpty
                             ? _name.substring(0, 1).toUpperCase()

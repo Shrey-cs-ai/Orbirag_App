@@ -5,14 +5,19 @@ import '../../utils/app_colors.dart';
 class TrendCard extends StatelessWidget {
   final int activeThisWeek;
   final int? totalActive;
+  final List<double>? weeklyPoints;
 
   const TrendCard({
     super.key,
     required this.activeThisWeek,
     this.totalActive,
+    this.weeklyPoints,
   });
 
   List<double> _generateWeeklyPoints() {
+    if (weeklyPoints != null && weeklyPoints!.length >= 4) {
+      return weeklyPoints!;
+    }
     // 4 points for the last 30 days ending at activeThisWeek
     final current = activeThisWeek.toDouble();
     if (totalActive != null && totalActive! > 0) {

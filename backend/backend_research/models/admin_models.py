@@ -1,4 +1,5 @@
 """Admin dashboard models — privacy-preserving institutional control."""
+import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, ForeignKey
@@ -46,6 +47,8 @@ class Student(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     name = Column(String(255))
     photo_url = Column(String(1024), nullable=True)
+    avatar_base64 = Column(Text, nullable=True)
+    password_hash = Column(String(255), nullable=True)
     role = Column(String(32), default="student")
     status = Column(String(32), default="active")  # active | suspended | banned
     ban_reason = Column(Text, nullable=True)
@@ -87,3 +90,16 @@ class AuditLog(Base):
     target_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
     details = Column(Text, nullable=True)  # JSON string, no sensitive content
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String(255), nullable=False, index=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False, index=True)
+    role = Column(String(32), default="student")
+    plan = Column(String(64), default="student_pro")
+    status = Column(String(32), default="pending")  # pending | accepted | expired | revoked
+    invited_by = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    accepted_at = Column(DateTime, nullable=True)

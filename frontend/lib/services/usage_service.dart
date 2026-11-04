@@ -5,8 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// Unified usage-tracking service.
 ///
-/// Exposes both a singleton instance API and a static fire-and-forget method
-/// so all existing callers (instance or static) continue to work.
+/// Exposes a static fire-and-forget method for usage-event tracking.
 class UsageService {
   static final UsageService _instance = UsageService._internal();
   factory UsageService() => _instance;
@@ -15,21 +14,11 @@ class UsageService {
   static const String _endpoint =
       'http://localhost:8001/api/admin/usage/record';
 
-  // ── Instance API (used by paper_reader_screen, etc.) ──────
-  /// Record a named usage event. Also POSTs to the admin usage endpoint.
-  static Future<void> recordEvent(String event,
+  /// Records an aggregated usage event for the current logged-in student.
+  /// Fire-and-forget: does not block the UI and logs any errors.
+  static Future<void> recordEvent(String eventType,
       {Map<String, dynamic>? extra}) async {
-    debugPrint('[UsageService] event=$event extra=$extra');
-    _postToBackend(event);
-  }
-
-  // ── Static API (used by admin_dashboard and screens that call static) ─
-  /// Fire-and-forget static method. Posts to backend with Firebase user info.
-  static void recordEventStatic(String eventType) {
-    _postToBackend(eventType);
-  }
-
-  static void _postToBackend(String eventType) {
+    debugPrint('[UsageService] event=$eventType extra=$extra');
     try {
       final user = FirebaseAuth.instance.currentUser;
       final email = user?.email;
@@ -58,5 +47,10 @@ class UsageService {
     } catch (e) {
       debugPrint('[UsageService] Error recording event $eventType: $e');
     }
+  }
+
+  // Also support static alias if needed
+  static void recordEventStatic(String eventType) {
+    recordEvent(eventType);
   }
 }
