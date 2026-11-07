@@ -746,11 +746,20 @@ def update_user_avatar(
     if st:
         st.avatar_base64 = avatar
     elif clean_email:
-        inst = db.query(Institution).first()
+        from models.admin_models import Invitation
+        inv = (
+            db.query(Invitation)
+            .filter(
+                Invitation.email == clean_email.lower(),
+                Invitation.status.in_(["pending", "accepted"]),
+            )
+            .order_by(Invitation.created_at.desc())
+            .first()
+        )
         st = Student(
-            email=clean_email,
+            email=clean_email.lower(),
             name=clean_email.split("@")[0],
-            institution_id=inst.id if inst else None,
+            institution_id=inv.institution_id if inv else None,
             external_uid=firebase_uid or None,
             avatar_base64=avatar,
             status="active",

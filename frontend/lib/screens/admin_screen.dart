@@ -89,6 +89,8 @@ class AdminApi {
       await _get('/api/admin/analytics/features') as Map<String, dynamic>;
   static Future<List<dynamic>> getRecentLogins() async =>
       await _get('/api/admin/logins/recent') as List<dynamic>;
+  static Future<Map<String, dynamic>> loginsSummary() async =>
+      await _get('/api/admin/logins/summary') as Map<String, dynamic>;
   static Future<List<dynamic>> audit() async =>
       await _get('/api/admin/audit-logs') as List<dynamic>;
 
@@ -113,6 +115,13 @@ class AdminApi {
   static Future<Map<String, dynamic>> revokeInvitation(String id) async =>
       await _post('/api/admin/invitations/$id/revoke', {});
 }
+
+final institutionalEmailRegex = RegExp(
+  r'^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+@[a-zA-Z0-9.-]+\.edu\.np$',
+  caseSensitive: false,
+);
+const institutionalEmailError =
+    'Please use your institutional email format (firstname_lastname_section@college.edu.np)';
 
 // ============================================================
 // Entry Screen
@@ -1041,7 +1050,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                           fontSize: 14, color: AppColors.textPrimary),
                       decoration: InputDecoration(
                         labelText: 'Student Email',
-                        hintText: 'student@college.edu',
+                        hintText: 'shreya_ganeju_s25@sunway.edu.np',
                         labelStyle:
                             GoogleFonts.inter(color: AppColors.textSecondary),
                         hintStyle: GoogleFonts.inter(
@@ -1130,9 +1139,9 @@ class _DashboardTabState extends State<_DashboardTab> {
                       ? null
                       : () async {
                           final email = emailController.text.trim().toLowerCase();
-                          if (email.isEmpty || !email.contains('@')) {
-                            setDialogState(() =>
-                                dialogErr = 'Please enter a valid email address');
+                          if (!institutionalEmailRegex.hasMatch(email)) {
+                            setDialogState(() => dialogErr =
+                                institutionalEmailError);
                             return;
                           }
                           setDialogState(() {
@@ -1236,7 +1245,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                       style: GoogleFonts.inter(
                           fontSize: 13, color: AppColors.textPrimary),
                       decoration: InputDecoration(
-                        hintText: 'student1@college.edu, student2@college.edu...',
+                        hintText: 'firstname_lastname_section@collegename.edu.np, ...',
                         hintStyle: GoogleFonts.inter(
                             color: AppColors.textSecondary
                                 .withValues(alpha: 0.5)),
@@ -1312,14 +1321,22 @@ class _DashboardTabState extends State<_DashboardTab> {
                       : () async {
                           final text = emailsController.text;
                           final emails = text
-                              .split(RegExp(r'[,\s]+'))
+                              .split(RegExp(r'[,\s\n\r]+'))
                               .map((e) => e.trim().toLowerCase())
-                              .where((e) => e.contains('@'))
+                              .where((e) => e.isNotEmpty)
                               .toSet()
                               .toList();
                           if (emails.isEmpty) {
                             setDialogState(() => dialogErr =
-                                'Please enter at least one valid email address.');
+                                'Please enter at least one email address.');
+                            return;
+                          }
+                          final invalidEmails = emails
+                              .where((e) => !institutionalEmailRegex.hasMatch(e))
+                              .toList();
+                          if (invalidEmails.isNotEmpty) {
+                            setDialogState(() => dialogErr =
+                                institutionalEmailError);
                             return;
                           }
                           setDialogState(() {
@@ -1423,7 +1440,7 @@ class _DashboardTabState extends State<_DashboardTab> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                'No recent admin activity recorded.',
+                'No recent activity',
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -1871,7 +1888,7 @@ class _StudentsTabState extends State<_StudentsTab> {
                         title: 'No students found',
                         subtitle: _statusFilter != null
                             ? 'Try clearing the filter or search'
-                            : 'Invite students from the Dashboard quick actions',
+                            : 'Invite students using the institutional email format',
                       )
                     : RefreshIndicator(
                         onRefresh: _load,
@@ -2804,8 +2821,12 @@ class _LoginsTabState extends State<_LoginsTab> {
       final list = await AdminApi.getRecentLogins();
       Map<String, dynamic>? summary;
       try {
-        summary = await AdminApi.summary();
-      } catch (_) {}
+        summary = await AdminApi.loginsSummary();
+      } catch (_) {
+        try {
+          summary = await AdminApi.summary();
+        } catch (_) {}
+      }
 
       if (mounted) {
         setState(() {
@@ -2991,40 +3012,14 @@ class _LoginsTabState extends State<_LoginsTab> {
       );
     }
 
-    final allLogins = _logins ?? [];
     final filteredLogins = _getFilteredLogins();
 
-    // Top Cards calculations
-    final activeStudents = (_summary?['active_students'] ??
-            _summary?['active_students_last_30_days'] ??
-            0) as int;
-    final totalLicensesUsed = (_summary?['total_licenses_used'] ??
-            _summary?['total_licensed_students'] ??
-            0) as int;
-
-    final now = DateTime.now().toUtc();
-    final uniqueEmailsThisMonth = <String>{};
-    final uniqueEmailsAllTime = <String>{};
-
-    for (final l in allLogins) {
-      final email = (l['email'] ?? '').toString().toLowerCase();
-      if (email.isEmpty) continue;
-      uniqueEmailsAllTime.add(email);
-      final t = l['login_time']?.toString();
-      if (t != null) {
-        final dt = DateTime.tryParse(t);
-        if (dt != null && now.difference(dt.toUtc()).inDays <= 30) {
-          uniqueEmailsThisMonth.add(email);
-        }
-      }
-    }
-
-    final loggedInThisMonth = uniqueEmailsThisMonth.isNotEmpty
-        ? uniqueEmailsThisMonth.length
-        : activeStudents;
-    final neverLoggedIn = (totalLicensesUsed > uniqueEmailsAllTime.length)
-        ? (totalLicensesUsed - uniqueEmailsAllTime.length)
-        : 0;
+    // Top Cards calculations (Direct database calculation)
+    final activeStudents = ((_summary?['active_students'] ?? 0) as num).toInt();
+    final loggedInThisMonth = ((_summary?['logged_in_this_month'] ?? 0) as num).toInt();
+    final neverLoggedIn = (_summary?['never_logged_in'] != null)
+        ? ((_summary!['never_logged_in'] as num).toInt())
+        : (activeStudents > loggedInThisMonth ? activeStudents - loggedInThisMonth : 0);
 
     return ColoredBox(
       color: AppColors.background,
@@ -3579,7 +3574,7 @@ class _AuditTabState extends State<_AuditTab> {
         color: AppColors.background,
         child: const AdminEmptyState(
           icon: Icons.history_outlined,
-          title: 'No audit entries yet',
+          title: 'No audit history yet',
           subtitle: 'Admin actions will appear here',
         ),
       );

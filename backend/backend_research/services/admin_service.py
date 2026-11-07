@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.admin_models import (
-    Institution, Student, UsageEvent, AuditLog, Invitation,
+    Institution, Student, UsageEvent, AuditLog, Invitation, StudentLoginLog,
 )
 
 
@@ -27,58 +27,96 @@ FEATURE_KEYS = [
 
 
 def dashboard_summary(db: Session, institution_id: Optional[int]) -> dict:
-    q = db.query(Student)
-    if institution_id:
-        q = q.filter(Student.institution_id == institution_id)
-    total = q.count()
-    active = q.filter(Student.status == "active").count()
+    if not institution_id:
+        return {
+            "total_licensed_students": 0,
+            "total_licenses_used": 0,
+            "active_students": 0,
+            "active_students_last_30_days": 0,
+            "active_this_week": 0,
+            "new_users_this_month": 0,
+            "pending_invitations_count": 0,
+            "logged_in_this_month": 0,
+            "never_logged_in": 0,
+            "weekly_trend": [0.0, 0.0, 0.0, 0.0],
+            "top_activities": [],
+            "research_projects": 0,
+            "papers_analyzed": 0,
+            "gap_analyses": 0,
+            "gap_analysis": 0,
+            "ai_citation_checks": 0,
+            "citation_checks": 0,
+            "literature_search": 0,
+        }
+
+    # 1. Students strictly in this institution
+    inst_students_q = db.query(Student).filter(Student.institution_id == institution_id)
+    total = inst_students_q.count()
+    active_q = inst_students_q.filter(Student.status == "active")
+    active = active_q.count()
 
     since_7 = datetime.utcnow() - timedelta(days=7)
     since_30 = datetime.utcnow() - timedelta(days=30)
-    active_week = q.filter(Student.last_active_at >= since_7).count()
-    active_30 = q.filter(Student.last_active_at >= since_30).count()
-    new_month = q.filter(Student.created_at >= since_30).count()
+    active_week = active_q.filter(Student.last_active_at >= since_7).count()
+    active_30 = active_q.filter(Student.last_active_at >= since_30).count()
+    new_month = inst_students_q.filter(Student.created_at >= since_30).count()
 
     now = datetime.utcnow()
-    inv_q = db.query(Invitation).filter(
+    pending_invites = db.query(Invitation).filter(
+        Invitation.institution_id == institution_id,
         Invitation.status == "pending",
         Invitation.expires_at > now,
+    ).count()
+
+    # 2. Usage events strictly by students belonging to this institution
+    inst_uq = (
+        db.query(UsageEvent)
+        .join(Student, UsageEvent.student_id == Student.id)
+        .filter(Student.institution_id == institution_id)
     )
-    if institution_id:
-        inv_q = inv_q.filter(Invitation.institution_id == institution_id)
-    pending_invites = inv_q.count()
+    papers = inst_uq.filter(UsageEvent.event_type == "paper_analysis").count()
+    gaps = inst_uq.filter(UsageEvent.event_type.in_(["gap_analysis", "gap_analyses"])).count()
+    checks = inst_uq.filter(UsageEvent.event_type.in_(
+        ["citation_check", "plagiarism_check", "citation_generation", "ai_citation_checks"]
+    )).count()
+    projects = inst_uq.filter(UsageEvent.event_type == "research_project").count()
+    lit_searches = inst_uq.filter(UsageEvent.event_type.in_(["literature_search", "literature_retrieval"])).count()
 
-    uq = db.query(UsageEvent)
-    if institution_id:
-        uq = uq.filter(UsageEvent.institution_id == institution_id)
-    papers = uq.filter(UsageEvent.event_type == "paper_analysis").count()
-    gaps = uq.filter(UsageEvent.event_type == "gap_analysis").count()
-    checks = uq.filter(UsageEvent.event_type.in_(
-        ["citation_check", "plagiarism_check"])).count()
-    projects = uq.filter(UsageEvent.event_type == "research_project").count()
-    lit_searches = uq.filter(UsageEvent.event_type == "literature_search").count()
-
-    # Calculate weekly trend points (last 4 weeks) for real-time graph
+    # 3. Weekly active students trend points (last 4 weeks) for real-time graph
+    # Combines login and usage activity strictly for students of this institution
     weekly_trend = []
     for i in range(3, -1, -1):
         w_start = now - timedelta(days=(i + 1) * 7)
         w_end = now - timedelta(days=i * 7)
-        uq_w = db.query(func.count(func.distinct(UsageEvent.student_id))).filter(
-            UsageEvent.created_at >= w_start,
-            UsageEvent.created_at < w_end,
+        uq_w = (
+            db.query(UsageEvent.student_id)
+            .join(Student, UsageEvent.student_id == Student.id)
+            .filter(
+                Student.institution_id == institution_id,
+                UsageEvent.created_at >= w_start,
+                UsageEvent.created_at < w_end,
+            )
         )
-        if institution_id:
-            uq_w = uq_w.filter(UsageEvent.institution_id == institution_id)
-        cnt = uq_w.scalar() or 0
+        lq_w = (
+            db.query(StudentLoginLog.student_id)
+            .join(Student, StudentLoginLog.student_id == Student.id)
+            .filter(
+                Student.institution_id == institution_id,
+                StudentLoginLog.login_time >= w_start,
+                StudentLoginLog.login_time < w_end,
+            )
+        )
+        cnt = uq_w.union(lq_w).count()
         weekly_trend.append(float(cnt))
 
     if weekly_trend[-1] == 0 and active_week > 0:
         weekly_trend[-1] = float(active_week)
 
-    # Top 3 real research activities
+    # 4. Top 3 real research activities strictly for this institution
     top_rows = (
         db.query(UsageEvent.event_type, func.count(UsageEvent.id).label("cnt"))
-        .filter(UsageEvent.institution_id == institution_id if institution_id else True)
+        .join(Student, UsageEvent.student_id == Student.id)
+        .filter(Student.institution_id == institution_id)
         .group_by(UsageEvent.event_type)
         .order_by(func.count(UsageEvent.id).desc())
         .limit(3)
@@ -89,6 +127,22 @@ def dashboard_summary(db: Session, institution_id: Optional[int]) -> dict:
         for r in top_rows
     ]
 
+    # 5. Login activity strictly for this institution
+    inst_student_ids_query = db.query(Student.id).filter(
+        Student.institution_id == institution_id,
+        Student.status == "active",
+    )
+    logged_in_count = (
+        db.query(func.count(func.distinct(StudentLoginLog.student_id)))
+        .filter(
+            StudentLoginLog.student_id.in_(inst_student_ids_query),
+            StudentLoginLog.login_time >= since_30,
+        )
+        .scalar()
+        or 0
+    )
+    never_logged_in = max(0, active - logged_in_count)
+
     return {
         "total_licensed_students": total,
         "total_licenses_used": active,
@@ -97,20 +151,36 @@ def dashboard_summary(db: Session, institution_id: Optional[int]) -> dict:
         "active_this_week": active_week,
         "new_users_this_month": new_month,
         "pending_invitations_count": pending_invites,
+        "logged_in_this_month": logged_in_count,
+        "never_logged_in": never_logged_in,
         "weekly_trend": weekly_trend,
         "top_activities": top_activities,
         "research_projects": projects,
         "papers_analyzed": papers,
         "gap_analyses": gaps,
+        "gap_analysis": gaps,
         "ai_citation_checks": checks,
-        "literature_search": lit_searches,
         "citation_checks": checks,
+        "literature_search": lit_searches,
     }
+
+
 def feature_adoption(db: Session, institution_id: Optional[int]) -> dict:
     """Return real % of active students who used each feature at least once."""
-    sq = db.query(Student).filter(Student.status == "active")
-    if institution_id:
-        sq = sq.filter(Student.institution_id == institution_id)
+    if not institution_id:
+        return {
+            key: {
+                "unique_users": 0,
+                "total_active": 0,
+                "adoption_pct": 0.0,
+            }
+            for key in FEATURE_KEYS
+        }
+
+    sq = db.query(Student).filter(
+        Student.status == "active",
+        Student.institution_id == institution_id,
+    )
     total_active = sq.count()
 
     alias_map = {
@@ -136,12 +206,11 @@ def feature_adoption(db: Session, institution_id: Optional[int]) -> dict:
             db.query(func.count(func.distinct(UsageEvent.student_id)))
             .join(Student, UsageEvent.student_id == Student.id)
             .filter(
-                UsageEvent.event_type.in_(keys),
+                Student.institution_id == institution_id,
                 Student.status == "active",
+                UsageEvent.event_type.in_(keys),
             )
         )
-        if institution_id:
-            uq = uq.filter(Student.institution_id == institution_id)
         used = uq.scalar() or 0
         adoption_pct = round((used / total_active) * 100.0, 1) if total_active > 0 else 0.0
         result[key] = {
@@ -150,23 +219,30 @@ def feature_adoption(db: Session, institution_id: Optional[int]) -> dict:
             "adoption_pct": adoption_pct,
         }
     return result
+
+
 def monthly_active(db: Session, institution_id: Optional[int], months: int = 6) -> list:
     """Monthly active users for the last N months."""
     out = []
+    if not institution_id:
+        return out
     now = datetime.utcnow()
     for i in range(months - 1, -1, -1):
-        # naive month math
         year = now.year
         month = now.month - i
         while month <= 0:
             month += 12; year -= 1
         start = datetime(year, month, 1)
         end = datetime(year + (month == 12), (month % 12) + 1, 1)
-        q = db.query(func.count(func.distinct(UsageEvent.student_id))).filter(
-            UsageEvent.created_at >= start, UsageEvent.created_at < end
+        q = (
+            db.query(func.count(func.distinct(UsageEvent.student_id)))
+            .join(Student, UsageEvent.student_id == Student.id)
+            .filter(
+                Student.institution_id == institution_id,
+                UsageEvent.created_at >= start,
+                UsageEvent.created_at < end,
+            )
         )
-        if institution_id:
-            q = q.filter(UsageEvent.institution_id == institution_id)
         out.append({"month": f"{year}-{month:02d}", "active_users": q.scalar() or 0})
     return out
 

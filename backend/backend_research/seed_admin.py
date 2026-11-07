@@ -36,38 +36,12 @@ try:
     )
     db.add(admin); db.commit(); db.refresh(admin)
 
-    first = ["Shreya", "Ram", "Anisha", "Bikash", "Nisha", "Prakash",
-             "Rita", "Sujan", "Aayush", "Srijana"]
-    last = ["Ganeju", "Sharma", "K.", "Thapa", "Adhikari", "Rai",
-            "Gurung", "KC", "Basnet", "Shrestha"]
-    statuses = ["active"] * 8 + ["suspended", "banned"]
-    features = ["literature_search", "gap_analysis", "citation_check",
-                "plagiarism_check", "methodology_builder", "ai_writing",
-                "paper_analysis", "research_project"]
-
-    students = []
-    for i in range(20):
-        s = Student(
-            institution_id=inst.id,
-            email=f"student{i+1}@sunway.edu.np",
-            name=f"{random.choice(first)} {random.choice(last)}",
-            status=random.choice(statuses),
-            created_at=datetime.utcnow() - timedelta(days=random.randint(10, 300)),
-            last_active_at=datetime.utcnow() - timedelta(days=random.randint(0, 20)),
-        )
-        if s.status == "banned":
-            s.ban_reason = "Institutional policy violation"
-            s.banned_by = admin.id
-            s.banned_at = datetime.utcnow() - timedelta(days=random.randint(1, 15))
-        db.add(s); students.append(s)
-    db.commit()
-
-    # No mock usage events — only real student activity is tracked
-
+    # Only seed institution and admin user.
+    # Students are added ONLY via institutional invitations.
     print("✅ Seed complete")
     print(f"   Institution: {inst.name} (id={inst.id})")
     print(f"   Admin login: admin@orbirag.local / admin123")
-    print(f"   Students:    {len(students)}")
+    print("   Students:    0 (Real invited students only)")
     print()
     print("⚠️  CHANGE THE PASSWORD after first login.")
 finally:
