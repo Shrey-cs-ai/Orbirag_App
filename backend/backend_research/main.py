@@ -46,8 +46,8 @@ from schemas import (
 from services import user_service
 from services.deps import get_current_user, require_admin
 from services.auth_service import verify_password, create_access_token
-from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, Text, DateTime, func
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import Column, String, Boolean, Text, DateTime, func, or_
 from schemas import (
     # ... existing ...
     PlagiarismCheckRequest, PlagiarismCheckResponse, PlagiarismMatch,
@@ -768,6 +768,189 @@ def update_user_avatar(
 
     db.commit()
     return {"ok": True, "message": "Avatar updated successfully", "email": clean_email}
+
+
+class HeartbeatRequest(BaseModel):
+    seconds_spent: int = 60
+    user_id: Optional[str] = None
+    email: Optional[str] = None
+
+
+@app.post("/api/users/heartbeat", tags=["Users"])
+def user_heartbeat(
+    payload: HeartbeatRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Records app usage time and updates streak and active dates.
+    """
+    from models import UserActivity, User
+    ident = (payload.user_id or payload.email or "anonymous").strip()
+    clean_email = (payload.email or "").strip().lower() or None
+
+    activity = db.query(UserActivity).filter(
+        (UserActivity.user_id == ident) |
+        ((UserActivity.email == clean_email) if clean_email else False)
+    ).first()
+
+    if not activity:
+        activity = UserActivity(
+            user_id=ident,
+            email=clean_email,
+            total_time_spent_seconds=0,
+            current_streak=0,
+            last_active_date=None,
+            active_dates={},
+        )
+        db.add(activity)
+
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    today_str = today.strftime("%Y-%m-%d")
+
+    # 1. Update total_time_spent_seconds
+    secs = max(0, int(payload.seconds_spent or 0))
+    activity.total_time_spent_seconds += secs
+
+    # 2. Check last_active_date & update streak
+    if activity.last_active_date == today:
+        # Already active today; retain streak (ensure at least 1)
+        if activity.current_streak < 1:
+            activity.current_streak = 1
+    elif activity.last_active_date == yesterday:
+        # Consecutive active day!
+        activity.current_streak += 1
+    else:
+        # Streak broken or first active day
+        activity.current_streak = 1
+
+    activity.last_active_date = today
+
+    # 3. Add/update today's date in active_dates JSON
+    active_dates_map = {}
+    if isinstance(activity.active_dates, dict):
+        active_dates_map = dict(activity.active_dates)
+    elif isinstance(activity.active_dates, list):
+        active_dates_map = {d: 60 for d in activity.active_dates}
+
+    active_dates_map[today_str] = active_dates_map.get(today_str, 0) + secs
+    activity.active_dates = active_dates_map
+    activity.updated_at = datetime.utcnow()
+
+    # Also sync to User row if it exists
+    try:
+        u = None
+        if clean_email:
+            u = db.query(User).filter(User.email == clean_email).first()
+        if not u and ident != "anonymous":
+            u = db.query(User).filter(User.username == ident).first()
+        if u:
+            u.total_time_spent_seconds = activity.total_time_spent_seconds
+            u.current_streak = activity.current_streak
+            u.last_active_date = activity.last_active_date
+            u.active_dates = activity.active_dates
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(activity)
+
+    return {
+        "ok": True,
+        "total_time_spent_seconds": activity.total_time_spent_seconds,
+        "current_streak": activity.current_streak,
+        "last_active_date": str(activity.last_active_date),
+        "today_seconds": active_dates_map.get(today_str, 0),
+    }
+
+
+@app.get("/api/users/profile-stats", tags=["Users"])
+def get_profile_stats(
+    user_id: Optional[str] = None,
+    email: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns user profile tracking data:
+    total_time_spent_seconds, total_hours, current_streak, active_dates (list for year),
+    weekly_activity (map for last 7 days), and papers_read.
+    """
+    from models import UserActivity, Paper, User
+    ident = (user_id or email or "anonymous").strip()
+    clean_email = (email or "").strip().lower() or None
+
+    activity = db.query(UserActivity).filter(
+        (UserActivity.user_id == ident) |
+        ((UserActivity.email == clean_email) if clean_email else False)
+    ).first()
+
+    total_time = 0
+    streak = 0
+    last_active = None
+    active_dates_map = {}
+
+    if activity:
+        total_time = activity.total_time_spent_seconds or 0
+        streak = activity.current_streak or 0
+        last_active = str(activity.last_active_date) if activity.last_active_date else None
+        if isinstance(activity.active_dates, dict):
+            active_dates_map = dict(activity.active_dates)
+        elif isinstance(activity.active_dates, list):
+            active_dates_map = {d: 60 for d in activity.active_dates}
+    else:
+        # Fallback to User table if present
+        u = None
+        if clean_email:
+            u = db.query(User).filter(User.email == clean_email).first()
+        if not u and ident != "anonymous":
+            u = db.query(User).filter(User.username == ident).first()
+        if u and hasattr(u, "total_time_spent_seconds"):
+            total_time = getattr(u, "total_time_spent_seconds", 0) or 0
+            streak = getattr(u, "current_streak", 0) or 0
+            la = getattr(u, "last_active_date", None)
+            last_active = str(la) if la else None
+            ad = getattr(u, "active_dates", None)
+            if isinstance(ad, dict):
+                active_dates_map = dict(ad)
+            elif isinstance(ad, list):
+                active_dates_map = {d: 60 for d in ad}
+
+    # Count papers where status == 'read' for this user
+    papers_q = db.query(Paper).filter(Paper.status == "read")
+    if ident != "anonymous" or clean_email:
+        conds = []
+        if ident != "anonymous":
+            conds.append(Paper.user_id == ident)
+        if clean_email:
+            conds.append(Paper.user_id == clean_email)
+        papers_read = papers_q.filter(or_(*conds)).count()
+    else:
+        papers_read = papers_q.count()
+
+    now = datetime.utcnow()
+    # Map of date: seconds_spent for the last 7 days
+    weekly_activity = {}
+    weekly_data = []
+    for i in range(6, -1, -1):
+        day_str = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        sec = int(active_dates_map.get(day_str, 0))
+        weekly_activity[day_str] = sec
+        weekly_data.append(sec)
+
+    active_dates_list = sorted(list(active_dates_map.keys()))
+
+    return {
+        "ok": True,
+        "total_time_spent_seconds": total_time,
+        "total_hours": round(total_time / 3600.0, 1),
+        "current_streak": streak,
+        "last_active_date": last_active,
+        "active_dates": active_dates_list,
+        "active_dates_detail": active_dates_map,
+        "weekly_activity": weekly_activity,
+        "weekly_data": weekly_data,
+        "papers_read": papers_read,
+    }
 
 
 class UserSyncRequest(BaseModel):

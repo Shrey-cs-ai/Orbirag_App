@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'services/auth_service.dart';
+import 'services/session_tracker_service.dart';
 import 'package:orbirag/screens/chat_with_pdf_screen.dart';
 import 'firebase_options.dart';
 import 'utils/app_colors.dart';
@@ -48,6 +49,7 @@ void main() async {
       photoUrl: user.photoURL,
     );
   }
+  SessionTrackerService.instance.start();
   runApp(const MyApp());
 }
 

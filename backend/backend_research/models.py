@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, Float,
-    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, Uuid, func
+    DateTime, ForeignKey, SmallInteger, CheckConstraint, JSON, Uuid, func, Date
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -215,6 +215,25 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     avatar_base64 = Column(Text, nullable=True)   # base64-encoded image, max ~500KB
+    total_time_spent_seconds = Column(Integer, default=0, nullable=True)
+    current_streak = Column(Integer, default=0, nullable=True)
+    last_active_date = Column(Date, nullable=True)
+    active_dates = Column(JSON, default=dict, nullable=True)
+
+
+# USER ACTIVITY MODEL
+class UserActivity(Base):
+    __tablename__ = "user_activities"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(128), index=True, nullable=False, unique=True)
+    email = Column(String(255), index=True, nullable=True)
+    total_time_spent_seconds = Column(Integer, default=0, nullable=False)
+    current_streak = Column(Integer, default=0, nullable=False)
+    last_active_date = Column(Date, nullable=True)
+    active_dates = Column(JSON, default=dict)  # {"YYYY-MM-DD": seconds_spent}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 #plagiarismCheck model

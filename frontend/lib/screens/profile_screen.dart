@@ -12,6 +12,8 @@ import '../widgets/app_drawer.dart';
 import '../widgets/app_brand_title.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_screen.dart';
+import '../services/session_tracker_service.dart';
+import '../services/papers_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -65,14 +67,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     },
   ];
 
-  // Progress Data
-  final Map<String, dynamic> _progressData = {
-    'totalHours': '127',
-    'papersRead': '34',
-    'citations': '12',
-    'streak': '7 days',
-    'weeklyData': [12, 8, 15, 10, 20, 5, 18],
-  };
+  // Real Progress & Tracking Data
+  bool _isLoadingStats = false;
+  int _totalTimeSpentSeconds = 0;
+  double _totalHours = 0.0;
+  int _currentStreak = 0;
+  int _papersRead = 0;
+  List<String> _activeDates = [];
+  Map<String, dynamic> _activeDatesDetail = {};
+  Map<String, dynamic> _weeklyActivity = {};
+  final ScrollController _heatmapScrollController = ScrollController();
 
   // Expanded Sections
   bool _isEditProfileExpanded = false;
@@ -111,6 +115,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _name = user?.displayName ?? 'Alex Bennett';
     _email = user?.email ?? 'alex.bennett@university.edu';
     _loadProfileImage();
+    _loadProfileStats();
+  }
+
+  @override
+  void dispose() {
+    _heatmapScrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfileStats() async {
+    setState(() => _isLoadingStats = true);
+    try {
+      // Flush current elapsed time to backend first
+      await SessionTrackerService.instance.flushHeartbeat();
+
+      final stats = await SessionTrackerService.instance.fetchProfileStats();
+      int papersCount = 0;
+      try {
+        papersCount = PapersService().getPapersByStatus('read').length;
+      } catch (_) {}
+
+      if (stats != null && mounted) {
+        final sec = (stats['total_time_spent_seconds'] as num?)?.toInt() ?? 0;
+        final serverPapers = (stats['papers_read'] as num?)?.toInt() ?? 0;
+        setState(() {
+          _totalTimeSpentSeconds = sec;
+          _totalHours = (stats['total_hours'] as num?)?.toDouble() ?? (sec / 3600.0);
+          _currentStreak = (stats['current_streak'] as num?)?.toInt() ?? 0;
+          _papersRead = serverPapers > 0 ? serverPapers : papersCount;
+          _activeDates = ((stats['active_dates'] as List<dynamic>?) ?? [])
+              .map((e) => e.toString())
+              .toList();
+          _activeDatesDetail = (stats['active_dates_detail'] as Map<String, dynamic>?) ?? {};
+          _weeklyActivity = (stats['weekly_activity'] as Map<String, dynamic>?) ?? {};
+          _isLoadingStats = false;
+        });
+      } else if (mounted) {
+        setState(() {
+          _papersRead = papersCount;
+          _isLoadingStats = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingStats = false);
+    }
+
+    // Scroll heatmap towards current week after render
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_heatmapScrollController.hasClients) {
+        _heatmapScrollController.jumpTo(
+          _heatmapScrollController.position.maxScrollExtent,
+        );
+      }
+    });
   }
 
   Future<void> _loadProfileImage() async {
@@ -776,24 +834,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ---- PROGRESS CONTENT ----
 
   Widget _buildProgressContent() {
+    final streakStr = _currentStreak == 1 ? '1 day' : '$_currentStreak days';
+    final hoursStr = _totalHours > 0
+        ? '${_totalHours.toStringAsFixed(1)}h'
+        : _totalTimeSpentSeconds > 0
+            ? '${(_totalTimeSpentSeconds / 60).round()}m'
+            : '0h';
+
     return Column(
       children: [
+        if (_isLoadingStats)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: AppColors.primary,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
         Row(
           children: [
-            _buildStatCard('Total Hours', _progressData['totalHours'],
+            _buildStatCard('Total Hours', hoursStr,
                 Icons.access_time, AppColors.progressColor1),
             const SizedBox(width: 8),
-            _buildStatCard('Papers Read', _progressData['papersRead'],
+            _buildStatCard('Papers Read', '$_papersRead',
                 Icons.menu_book, AppColors.progressColor2),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _buildStatCard('Citations', _progressData['citations'],
-                Icons.format_quote, AppColors.progressColor3),
             const SizedBox(width: 8),
-            _buildStatCard('Streak', _progressData['streak'],
+            _buildStatCard('Streak', streakStr,
                 Icons.local_fire_department, AppColors.warning),
           ],
         ),
@@ -804,53 +871,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-              .asMap()
-              .entries
-              .map((entry) {
-            final index = entry.key;
-            final day = entry.value;
-            final value = (_progressData['weeklyData'] as List<int>)[index];
-            return Column(
-              children: [
-                Container(
-                  width: 24,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBg,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.bottomCenter,
-                    children: [
-                      Container(
-                        height: (value / 20) * 80,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppColors.progressColor1,
-                              AppColors.progressColor2
-                            ],
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(day,
-                    style: const TextStyle(
-                        fontSize: 9, color: AppColors.textSecondary)),
-              ],
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 8),
+        _buildWeeklyActivityBarChart(),
+        const SizedBox(height: 16),
 
         const Text(
           'Activity Overview',
@@ -866,10 +888,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String label, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
         ),
         child: Column(
           children: [
@@ -877,10 +900,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 4),
             Text(
               value,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 2),
             Text(
               label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style:
                   const TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
@@ -890,55 +920,296 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildWeeklyActivityBarChart() {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final weekValues = <int>[];
+
+    for (int i = 0; i < 7; i++) {
+      final day = monday.add(Duration(days: i));
+      final dateKey =
+          "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
+      final sec = (_weeklyActivity[dateKey] ??
+              _activeDatesDetail[dateKey] as num?)
+          ?.toInt() ??
+          0;
+      weekValues.add(sec);
+    }
+
+    final int maxSec =
+        weekValues.fold(0, (prev, val) => val > prev ? val : prev);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: days.asMap().entries.map((entry) {
+        final index = entry.key;
+        final dayName = entry.value;
+        final seconds = weekValues[index];
+        final isToday = (index + 1) == now.weekday;
+
+        final double barHeight = maxSec > 0 && seconds > 0
+            ? ((seconds / maxSec) * 72.0 + 8.0).clamp(8.0, 80.0)
+            : 6.0;
+
+        final String tooltip = seconds >= 3600
+            ? '${(seconds / 3600.0).toStringAsFixed(1)}h'
+            : seconds >= 60
+                ? '${(seconds / 60).round()}m'
+                : '${seconds}s';
+
+        return Tooltip(
+          message: '$dayName: $tooltip',
+          child: Column(
+            children: [
+              Container(
+                width: 24,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.cardBg,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isToday
+                        ? AppColors.primary.withValues(alpha: 0.3)
+                        : Colors.transparent,
+                    width: 1,
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    Container(
+                      height: barHeight,
+                      decoration: BoxDecoration(
+                        gradient: seconds > 0
+                            ? const LinearGradient(
+                                colors: [
+                                  AppColors.progressColor1,
+                                  AppColors.progressColor2,
+                                ],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              )
+                            : null,
+                        color: seconds == 0
+                            ? AppColors.border.withValues(alpha: 0.6)
+                            : null,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                dayName,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                  color: isToday ? AppColors.primary : AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildContributionGraph() {
-    final colors = [
+    final now = DateTime.now();
+    final currentYear = now.year;
+    final jan1 = DateTime(currentYear, 1, 1);
+    final daysBefore = jan1.weekday % 7; // Sunday start
+    final gridStartDate = jan1.subtract(Duration(days: daysBefore));
+
+    const totalWeeks = 53;
+    const boxSize = 11.0;
+    const boxMargin = 1.5;
+
+    final monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final weekMonthLabels = <int, String>{};
+    for (int w = 0; w < totalWeeks; w++) {
+      final cellDate = gridStartDate.add(Duration(days: w * 7));
+      if (cellDate.year == currentYear && cellDate.day <= 7) {
+        weekMonthLabels[w] = monthNames[cellDate.month - 1];
+      }
+    }
+
+    final levelColors = [
       AppColors.cardBg,
-      AppColors.progressColor1.withValues(alpha: 0.2),
-      AppColors.progressColor1.withValues(alpha: 0.4),
-      AppColors.progressColor1.withValues(alpha: 0.6),
+      AppColors.progressColor1.withValues(alpha: 0.25),
+      AppColors.progressColor1.withValues(alpha: 0.50),
+      AppColors.progressColor1.withValues(alpha: 0.75),
       AppColors.progressColor1,
     ];
 
-    return Column(
-      children: [
-        ...List.generate(5, (row) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              children: List.generate(15, (col) {
-                final intensity = (row * 3 + col) % 5;
-                return Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.all(1.5),
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: colors[intensity],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                );
-              }),
+    Color getCellColor(DateTime date) {
+      if (date.year != currentYear) return Colors.transparent;
+      if (date.isAfter(now)) {
+        return AppColors.cardBg.withValues(alpha: 0.4);
+      }
+      final key =
+          "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+      if (!_activeDates.contains(key) && !_activeDatesDetail.containsKey(key)) {
+        return AppColors.cardBg;
+      }
+      final sec = (_activeDatesDetail[key] as num?)?.toInt() ?? 60;
+      if (sec <= 0) return AppColors.cardBg;
+      if (sec < 900) return levelColors[1];
+      if (sec < 2700) return levelColors[2];
+      if (sec < 5400) return levelColors[3];
+      return levelColors[4];
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SingleChildScrollView(
+            controller: _heatmapScrollController,
+            scrollDirection: Axis.horizontal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Month labels row
+                Row(
+                  children: List.generate(totalWeeks, (w) {
+                    final label = weekMonthLabels[w] ?? '';
+                    return SizedBox(
+                      width: boxSize + boxMargin * 2,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                        softWrap: false,
+                        overflow: TextOverflow.visible,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 4),
+
+                // 7 rows (Sunday to Saturday)
+                Column(
+                  children: List.generate(7, (row) {
+                    return Row(
+                      children: List.generate(totalWeeks, (col) {
+                        final cellDate =
+                            gridStartDate.add(Duration(days: col * 7 + row));
+                        final isRealYear = cellDate.year == currentYear;
+                        final isFuture = cellDate.isAfter(now);
+                        final dateKey =
+                            "${cellDate.year}-${cellDate.month.toString().padLeft(2, '0')}-${cellDate.day.toString().padLeft(2, '0')}";
+                        final cellColor = getCellColor(cellDate);
+                        final sec =
+                            (_activeDatesDetail[dateKey] as num?)?.toInt() ?? 0;
+
+                        if (!isRealYear) {
+                          return Container(
+                            width: boxSize,
+                            height: boxSize,
+                            margin: const EdgeInsets.all(boxMargin),
+                            color: Colors.transparent,
+                          );
+                        }
+
+                        final String tooltip = isFuture
+                            ? dateKey
+                            : sec > 0
+                                ? '$dateKey: ${_formatDuration(sec)} active'
+                                : '$dateKey: No activity';
+
+                        return Tooltip(
+                          message: tooltip,
+                          child: Container(
+                            width: boxSize,
+                            height: boxSize,
+                            margin: const EdgeInsets.all(boxMargin),
+                            decoration: BoxDecoration(
+                              color: cellColor,
+                              borderRadius: BorderRadius.circular(2),
+                              border: Border.all(
+                                color: isFuture
+                                    ? Colors.transparent
+                                    : AppColors.border.withValues(alpha: 0.5),
+                                width: 0.5,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    );
+                  }),
+                ),
+              ],
             ),
-          );
-        }),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            const Text('Less',
-                style: TextStyle(fontSize: 8, color: AppColors.textSecondary)),
-            ...colors.map((color) => Container(
-                  width: 10,
-                  height: 10,
-                  margin: const EdgeInsets.symmetric(horizontal: 1),
-                  decoration: BoxDecoration(
-                      color: color, borderRadius: BorderRadius.circular(2)),
-                )),
-            const Text('More',
-                style: TextStyle(fontSize: 8, color: AppColors.textSecondary)),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(height: 10),
+
+          // Legend and summary footer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${_activeDates.length} active ${_activeDates.length == 1 ? "day" : "days"} in $currentYear',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Row(
+                children: [
+                  const Text('Less ',
+                      style: TextStyle(
+                          fontSize: 8, color: AppColors.textSecondary)),
+                  ...levelColors.map((color) => Container(
+                        width: 9,
+                        height: 9,
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(2),
+                          border: Border.all(
+                            color: AppColors.border.withValues(alpha: 0.6),
+                            width: 0.5,
+                          ),
+                        ),
+                      )),
+                  const Text(' More',
+                      style: TextStyle(
+                          fontSize: 8, color: AppColors.textSecondary)),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
+  }
+
+  String _formatDuration(int seconds) {
+    if (seconds >= 3600) {
+      final h = (seconds / 3600.0).toStringAsFixed(1);
+      return '${h}h';
+    }
+    if (seconds >= 60) {
+      return '${(seconds / 60).round()}m';
+    }
+    return '${seconds}s';
   }
 
   // ---- PRIVACY CONTENT ----
