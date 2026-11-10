@@ -109,3 +109,4 @@ class SessionTrackerService with WidgetsBindingObserver {
     }
   }
 }
+
