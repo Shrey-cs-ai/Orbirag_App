@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/ai_service.dart';
+import '../services/chat_history_service.dart';
 import '../services/usage_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/chat_history_drawer.dart';
 import '../widgets/safe_chat_text.dart';
 import 'voice_input_screen.dart';
 
@@ -23,14 +25,19 @@ class _OriChatScreenState extends State<OriChatScreen> {
 
   bool _isTyping = false;
   int _selectedIndex = 1;
+  String? _activeConversationId;
 
-  final List<Map<String, dynamic>> _messages = [
-    {
+  final List<Map<String, dynamic>> _messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _messages.add({
       "text": "Hi, I'm Ori 😊\nHow can I help you with your research today?",
       "isUser": false,
       "time": _getCurrentTime(),
-    },
-  ];
+    });
+  }
 
   static String _getCurrentTime() {
     final now = DateTime.now();
@@ -42,12 +49,6 @@ class _OriChatScreenState extends State<OriChatScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-  }
-
-  @override
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
@@ -55,7 +56,73 @@ class _OriChatScreenState extends State<OriChatScreen> {
     super.dispose();
   }
 
-  // SEND MESSAGE (via backend)
+  // ---- Start a fresh chat ----
+  void _startNewChat() {
+    setState(() {
+      _messages
+        ..clear()
+        ..add({
+          "text":
+              "Hi, I'm Ori 😊\nHow can I help you with your research today?",
+          "isUser": false,
+          "time": _getCurrentTime(),
+        });
+      _activeConversationId = null;
+      AiService.instance.lastOriConversationId = null;
+    });
+    _controller.clear();
+  }
+
+  // ---- Load a past conversation ----
+  Future<void> _loadConversation(ChatConversationSummary summary) async {
+    setState(() => _isTyping = true);
+    try {
+      final detail =
+          await ChatHistoryService.instance.getConversation(summary.id);
+      if (!mounted) return;
+      if (detail == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load conversation')),
+        );
+        return;
+      }
+
+      final msgs = detail['messages'] as List<ChatMessageItem>? ?? [];
+      final newMessages = <Map<String, dynamic>>[
+        {
+          "text":
+              "Hi, I'm Ori 😊\nHow can I help you with your research today?",
+          "isUser": false,
+          "time": _getCurrentTime(),
+        },
+      ];
+
+      for (final m in msgs) {
+        newMessages.add({
+          "text": m.content,
+          "isUser": m.role == 'user',
+          "time": m.createdAt != null
+              ? '${m.createdAt!.hour}:${m.createdAt!.minute.toString().padLeft(2, '0')}'
+              : _getCurrentTime(),
+        });
+      }
+
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(newMessages);
+        _activeConversationId = summary.id;
+        AiService.instance.lastOriConversationId = summary.id;
+        _isTyping = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isTyping = false);
+    }
+  }
+
+  // ---- SEND MESSAGE (via backend) ----
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isTyping) return;
@@ -84,22 +151,29 @@ class _OriChatScreenState extends State<OriChatScreen> {
               })
           .toList();
 
-      // 3. Call the backend
-      final response = await AiService.instance.chat(
+      // 3. Call the backend (which now also saves to DB)
+      final result = await AiService.instance.chatFull(
         message: text,
         history: history,
+        conversationId: _activeConversationId,
       );
 
       if (!mounted) return;
 
+      final responseText = result['response'] as String? ?? '';
+      final convId = result['conversation_id'] as String?;
+
       // 4. Add AI response to UI
       setState(() {
         _messages.add({
-          "text": response,
+          "text": responseText,
           "isUser": false,
           "time": _getCurrentTime(),
         });
         _isTyping = false;
+        if (convId != null) {
+          _activeConversationId = convId;
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -134,9 +208,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
       context,
       MaterialPageRoute(builder: (_) => const VoiceInputScreen()),
     );
-
-    if (result != null && result is String && result.trim().isNotEmpty) {
-      setState(() => _controller.text = result);
+    if (result is String && result.trim().isNotEmpty) {
+      _controller.text = result;
       Future.delayed(const Duration(milliseconds: 300), _sendMessage);
     }
   }
@@ -147,7 +220,19 @@ class _OriChatScreenState extends State<OriChatScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      // Left drawer: App navigation
       drawer: const AppDrawer(),
+      // Right drawer: Chat History
+      endDrawer: _ChatHistoryDrawerWrapper(
+        activeConversationId: _activeConversationId,
+        onSelectConversation: _loadConversation,
+        onNewChat: _startNewChat,
+        onDeleteCurrent: () {
+          if (_activeConversationId != null) {
+            _startNewChat();
+          }
+        },
+      ),
       appBar: AppBar(
         backgroundColor: AppColors.white,
         elevation: 0,
@@ -188,11 +273,21 @@ class _OriChatScreenState extends State<OriChatScreen> {
           ],
         ),
         actions: [
+          // History icon
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.history_rounded,
+                  color: AppColors.textPrimary),
+              tooltip: 'Chat History',
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+            ),
+          ),
           IconButton(
             icon: const Icon(
               Icons.auto_awesome_outlined,
               color: AppColors.textPrimary,
             ),
+            tooltip: 'Paper Orbit',
             onPressed: () {
               Navigator.of(context).pushNamed(AppConstants.routePaperOrbit);
             },
@@ -315,7 +410,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
                               ),
                               child: SafeChatText(
                                 message,
-                                style: const TextStyle(fontSize: 15, height: 1.4),
+                                style: const TextStyle(
+                                    fontSize: 15, height: 1.4),
                               ),
                             ),
                             if (msg['time'] != null) ...[
@@ -338,7 +434,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
           // Suggestion chips (only when conversation is fresh)
           if (showSuggestions)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -387,10 +484,12 @@ class _OriChatScreenState extends State<OriChatScreen> {
                               ),
                             ),
                             onSubmitted: (_) => _sendMessage(),
+                            onChanged: (_) => setState(() {}),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.mic, color: AppColors.purple),
+                          icon:
+                              const Icon(Icons.mic, color: AppColors.purple),
                           onPressed: _handleVoiceInput,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
@@ -431,7 +530,8 @@ class _OriChatScreenState extends State<OriChatScreen> {
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() => _selectedIndex = index);
-          final route = AppConstants.bottomNavItems[index]['route'] as String;
+          final route =
+              AppConstants.bottomNavItems[index]['route'] as String;
           Navigator.of(context).pushReplacementNamed(route);
         },
       ),
@@ -478,6 +578,41 @@ class _OriChatScreenState extends State<OriChatScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Private wrapper so endDrawer can hold stateful ChatHistoryDrawer
+// ---------------------------------------------------------------------------
+class _ChatHistoryDrawerWrapper extends StatefulWidget {
+  final String? activeConversationId;
+  final ValueChanged<ChatConversationSummary> onSelectConversation;
+  final VoidCallback onNewChat;
+  final VoidCallback? onDeleteCurrent;
+
+  const _ChatHistoryDrawerWrapper({
+    this.activeConversationId,
+    required this.onSelectConversation,
+    required this.onNewChat,
+    this.onDeleteCurrent,
+  });
+
+  @override
+  State<_ChatHistoryDrawerWrapper> createState() =>
+      _ChatHistoryDrawerWrapperState();
+}
+
+class _ChatHistoryDrawerWrapperState
+    extends State<_ChatHistoryDrawerWrapper> {
+  @override
+  Widget build(BuildContext context) {
+    return ChatHistoryDrawer(
+      sessionType: 'ori_chat',
+      activeConversationId: widget.activeConversationId,
+      onSelectConversation: widget.onSelectConversation,
+      onNewChat: widget.onNewChat,
+      onDeleteCurrent: widget.onDeleteCurrent,
     );
   }
 }

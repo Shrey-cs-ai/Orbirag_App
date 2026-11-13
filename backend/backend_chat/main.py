@@ -5,9 +5,18 @@ Orbirag Chat Backend — Ori chatbot + PDF chat + voice transcription + text ana
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional, List
+
+try:
+    from backend_research.database import SessionLocal as ResearchSessionLocal
+    from backend_research.services import chat_history_service
+except Exception as e:
+    print(f"[ChatMain] Research DB import notice: {e}")
+    ResearchSessionLocal = None
+    chat_history_service = None
 
 def _load_env():
     env_path = Path(__file__).resolve().parent / ".env"
@@ -29,25 +38,46 @@ print(f"[ENV] GEMINI   : {'OK' if os.getenv('GEMINI_API_KEY') else 'MISSING'}")
 print(f"[ENV] DEEPGRAM : {'OK' if os.getenv('DEEPGRAM_API_KEY') else 'MISSING'}")
 
 
-from models import (
-    ChatRequest, ChatResponse,
-    TranscribeResponse,
-    PdfChatRequest, PdfChatResponse,
-    PdfUploadResponse,
-    AnalyzeRequest, AnalyzeResponse, TextStats, Suggestion,
-)
-from services.ai_service import (
-    get_chat_response, get_paper_response, get_suggestions, _generate_with_fallback
-)
-from services.deepgram_service import transcribe_audio
-from services.pdf_service import (
-    extract_text_from_pdf,
-    chunk_text,
-    save_paper,
-    get_paper,
-    find_relevant_chunks,
-)
-from services.word_counter_service import build_stats
+try:
+    from backend_chat.models import (
+        ChatRequest, ChatResponse,
+        TranscribeResponse,
+        PdfChatRequest, PdfChatResponse,
+        PdfUploadResponse,
+        AnalyzeRequest, AnalyzeResponse, TextStats, Suggestion,
+    )
+    from backend_chat.services.ai_service import (
+        get_chat_response, get_paper_response, get_suggestions, _generate_with_fallback
+    )
+    from backend_chat.services.deepgram_service import transcribe_audio
+    from backend_chat.services.pdf_service import (
+        extract_text_from_pdf,
+        chunk_text,
+        save_paper,
+        get_paper,
+        find_relevant_chunks,
+    )
+    from backend_chat.services.word_counter_service import build_stats
+except ImportError:
+    from models import (
+        ChatRequest, ChatResponse,
+        TranscribeResponse,
+        PdfChatRequest, PdfChatResponse,
+        PdfUploadResponse,
+        AnalyzeRequest, AnalyzeResponse, TextStats, Suggestion,
+    )
+    from services.ai_service import (
+        get_chat_response, get_paper_response, get_suggestions, _generate_with_fallback
+    )
+    from services.deepgram_service import transcribe_audio
+    from services.pdf_service import (
+        extract_text_from_pdf,
+        chunk_text,
+        save_paper,
+        get_paper,
+        find_relevant_chunks,
+    )
+    from services.word_counter_service import build_stats
 
 
 app = FastAPI(title="Orbirag Chat API")
@@ -79,10 +109,30 @@ def root():
 
 # Ori Chatbot
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
+@app.post("/api/chat", response_model=ChatResponse, tags=["Chat"])
 async def chat(request: ChatRequest):
     history_dicts = _to_history_dicts(request.history)
     response = await get_chat_response(request.message, history_dicts)
-    return ChatResponse(response=response)
+
+    conv_id = request.conversation_id
+    if ResearchSessionLocal and chat_history_service:
+        db = ResearchSessionLocal()
+        try:
+            conv, _, _ = chat_history_service.record_chat_turn(
+                db,
+                user_message=request.message,
+                assistant_message=response,
+                session_type="ori_chat",
+                conversation_id=conv_id,
+                user_id=request.user_id,
+            )
+            conv_id = str(conv.id)
+        except Exception as e:
+            print(f"[ChatMain] History record warning: {e}")
+        finally:
+            db.close()
+
+    return ChatResponse(response=response, conversation_id=conv_id)
 
 
 # Voice
@@ -114,7 +164,11 @@ async def voice_transcribe(
 # Paper Orbit: Upload PDF
 @app.post("/api/ai/upload-pdf", response_model=PdfUploadResponse, tags=["Paper Orbit"])
 @app.post("/upload-pdf", response_model=PdfUploadResponse, tags=["Paper Orbit"])
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    user_id: Optional[str] = Form(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id"),
+):
     if file.content_type not in {"application/pdf", "application/octet-stream"} and not (file.filename and file.filename.lower().endswith(".pdf")):
         raise HTTPException(400, f"Only PDF files allowed. Got: {file.content_type}")
 
@@ -126,8 +180,14 @@ async def upload_pdf(file: UploadFile = File(...)):
         if not pages:
             raise HTTPException(400, "Could not extract text from PDF")
 
+        effective_user_id = user_id or x_user_id
         chunks = chunk_text(pages, chunk_size=800, overlap=100)
-        paper_id = save_paper(file.filename or "untitled.pdf", chunks)
+        paper_id = save_paper(
+            file.filename or "untitled.pdf",
+            chunks,
+            user_id=effective_user_id,
+            num_pages=len(pages),
+        )
 
         return PdfUploadResponse(
             paper_id=paper_id,
@@ -147,7 +207,10 @@ async def upload_pdf(file: UploadFile = File(...)):
 # Paper Orbit: Chat with PDF
 @app.post("/api/ai/chat-with-pdf", response_model=PdfChatResponse, tags=["Paper Orbit"])
 @app.post("/chat-with-pdf", response_model=PdfChatResponse, tags=["Paper Orbit"])
-async def chat_with_pdf(request: PdfChatRequest):
+async def chat_with_pdf(
+    request: PdfChatRequest,
+    x_user_id: Optional[str] = Header(None, alias="x-user-id"),
+):
     paper_id = request.paper_id or request.doc_id
     question = request.question or request.message
     if not paper_id:
@@ -155,7 +218,10 @@ async def chat_with_pdf(request: PdfChatRequest):
     if not question:
         raise HTTPException(400, "question or message is required")
 
-    paper = get_paper(paper_id)
+    effective_user_id = request.user_id or x_user_id
+    paper = get_paper(paper_id, user_id=effective_user_id)
+    if isinstance(paper, dict) and paper.get("error") == "unauthorized":
+        raise HTTPException(403, "You do not have permission to access this PDF")
     if not paper:
         raise HTTPException(404, "Paper not found")
 
@@ -166,6 +232,7 @@ async def chat_with_pdf(request: PdfChatRequest):
         return PdfChatResponse(
             response="I couldn't find relevant information in this paper.",
             sources=[],
+            conversation_id=request.conversation_id,
         )
 
     context = "\n\n".join(f"[Page {c['page']}]\n{c['text']}" for c in relevant)
@@ -176,7 +243,27 @@ async def chat_with_pdf(request: PdfChatRequest):
         history=_to_history_dicts(request.history),
     )
 
-    return PdfChatResponse(response=response, sources=relevant)
+    conv_id = request.conversation_id
+    if ResearchSessionLocal and chat_history_service:
+        db = ResearchSessionLocal()
+        try:
+            conv, _, _ = chat_history_service.record_chat_turn(
+                db,
+                user_message=question,
+                assistant_message=response,
+                session_type="paper_orbit",
+                conversation_id=conv_id,
+                user_id=effective_user_id,
+                paper_id=None,
+                sources=relevant,
+            )
+            conv_id = str(conv.id)
+        except Exception as e:
+            print(f"[ChatMain] History record warning for PDF: {e}")
+        finally:
+            db.close()
+
+    return PdfChatResponse(response=response, sources=relevant, conversation_id=conv_id)
 
 
 # AI Rewrite (Paraphrase / Humanize)
@@ -251,3 +338,75 @@ async def analyze_text(request: AnalyzeRequest):
         suggestions=[Suggestion(**s) for s in suggestions_list],
         meta={"ignored": len(ignore_words)},
     )
+
+
+# ---- Chat History Endpoints ----
+@app.get("/api/chat/history", tags=["Chat History"])
+def get_chat_history_route(
+    session_type: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id"),
+):
+    effective_user_id = user_id or x_user_id
+    if not (ResearchSessionLocal and chat_history_service):
+        return {"conversations": [], "total": 0}
+
+    db = ResearchSessionLocal()
+    try:
+        conversations = chat_history_service.list_conversations(
+            db,
+            user_id=effective_user_id,
+            session_type=session_type,
+        )
+        return {"conversations": conversations, "total": len(conversations)}
+    finally:
+        db.close()
+
+
+@app.get("/api/chat/history/{conversation_id}", tags=["Chat History"])
+def get_conversation_detail_route(
+    conversation_id: str,
+    user_id: Optional[str] = Query(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id"),
+):
+    effective_user_id = user_id or x_user_id
+    if not (ResearchSessionLocal and chat_history_service):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    db = ResearchSessionLocal()
+    try:
+        conv = chat_history_service.get_conversation(
+            db,
+            conversation_id=conversation_id,
+            user_id=effective_user_id,
+        )
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return conv
+    finally:
+        db.close()
+
+
+@app.delete("/api/chat/history/{conversation_id}", tags=["Chat History"])
+def delete_conversation_route(
+    conversation_id: str,
+    user_id: Optional[str] = Query(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id"),
+):
+    effective_user_id = user_id or x_user_id
+    if not (ResearchSessionLocal and chat_history_service):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    db = ResearchSessionLocal()
+    try:
+        success = chat_history_service.delete_conversation(
+            db,
+            conversation_id=conversation_id,
+            user_id=effective_user_id,
+        )
+        if not success:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"deleted": True, "conversation_id": conversation_id}
+    finally:
+        db.close()
+

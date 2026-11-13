@@ -70,6 +70,7 @@ class ChatConversation(Base):
     id            = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     user_id       = Column(String(64), nullable=True, index=True)
     title         = Column(Text, default="New Conversation")
+    session_type  = Column(String(32), default="ori_chat", index=True)
     paper_id      = Column(UUID(as_uuid=False), ForeignKey("papers.id", ondelete="SET NULL"),
                            nullable=True)
     message_count = Column(Integer, default=0)
@@ -100,6 +101,17 @@ class ChatMessage(Base):
     __table_args__ = (
         CheckConstraint("role IN ('user','assistant','system')", name="chat_messages_role_check"),
     )
+
+
+class ChatPdfDocument(Base):
+    __tablename__ = "chat_pdf_documents"
+
+    id         = Column(String(64), primary_key=True)
+    user_id    = Column(String(128), nullable=True, index=True)
+    filename   = Column(String(255), nullable=False)
+    chunks     = Column(JSON, nullable=False)
+    num_pages  = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # SCOPING

@@ -6,8 +6,14 @@ from typing import Dict, List
 from pypdf import PdfReader
 
 
-# In-memory storage
-_papers: Dict[str, dict] = {}
+from datetime import datetime
+try:
+    from backend_chat.database import ChatPdfDocument, SessionLocal, init_db
+except ImportError:
+    from database import ChatPdfDocument, SessionLocal, init_db
+
+# Transient fallback cache if DB is temporarily unreachable or empty
+_fallback_cache: Dict[str, dict] = {}
 
 
 # Extract text from PDF
@@ -55,24 +61,129 @@ def chunk_text(
     return chunks
 
 
-# Store and retrieve papers (in-memory)
-def save_paper(filename: str, chunks: List[dict]) -> str:
-    """Store a paper and return its ID."""
+# Store and retrieve papers (database backed with max 20 PDFs per user)
+def save_paper(
+    filename: str,
+    chunks: List[dict],
+    user_id: str | None = None,
+    num_pages: int = 1,
+) -> str:
+    """Store a paper in ChatPdfDocument, maintaining a max of 20 PDFs per user."""
     paper_id = str(uuid.uuid4())
-    _papers[paper_id] = {
+    db = SessionLocal()
+    try:
+        init_db()
+        # Enforce max 20 PDFs limit per user
+        if user_id:
+            existing_docs = (
+                db.query(ChatPdfDocument)
+                .filter(ChatPdfDocument.user_id == user_id)
+                .order_by(ChatPdfDocument.created_at.asc())
+                .all()
+            )
+            if len(existing_docs) >= 20:
+                excess = len(existing_docs) - 19
+                for old_doc in existing_docs[:excess]:
+                    db.delete(old_doc)
+                db.flush()
+
+        doc = ChatPdfDocument(
+            id=paper_id,
+            user_id=user_id,
+            filename=filename,
+            chunks=chunks,
+            num_pages=num_pages,
+            created_at=datetime.utcnow(),
+        )
+        db.add(doc)
+        db.commit()
+        print(f"[PDF] Saved paper {paper_id} ({filename}) for user={user_id} with {len(chunks)} chunks")
+    except Exception as e:
+        db.rollback()
+        print(f"[PDF] Warning: DB save failed ({e}), using fallback cache.")
+        _fallback_cache[paper_id] = {
+            "id": paper_id,
+            "filename": filename,
+            "chunks": chunks,
+            "num_pages": num_pages,
+            "user_id": user_id,
+        }
+    finally:
+        db.close()
+
+    # Also keep a copy in fallback cache for seamless fallback
+    _fallback_cache[paper_id] = {
+        "id": paper_id,
         "filename": filename,
         "chunks": chunks,
+        "num_pages": num_pages,
+        "user_id": user_id,
     }
-    print(f"[PDF] Saved paper {paper_id} ({filename}) with {len(chunks)} chunks")
     return paper_id
 
 
-def get_paper(paper_id: str) -> dict | None:
-    return _papers.get(paper_id)
+def get_paper(paper_id: str, user_id: str | None = None) -> dict | None:
+    """Retrieve paper by paper_id and optionally enforce user_id privacy."""
+    db = SessionLocal()
+    try:
+        init_db()
+        doc = db.query(ChatPdfDocument).filter(ChatPdfDocument.id == paper_id).first()
+        if not doc:
+            # Check fallback cache
+            cached = _fallback_cache.get(paper_id)
+            if not cached:
+                return None
+            if user_id and cached.get("user_id") and cached.get("user_id") != user_id:
+                return {"error": "unauthorized"}
+            return cached
+
+        # Check authorization
+        if user_id and doc.user_id and doc.user_id != user_id:
+            return {"error": "unauthorized"}
+
+        return {
+            "id": doc.id,
+            "filename": doc.filename,
+            "chunks": doc.chunks,
+            "num_pages": doc.num_pages,
+            "user_id": doc.user_id,
+        }
+    except Exception as e:
+        print(f"[PDF] Warning: DB fetch failed ({e}), checking fallback cache.")
+        cached = _fallback_cache.get(paper_id)
+        if not cached:
+            return None
+        if user_id and cached.get("user_id") and cached.get("user_id") != user_id:
+            return {"error": "unauthorized"}
+        return cached
+    finally:
+        db.close()
 
 
-def get_all_papers() -> Dict[str, dict]:
-    return _papers
+def get_all_papers(user_id: str | None = None) -> Dict[str, dict]:
+    """Retrieve all papers, optionally filtered by user_id."""
+    db = SessionLocal()
+    try:
+        init_db()
+        query = db.query(ChatPdfDocument)
+        if user_id:
+            query = query.filter(ChatPdfDocument.user_id == user_id)
+        docs = query.all()
+        result = {}
+        for doc in docs:
+            result[doc.id] = {
+                "id": doc.id,
+                "filename": doc.filename,
+                "chunks": doc.chunks,
+                "num_pages": doc.num_pages,
+                "user_id": doc.user_id,
+            }
+        return result
+    except Exception as e:
+        print(f"[PDF] DB get_all_papers error: {e}")
+        return _fallback_cache
+    finally:
+        db.close()
 
 
 # Find relevant chunks for a question

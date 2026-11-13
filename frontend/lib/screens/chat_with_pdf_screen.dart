@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_constants.dart';
 import '../services/ai_service.dart';
+import '../services/chat_history_service.dart';
 import '../services/usage_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/app_brand_title.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/chat_history_drawer.dart';
 import '../widgets/safe_chat_text.dart';
 import 'voice_input_screen.dart';
 
@@ -34,6 +36,7 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
 
   bool _isTyping = false;
   int _selectedIndex = 0;
+  String? _activeConversationId;
 
   final List<Map<String, dynamic>> _messages = [
     {
@@ -47,6 +50,8 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
   @override
   void initState() {
     super.initState();
+    // Restore last PDF conversation ID if any
+    _activeConversationId = _aiService.lastPdfConversationId;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
@@ -109,6 +114,7 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
         paperId: widget.paperId!,
         question: text,
         history: history,
+        conversationId: _activeConversationId,
       );
 
       if (!mounted) return;
@@ -116,6 +122,7 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
       final pageLabel = sources != null && sources.isNotEmpty
           ? "Page ${sources.first['page']}"
           : null;
+      final convId = result['conversation_id'] as String?;
 
       setState(() {
         _messages.add({
@@ -125,6 +132,9 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
           "time": _getCurrentTime(),
         });
         _isTyping = false;
+        if (convId != null) {
+          _activeConversationId = convId;
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -168,6 +178,18 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       drawer: const AppDrawer(),
+      // Right drawer: Paper Orbit chat history
+      endDrawer: ChatHistoryDrawer(
+        sessionType: 'paper_orbit',
+        activeConversationId: _activeConversationId,
+        onSelectConversation: _loadConversation,
+        onNewChat: _startNewChat,
+        onDeleteCurrent: () {
+          if (_activeConversationId != null) {
+            _startNewChat();
+          }
+        },
+      ),
       appBar: AppBar(
         backgroundColor: AppColors.white,
         elevation: 0,
@@ -178,7 +200,16 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
               Navigator.of(context).pushReplacementNamed(AppConstants.routeHome),
         ),
         title: const AppBrandTitle(),
-        actions: const [],
+        actions: [
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.history_rounded,
+                  color: AppColors.textPrimary),
+              tooltip: 'Chat History',
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -197,6 +228,73 @@ class _ChatWithPdfScreenState extends State<ChatWithPdfScreen> {
         },
       ),
     );
+  }
+
+  // ---- Start a fresh chat ----
+  void _startNewChat() {
+    setState(() {
+      _messages
+        ..clear()
+        ..add({
+          "isUser": false,
+          "text":
+              "Ready to explore\n\nI've analyzed the document. Ask me anything or try a suggestion below.",
+          "time": _getCurrentTime(),
+        });
+      _activeConversationId = null;
+      _aiService.lastPdfConversationId = null;
+    });
+    _controller.clear();
+  }
+
+  // ---- Load a past conversation ----
+  Future<void> _loadConversation(ChatConversationSummary summary) async {
+    setState(() => _isTyping = true);
+    try {
+      final detail =
+          await ChatHistoryService.instance.getConversation(summary.id);
+      if (!mounted) return;
+      if (detail == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load conversation')),
+        );
+        setState(() => _isTyping = false);
+        return;
+      }
+
+      final msgs = detail['messages'] as List<ChatMessageItem>? ?? [];
+      final newMessages = <Map<String, dynamic>>[
+        {
+          "isUser": false,
+          "text":
+              "Ready to explore\n\nLoaded from history. Continue the conversation.",
+          "time": _getCurrentTime(),
+        },
+      ];
+
+      for (final m in msgs) {
+        newMessages.add({
+          "text": m.content,
+          "isUser": m.role == 'user',
+          "time": m.createdAt != null
+              ? '${m.createdAt!.hour}:${m.createdAt!.minute.toString().padLeft(2, '0')}'
+              : _getCurrentTime(),
+        });
+      }
+
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(newMessages);
+        _activeConversationId = summary.id;
+        _aiService.lastPdfConversationId = summary.id;
+        _isTyping = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isTyping = false);
+    }
   }
 
   Widget _buildPaperHeader() {

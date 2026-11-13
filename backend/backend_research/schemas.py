@@ -19,10 +19,13 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     history: Optional[List[ChatMessage]] = []
+    user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     response: str
+    conversation_id: Optional[str] = None
 
 
 # Voice (Deepgram)
@@ -48,6 +51,8 @@ class RagChatRequest(BaseModel):
     doc_id: str
     message: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(5, ge=1, le=15)
+    user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 class RagSource(BaseModel):
@@ -59,6 +64,7 @@ class RagSource(BaseModel):
 class RagChatResponse(BaseModel):
     response: str
     sources: List[RagSource] = []
+    conversation_id: Optional[str] = None
 
 
 # Saved Papers (for SavedPapersScreen)

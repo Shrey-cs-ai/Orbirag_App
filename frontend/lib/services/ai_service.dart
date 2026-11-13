@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:http/http.dart' as http;
@@ -6,6 +7,11 @@ import 'package:http/http.dart' as http;
 class AiService {
   static final AiService instance = AiService._internal();
   AiService._internal();
+
+  String? lastOriConversationId;
+  String? lastPdfConversationId;
+
+  String? get _currentUserId => FirebaseAuth.instance.currentUser?.uid;
 
   // ✅ Dynamic Base URL
   String get baseUrl {
@@ -22,6 +28,23 @@ class AiService {
   Future<String> chat({
     required String message,
     List<Map<String, dynamic>> history = const [],
+    String? conversationId,
+    String? userId,
+  }) async {
+    final result = await chatFull(
+      message: message,
+      history: history,
+      conversationId: conversationId ?? lastOriConversationId,
+      userId: userId,
+    );
+    return result['response'] as String? ?? '';
+  }
+
+  Future<Map<String, dynamic>> chatFull({
+    required String message,
+    List<Map<String, dynamic>> history = const [],
+    String? conversationId,
+    String? userId,
   }) async {
     try {
       final backendHistory = history.map((msg) {
@@ -31,20 +54,31 @@ class AiService {
         };
       }).toList();
 
+      final effectiveUserId = userId ?? _currentUserId;
+      final effectiveConvId = conversationId ?? lastOriConversationId;
+
       final response = await http
           .post(
             Uri.parse('$baseUrl/chat'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              if (effectiveUserId != null) 'x-user-id': effectiveUserId,
+            },
             body: jsonEncode({
               'message': message,
               'history': backendHistory,
+              if (effectiveUserId != null) 'user_id': effectiveUserId,
+              if (effectiveConvId != null) 'conversation_id': effectiveConvId,
             }),
           )
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['response'] as String;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['conversation_id'] != null) {
+          lastOriConversationId = data['conversation_id'] as String;
+        }
+        return data;
       } else {
         throw Exception(
             'Server error: ${response.statusCode} - ${response.body}');
@@ -58,12 +92,19 @@ class AiService {
   Future<Map<String, dynamic>> uploadPdf({
     required List<int> fileBytes,
     required String filename,
+    String? userId,
   }) async {
     try {
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/upload-pdf'),
       );
+
+      final effectiveUserId = userId ?? _currentUserId;
+      if (effectiveUserId != null) {
+        request.fields['user_id'] = effectiveUserId;
+        request.headers['x-user-id'] = effectiveUserId;
+      }
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -93,6 +134,8 @@ class AiService {
     required String paperId,
     required String question,
     List<Map<String, dynamic>> history = const [],
+    String? conversationId,
+    String? userId,
   }) async {
     try {
       final backendHistory = history.map((msg) {
@@ -102,20 +145,32 @@ class AiService {
         };
       }).toList();
 
+      final effectiveUserId = userId ?? _currentUserId;
+      final effectiveConvId = conversationId ?? lastPdfConversationId;
+
       final response = await http
           .post(
             Uri.parse('$baseUrl/chat-with-pdf'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              if (effectiveUserId != null) 'x-user-id': effectiveUserId,
+            },
             body: jsonEncode({
               'paper_id': paperId,
               'question': question,
               'history': backendHistory,
+              if (effectiveUserId != null) 'user_id': effectiveUserId,
+              if (effectiveConvId != null) 'conversation_id': effectiveConvId,
             }),
           )
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['conversation_id'] != null) {
+          lastPdfConversationId = data['conversation_id'] as String;
+        }
+        return data;
       } else {
         throw Exception(
             'Chat failed (${response.statusCode}): ${response.body}');

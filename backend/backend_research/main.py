@@ -69,11 +69,12 @@ from schemas import (
     ScopingSaveRequest, ScopingSessionOut, ScopingListResponse,
 )
 from services import scoping_service
+from services import chat_history_service
 
 from backend_research.routes import gap_analysis_routes
 from backend_research.models import GapAnalysis  # noqa: F401
 
-from routes import admin_routes
+from routes import admin_routes, chat_routes
 from models import admin_models  
 
 def _load_env():
@@ -151,10 +152,26 @@ def read_root():
 # ---- Ori chatbot ----
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     history = [m.model_dump() for m in (request.history or [])]
     text = await get_chat_response(request.message, history)
-    return ChatResponse(response=text)
+
+    conv_id = request.conversation_id
+    try:
+        conv, _, _ = chat_history_service.record_chat_turn(
+            db,
+            user_message=request.message,
+            assistant_message=text,
+            session_type="ori_chat",
+            conversation_id=conv_id,
+            user_id=request.user_id,
+        )
+        conv_id = str(conv.id)
+    except Exception as e:
+        print(f"[Chat] Warning: failed to save chat turn: {e}")
+
+    return ChatResponse(response=text, conversation_id=conv_id)
 
 
 # ---- Voice ----
@@ -252,7 +269,8 @@ async def ingest_text_route(req: TextIngestRequest):
 
 
 @app.post("/api/ai/chat-with-pdf", response_model=RagChatResponse)
-async def chat_with_pdf(request: RagChatRequest):
+@app.post("/chat-with-pdf", response_model=RagChatResponse)
+async def chat_with_pdf(request: RagChatRequest, db: Session = Depends(get_db)):
     if not vector_store.document_exists(request.doc_id):
         raise HTTPException(404, "Document not found")
 
@@ -260,7 +278,27 @@ async def chat_with_pdf(request: RagChatRequest):
         result = await ask_document(
             request.doc_id, request.message, top_k=request.top_k
         )
-        return RagChatResponse(**result)
+        conv_id = request.conversation_id
+        try:
+            conv, _, _ = chat_history_service.record_chat_turn(
+                db,
+                user_message=request.message,
+                assistant_message=result.get("response", ""),
+                session_type="paper_orbit",
+                conversation_id=conv_id,
+                user_id=request.user_id,
+                paper_id=None,
+                sources=result.get("sources"),
+            )
+            conv_id = str(conv.id)
+        except Exception as e:
+            print(f"[RAG] Warning: failed to save chat turn: {e}")
+
+        return RagChatResponse(
+            response=result.get("response", ""),
+            sources=result.get("sources", []),
+            conversation_id=conv_id,
+        )
     except Exception as e:
         raise HTTPException(500, f"RAG error: {e}")
 
@@ -1372,3 +1410,4 @@ def scoping_list(user_id: str | None = None, db: Session = Depends(get_db)):
 
 app.include_router(gap_analysis_routes.router)
 app.include_router(admin_routes.router)
+app.include_router(chat_routes.router)

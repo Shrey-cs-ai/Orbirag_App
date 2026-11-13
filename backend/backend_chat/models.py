@@ -8,9 +8,12 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List[ChatMessage]] = []
+    user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
+    conversation_id: Optional[str] = None
 
 class TranscribeResponse(BaseModel):
     transcript: str
@@ -27,6 +30,8 @@ class PdfChatRequest(BaseModel):
     message: Optional[str] = None
     top_k: Optional[int] = 3
     history: Optional[List[PdfChatMessage]] = []
+    user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 class PdfUploadResponse(BaseModel):
     paper_id: str
@@ -38,7 +43,8 @@ class PdfUploadResponse(BaseModel):
 
 class PdfChatResponse(BaseModel):
     response: str
-    sources: List[dict]   
+    sources: List[dict]
+    conversation_id: Optional[str] = None   
 
 class AnalyzeRequest(BaseModel):
     text: str
